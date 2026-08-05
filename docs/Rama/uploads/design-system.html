@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-accent="plasma">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RTL — Design Reference · background · gradients · controls</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet" />
+  <style>
+    /* ════════════════════════════════════════════════════════════════
+       This file mirrors the live token + control definitions from
+       src/lib/ui/styles/tokens.css and the DotFieldBackground canvas.
+       Toggle theme + accent in the top bar to inspect every state.
+    ════════════════════════════════════════════════════════════════ */
+
+    /* ── ACCENT COLOR SYSTEM (dark defaults) ──────────────────────── */
+    [data-accent="plasma"] { --accent: oklch(0.65 0.22 290); --accent-bright: oklch(0.75 0.24 290); --accent-dim: oklch(0.30 0.12 290); --accent-glow: oklch(0.65 0.22 290 / 0.35); --accent-tint: oklch(0.65 0.22 290 / 0.08); --accent-border: oklch(0.65 0.22 290 / 0.25); }
+    [data-accent="surge"]  { --accent: oklch(0.75 0.20 172); --accent-bright: oklch(0.82 0.22 172); --accent-dim: oklch(0.28 0.10 172); --accent-glow: oklch(0.75 0.20 172 / 0.35); --accent-tint: oklch(0.75 0.20 172 / 0.08); --accent-border: oklch(0.75 0.20 172 / 0.25); }
+    [data-accent="frost"]  { --accent: oklch(0.72 0.18 220); --accent-bright: oklch(0.80 0.20 220); --accent-dim: oklch(0.28 0.09 220); --accent-glow: oklch(0.72 0.18 220 / 0.35); --accent-tint: oklch(0.72 0.18 220 / 0.08); --accent-border: oklch(0.72 0.18 220 / 0.25); }
+    [data-accent="void"]   { --accent: oklch(0.62 0.26 260); --accent-bright: oklch(0.72 0.28 260); --accent-dim: oklch(0.28 0.13 260); --accent-glow: oklch(0.62 0.26 260 / 0.35); --accent-tint: oklch(0.62 0.26 260 / 0.08); --accent-border: oklch(0.62 0.26 260 / 0.25); }
+    [data-accent="dusk"]   { --accent: oklch(0.78 0.17 60);  --accent-bright: oklch(0.85 0.18 60);  --accent-dim: oklch(0.30 0.09 60);  --accent-glow: oklch(0.78 0.17 60 / 0.35);  --accent-tint: oklch(0.78 0.17 60 / 0.08);  --accent-border: oklch(0.78 0.17 60 / 0.25); }
+    [data-accent="ember"]  { --accent: oklch(0.68 0.22 355); --accent-bright: oklch(0.76 0.24 355); --accent-dim: oklch(0.28 0.11 355); --accent-glow: oklch(0.68 0.22 355 / 0.35); --accent-tint: oklch(0.68 0.22 355 / 0.08); --accent-border: oklch(0.68 0.22 355 / 0.25); }
+
+    /* ── DARK THEME ───────────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg-base: #06060a; --bg-deep: #09090f; --bg-surface: #0d0d16;
+      --bg-elevated: #111120; --bg-overlay: rgba(6,6,10,0.88);
+      --text-1: #ede9fe; --text-2: #a78bfa;
+      --text-3: oklch(from var(--accent) 0.62 0.09 h);
+      --text-4: oklch(from var(--accent) 0.59 0.07 h);
+      --border-1: rgba(168,85,247,0.06); --border-2: rgba(168,85,247,0.10);
+      --border-3: rgba(168,85,247,0.18); --border-4: rgba(168,85,247,0.30);
+      --green: #34d399; --amber: #fbbf24; --red: #ff5f57;
+      --grain-opacity: 0.32; --grid-color: rgba(168,85,247,0.06);
+      --dot-field-color: rgba(255, 255, 255, 0.44);
+      --nav-bg: rgba(6, 6, 10, 0.45);
+      color-scheme: dark;
+    }
+
+    /* ── LIGHT THEME ──────────────────────────────────────────────── */
+    [data-theme="light"] {
+      --bg-base: #f4f2ee; --bg-deep: #ede9e1; --bg-surface: #e6e1d8;
+      --bg-elevated: #fff; --bg-overlay: rgba(244,242,238,0.92);
+      --text-1: #0f0a1e; --text-2: #3730a3;
+      --text-3: oklch(from var(--accent) 0.40 0.07 h);
+      --text-4: oklch(from var(--accent) 0.48 0.06 h);
+      --border-1: rgba(80,40,180,0.05); --border-2: rgba(80,40,180,0.10);
+      --border-3: rgba(80,40,180,0.18); --border-4: rgba(80,40,180,0.32);
+      --green: #059669; --amber: #d97706; --red: #dc2626;
+      --grain-opacity: 0.12; --grid-color: rgba(80,40,180,0.04);
+      --dot-field-color: rgba(0, 0, 0, 0.26);
+      --nav-bg: rgba(244, 242, 238, 0.5);
+      --accent-glow: oklch(from var(--accent) l c h / 0.18);
+      color-scheme: light;
+    }
+    [data-theme="light"][data-accent="plasma"] { --accent: oklch(0.42 0.18 290); --accent-bright: oklch(0.35 0.20 290); --accent-dim: oklch(0.90 0.06 290); --accent-tint: oklch(0.42 0.18 290 / 0.07); --accent-border: oklch(0.42 0.18 290 / 0.20); }
+    [data-theme="light"][data-accent="surge"]  { --accent: oklch(0.45 0.16 172); --accent-bright: oklch(0.38 0.18 172); --accent-dim: oklch(0.90 0.05 172); --accent-tint: oklch(0.45 0.16 172 / 0.07); --accent-border: oklch(0.45 0.16 172 / 0.20); }
+    [data-theme="light"][data-accent="frost"]  { --accent: oklch(0.42 0.15 220); --accent-bright: oklch(0.35 0.17 220); --accent-dim: oklch(0.90 0.05 220); --accent-tint: oklch(0.42 0.15 220 / 0.07); --accent-border: oklch(0.42 0.15 220 / 0.20); }
+    [data-theme="light"][data-accent="void"]   { --accent: oklch(0.40 0.20 260); --accent-bright: oklch(0.33 0.22 260); --accent-dim: oklch(0.90 0.06 260); --accent-tint: oklch(0.40 0.20 260 / 0.07); --accent-border: oklch(0.40 0.20 260 / 0.20); }
+    [data-theme="light"][data-accent="dusk"]   { --accent: oklch(0.50 0.13 60);  --accent-bright: oklch(0.44 0.15 60);  --accent-dim: oklch(0.92 0.04 60);  --accent-tint: oklch(0.50 0.13 60 / 0.07);  --accent-border: oklch(0.50 0.13 60 / 0.20); }
+    [data-theme="light"][data-accent="ember"]  { --accent: oklch(0.46 0.18 355); --accent-bright: oklch(0.38 0.20 355); --accent-dim: oklch(0.90 0.06 355); --accent-tint: oklch(0.46 0.18 355 / 0.07); --accent-border: oklch(0.46 0.18 355 / 0.20); }
+
+    /* ── FOUNDATIONS ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body {
+      font-family: 'DM Mono', monospace; font-size: 15px;
+      background: var(--bg-base); color: var(--text-1);
+      line-height: 1.8; min-height: 100vh; overflow-x: clip;
+      transition: background 0.3s, color 0.3s;
+    }
+    /* Grain noise overlay — body::before in the live site */
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+      opacity: var(--grain-opacity);
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+    }
+    /* Dot-field canvas sits behind everything */
+    #dotfield { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; }
+
+    /* ── TYPE HELPERS ─────────────────────────────────────────────── */
+    .f-display { font-family: 'Martian Mono', monospace; }
+    .t-label { font-family: 'Martian Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-3); }
+    .t-accent { color: var(--accent); }
+    .t-muted { color: var(--text-3); }
+    .t-dim { color: var(--text-4); }
+    code { font-family: 'DM Mono', monospace; font-size: 0.85em; color: var(--accent); }
+
+    /* ════════ DOCUMENTATION CHROME (not part of the design system) ═══ */
+    .topbar {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 14px 32px; background: var(--nav-bg); border-bottom: 1px solid var(--border-2);
+      -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+    }
+    .topbar .brand { font-family: 'Martian Mono', monospace; font-weight: 800; letter-spacing: 0.08em; color: var(--accent-bright); }
+    .topbar .brand span { color: var(--text-3); }
+    .topbar .spacer { flex: 1; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 56px 32px 120px; }
+    .lead { max-width: 720px; margin-bottom: 8px; }
+    h1.f-display { font-size: clamp(28px, 5vw, 44px); letter-spacing: -0.01em; line-height: 1.2; margin-bottom: 16px; }
+    section.block { margin-top: 72px; }
+    section.block > h2 { font-family: 'Martian Mono', monospace; font-size: 20px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 6px; }
+    section.block > p.desc { color: var(--text-3); max-width: 720px; margin-bottom: 28px; font-size: 14px; }
+    .grid { display: grid; gap: 16px; }
+    .cols-2 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+    .panel { background: var(--bg-surface); border: 1px solid var(--border-2); padding: 24px; }
+    .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .stack { display: flex; flex-direction: column; gap: 18px; }
+    .specimen { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+    .caption { font-family: 'Martian Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-4); }
+
+    /* color + gradient swatches */
+    .swatch { border: 1px solid var(--border-2); overflow: hidden; }
+    .swatch .chip { height: 72px; }
+    .swatch .meta { padding: 10px 12px; background: var(--bg-elevated); }
+    .swatch .name { font-family: 'Martian Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
+    .swatch .val { font-size: 11px; color: var(--text-3); word-break: break-all; }
+    .checker { background-image: linear-gradient(45deg, var(--border-3) 25%, transparent 25%), linear-gradient(-45deg, var(--border-3) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--border-3) 75%), linear-gradient(-45deg, transparent 75%, var(--border-3) 75%); background-size: 14px 14px; background-position: 0 0, 0 7px, 7px -7px, -7px 0; }
+
+    /* ══════════ LIVE CONTROL STYLES — copied from tokens.css ══════════ */
+    .btn { display: inline-flex; align-items: center; gap: 8px; font-family: 'Martian Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; border: none; cursor: pointer; white-space: nowrap; border-radius: 2px; transition: background .25s, color .25s, box-shadow .25s, border-color .25s, transform .15s; }
+    .btn-primary { background: var(--accent); color: var(--bg-base); padding: 12px 28px; }
+    [data-theme="dark"] .btn-primary { box-shadow: 0 0 24px var(--accent-glow); }
+    .btn-primary:hover { background: var(--accent-bright); transform: translateY(-2px); }
+    [data-theme="dark"] .btn-primary:hover { box-shadow: 0 0 40px var(--accent-glow); }
+    .btn-ghost { background: transparent; color: var(--text-3); padding: 12px 28px; border: 1px solid var(--border-3); }
+    .btn-ghost:hover { border-color: var(--accent-border); color: var(--accent); }
+    .btn-sm { padding: 8px 18px; font-size: 12px; }
+    .btn-xs { padding: 5px 12px; font-size: 11px; }
+    .btn-nav { background: var(--accent); color: var(--bg-base); padding: 8px 18px; font-size: 12px; }
+    [data-theme="dark"] .btn-nav { box-shadow: 0 0 16px var(--accent-glow); }
+    .btn-nav:hover { background: var(--accent-bright); }
+
+    .badge { display: inline-flex; align-items: center; gap: 5px; font-family: 'Martian Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; padding: 3px 9px; }
+    .badge-accent { background: var(--accent-tint); border: 1px solid var(--accent-border); color: var(--accent); }
+    .badge-green { background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.20); color: var(--green); }
+    .badge-dim { background: var(--border-1); border: 1px solid var(--border-2); color: var(--text-3); }
+    .badge-dot::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; display: inline-block; animation: pulse 2s infinite; }
+
+    .input { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text-1); background: var(--bg-deep); border: 1px solid var(--border-3); padding: 11px 14px; outline: none; width: 100%; transition: border-color .25s, box-shadow .25s; }
+    .input::placeholder { color: var(--text-4); }
+    .input:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-tint); }
+
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-2); }
+    .tab { font-family: 'Martian Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); padding: 10px 18px; border-bottom: 2px solid transparent; cursor: pointer; text-decoration: none; margin-bottom: -1px; background: none; transition: color .2s, border-color .2s; }
+    .tab:hover { color: var(--accent); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .conn-pill { font-family: 'Martian Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 10px; border: 1px solid var(--border-3); color: var(--text-3); cursor: default; transition: border-color .2s, color .2s, background .2s; }
+    .conn-pill.active, .conn-pill:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-tint); }
+
+    .tool-badge { font-family: 'Martian Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 2px 7px; border: 1px solid; }
+    .tool-badge.read  { color: var(--green); border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.06); }
+    .tool-badge.write { color: var(--amber); border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.06); }
+
+    .nav-link { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); text-decoration: none; cursor: pointer; transition: color .2s; }
+    .nav-link:hover, .nav-link.active { color: var(--accent); }
+
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-tint); border: 2px solid var(--accent-border); display: flex; align-items: center; justify-content: center; font-family: 'Martian Mono', monospace; font-size: 14px; font-weight: 800; color: var(--accent); flex-shrink: 0; }
+    .card { background: var(--bg-surface); border: 1px solid var(--border-2); padding: 24px; position: relative; overflow: hidden; transition: border-color .25s, background .25s; }
+    .card:hover { border-color: var(--accent-border); background: var(--bg-elevated); }
+
+    /* Theme toggle (sun/moon) */
+    .theme-toggle { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: none; cursor: pointer; flex-shrink: 0; transition: box-shadow 0.2s; }
+    [data-theme="light"] .theme-toggle { background: #111827; color: #fff; }
+    [data-theme="dark"]  .theme-toggle { background: #f1f5f9; color: #111827; }
+    .theme-toggle:hover { box-shadow: 0 0 0 2px var(--accent-border); }
+
+    /* Accent picker button + swatches */
+    .accent-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); border: 2px solid var(--border-3); cursor: pointer; box-shadow: 0 0 10px var(--accent-glow); transition: transform 0.2s, box-shadow 0.2s; flex-shrink: 0; }
+    .accent-btn:hover { transform: scale(1.12); box-shadow: 0 0 20px var(--accent-glow); }
+    .accent-swatch-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .accent-swatch { display: flex; flex-direction: column; gap: 5px; cursor: pointer; align-items: center; min-height: 44px; padding: 8px 4px; border: none; background: transparent; color: inherit; border-radius: 4px; }
+    .accent-swatch-dot { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; transition: transform 0.15s, border-color 0.15s; }
+    .accent-swatch:hover .accent-swatch-dot { transform: scale(1.15); }
+    .accent-swatch.active .accent-swatch-dot { border-color: var(--text-1); }
+    .accent-swatch-name { font-family: 'Martian Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); text-align: center; }
+
+    /* Gradient + glow demo tiles */
+    .gtile { height: 120px; border: 1px solid var(--border-2); display: flex; align-items: flex-end; padding: 10px 12px; }
+    .g-accent-vert  { background: linear-gradient(transparent, var(--accent-glow), transparent); }
+    .g-tint-down    { background: linear-gradient(180deg, var(--accent-tint), transparent); }
+    .g-radial-top   { background: radial-gradient(ellipse at 30% 0%, var(--accent-tint), transparent 70%); }
+    .g-hatch        { background: repeating-linear-gradient(135deg, var(--accent-tint) 0 14px, transparent 14px 28px), var(--bg-surface); }
+    .g-strip        { background: linear-gradient(90deg, var(--accent-tint), transparent); }
+    .glow-box { width: 120px; height: 120px; border-radius: 4px; background: var(--accent); }
+    .glow-static { box-shadow: 0 0 24px var(--accent-glow); }
+    .glow-anim { animation: glow 2.4s ease-in-out infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes glow  { 0%,100%{box-shadow:0 0 20px var(--accent-glow)} 50%{box-shadow:0 0 40px var(--accent-glow)} }
+
+    @media (max-width: 640px) { .wrap { padding: 40px 20px 100px; } .topbar { padding: 12px 20px; } }
+  </style>
+</head>
+<body>
+  <canvas id="dotfield" aria-hidden="true"></canvas>
+
+  <header class="topbar">
+    <span class="brand">rtl<span>://</span>design</span>
+    <div class="spacer"></div>
+    <button class="accent-btn" id="accentBtn" title="Cycle accent" aria-label="Cycle accent color"></button>
+    <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">
+      <svg id="themeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+  </header>
+
+  <main class="wrap">
+    <h1 class="f-display">Visual reference</h1>
+    <p class="lead t-muted">A living spec of the website's <span class="t-accent">background</span>, <span class="t-accent">gradients</span>, and <span class="t-accent">controls</span>. Toggle the theme and cycle the accent in the bar above — every token, gradient, and control below re-renders live, exactly as it does on the site. Values are mirrored from <code>tokens.css</code> and the <code>DotFieldBackground</code> canvas.</p>
+
+    <!-- ════════════ BACKGROUND ════════════ -->
+    <section class="block">
+      <h2>01 · Background</h2>
+      <p class="desc">Three stacked layers compose every page: the flat <code>--bg-base</code> fill, an animated <em>dot-field</em> canvas (<code>z-index:-1</code>), and a fixed fractal-noise grain overlay (<code>z-index:9999</code>). The dot-field running behind this whole page is the real component — a 14px grid where a Perlin/fBm noise mask reveals clusters of 1px dots, and short dashes "hop" between neighbouring cells.</p>
+
+      <div class="grid cols-2">
+        <div class="swatch"><div class="chip" style="background:var(--bg-base)"></div><div class="meta"><div class="name">--bg-base</div><div class="val">page fill · #06060a / #f4f2ee</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--bg-deep)"></div><div class="meta"><div class="name">--bg-deep</div><div class="val">inputs, wells</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--bg-surface)"></div><div class="meta"><div class="name">--bg-surface</div><div class="val">cards, panels</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--bg-elevated)"></div><div class="meta"><div class="name">--bg-elevated</div><div class="val">hover / raised</div></div></div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:16px">
+        <div class="panel specimen">
+          <span class="caption">Dot-field color</span>
+          <div style="width:100%;height:90px;border:1px solid var(--border-2);position:relative;overflow:hidden;background:var(--bg-base)">
+            <canvas id="dotfieldMini" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+          </div>
+          <code>--dot-field-color</code>
+          <span class="t-dim" style="font-size:12px">rgba(255,255,255,0.44) dark · rgba(0,0,0,0.26) light · 14px grid, 1px dots, ≤6 hop-chains</span>
+        </div>
+        <div class="panel specimen">
+          <span class="caption">Grain overlay</span>
+          <div style="width:100%;height:90px;border:1px solid var(--border-2);position:relative;overflow:hidden;background:var(--bg-base)">
+            <div style="position:absolute;inset:0;opacity:var(--grain-opacity);background-image:url(&quot;data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n2)' opacity='0.4'/%3E%3C/svg%3E&quot;);background-size:200px 200px"></div>
+          </div>
+          <code>--grain-opacity</code>
+          <span class="t-dim" style="font-size:12px">fractalNoise, baseFrequency 0.9 · 0.32 dark · 0.12 light</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ GRADIENTS & GLOW ════════════ -->
+    <section class="block">
+      <h2>02 · Gradients &amp; glow</h2>
+      <p class="desc">All gradients are accent-driven and derive from <code>--accent-tint</code> (8% alpha), <code>--accent-glow</code> (35% dark / 18% light), and <code>--accent-bright</code>. They wash sections, separators, and hover states. Cycle the accent to see them shift in hue.</p>
+
+      <div class="grid cols-3">
+        <div class="specimen"><div class="gtile g-radial-top"></div><code>radial-gradient(ellipse at 30% 0%, --accent-tint, transparent 70%)</code></div>
+        <div class="specimen"><div class="gtile g-tint-down"></div><code>linear-gradient(180deg, --accent-tint, transparent)</code></div>
+        <div class="specimen"><div class="gtile g-accent-vert"></div><code>linear-gradient(transparent, --accent-glow, transparent)</code></div>
+        <div class="specimen"><div class="gtile g-strip"></div><code>linear-gradient(90deg, --accent-tint, transparent)</code></div>
+        <div class="specimen"><div class="gtile g-hatch"></div><code>repeating-linear-gradient(135deg, --accent-tint 0 14px, transparent 14px 28px)</code></div>
+        <div class="specimen">
+          <div class="gtile" style="justify-content:center;align-items:center;gap:18px">
+            <div class="glow-box glow-static" style="width:64px;height:64px"></div>
+            <div class="glow-box glow-anim" style="width:64px;height:64px"></div>
+          </div>
+          <code>box-shadow: 0 0 24px --accent-glow · @keyframes glow</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ ACCENTS ════════════ -->
+    <section class="block">
+      <h2>03 · Accent palette</h2>
+      <p class="desc">Six OKLCH accents, each with light + dark variants. The active one drives <code>--accent</code>, <code>--accent-bright</code>, <code>--accent-glow</code>, <code>--accent-tint</code>, and <code>--accent-border</code>. Click a swatch to apply it.</p>
+      <div class="panel">
+        <div class="accent-swatch-row" id="accentSwatches" style="grid-template-columns:repeat(6,1fr)"></div>
+      </div>
+    </section>
+
+    <!-- ════════════ TEXT & BORDERS ════════════ -->
+    <section class="block">
+      <h2>04 · Text &amp; borders</h2>
+      <p class="desc">Four text tiers and four border tiers, all theme-aware. Text 3 &amp; 4 are derived from the live accent hue via <code>oklch(from var(--accent) …)</code>.</p>
+      <div class="grid cols-2">
+        <div class="panel stack">
+          <span style="color:var(--text-1)">text-1 — primary copy</span>
+          <span style="color:var(--text-2)">text-2 — secondary / links</span>
+          <span style="color:var(--text-3)">text-3 — muted labels</span>
+          <span style="color:var(--text-4)">text-4 — dim / placeholder</span>
+        </div>
+        <div class="panel stack">
+          <div style="height:1px;background:var(--border-1)"></div><span class="caption">border-1 · hairline</span>
+          <div style="height:1px;background:var(--border-2)"></div><span class="caption">border-2 · default</span>
+          <div style="height:1px;background:var(--border-3)"></div><span class="caption">border-3 · strong</span>
+          <div style="height:1px;background:var(--border-4)"></div><span class="caption">border-4 · max</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ CONTROLS ════════════ -->
+    <section class="block">
+      <h2>05 · Controls</h2>
+      <p class="desc">Every interactive primitive, live. Hover and focus to see transitions. Dark mode adds an accent glow to primary/nav buttons.</p>
+
+      <div class="stack">
+        <div class="panel specimen">
+          <span class="caption">Buttons — .btn</span>
+          <div class="row">
+            <button class="btn btn-primary">Primary →</button>
+            <button class="btn btn-ghost">Ghost</button>
+            <button class="btn btn-nav">Nav CTA</button>
+            <button class="btn btn-primary btn-sm">Small</button>
+            <button class="btn btn-ghost btn-xs">XS Ghost</button>
+          </div>
+        </div>
+
+        <div class="panel specimen">
+          <span class="caption">Theme toggle · accent picker</span>
+          <div class="row">
+            <div class="theme-toggle" style="cursor:default"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+            <div class="accent-btn" style="cursor:default"></div>
+            <span class="t-dim" style="font-size:12px">44×44 circular · sun/moon flip · accent ring glow on hover</span>
+          </div>
+        </div>
+
+        <div class="panel specimen">
+          <span class="caption">Badges &amp; pills</span>
+          <div class="row">
+            <span class="badge badge-accent badge-dot">Live</span>
+            <span class="badge badge-green">Stable</span>
+            <span class="badge badge-dim">v2.1</span>
+            <span class="conn-pill active">connected</span>
+            <span class="conn-pill">idle</span>
+            <span class="tool-badge read">read</span>
+            <span class="tool-badge write">write</span>
+            <span class="avatar">R</span>
+          </div>
+        </div>
+
+        <div class="panel specimen" style="width:100%">
+          <span class="caption">Input — .input (focus me)</span>
+          <input class="input" placeholder="heku install @rtl/github-http" style="max-width:420px" />
+        </div>
+
+        <div class="panel specimen" style="width:100%">
+          <span class="caption">Tabs — .tab</span>
+          <div class="tabs" id="tabs">
+            <button class="tab active">Overview</button>
+            <button class="tab">Tokens</button>
+            <button class="tab">Controls</button>
+          </div>
+        </div>
+
+        <div class="panel specimen" style="width:100%">
+          <span class="caption">Nav links — .nav-link</span>
+          <div class="row" style="gap:32px">
+            <a class="nav-link active">Home</a>
+            <a class="nav-link">heku</a>
+            <a class="nav-link">Knotless</a>
+            <a class="nav-link">Docs</a>
+            <a class="nav-link">Blog</a>
+          </div>
+        </div>
+
+        <div class="grid cols-2" style="width:100%">
+          <div class="card"><div class="t-label" style="margin-bottom:8px">Card</div><p class="t-muted" style="font-size:13px">.card — surface fill, border-2, hover lifts to bg-elevated + accent-border. Hover me.</p></div>
+          <div class="card"><div class="t-label" style="margin-bottom:8px">Card</div><p class="t-muted" style="font-size:13px">Used for product features, blog cards, config tiles across the site.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <p class="caption" style="margin-top:80px">Generated from src/lib/ui/styles/tokens.css · src/components/DotFieldBackground · keep in sync when tokens change.</p>
+  </main>
+
+  <script>
+    const ACCENTS = [
+      { id: 'plasma', label: 'Plasma' }, { id: 'surge', label: 'Surge' },
+      { id: 'frost',  label: 'Frost'  }, { id: 'void',  label: 'Void'  },
+      { id: 'dusk',   label: 'Dusk'   }, { id: 'ember', label: 'Ember' },
+    ];
+    const root = document.documentElement;
+
+    /* ── theme toggle ── */
+    const SUN = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>';
+    const MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor" stroke="none"/>';
+    const themeIcon = document.getElementById('themeIcon');
+    function paintThemeIcon() { themeIcon.innerHTML = root.dataset.theme === 'dark' ? SUN : MOON; }
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      paintThemeIcon();
+    });
+    paintThemeIcon();
+
+    /* ── accent picker ── */
+    function setAccent(id) { root.dataset.accent = id; document.querySelectorAll('.accent-swatch').forEach(s => s.classList.toggle('active', s.dataset.accent === id)); }
+    const swatchHost = document.getElementById('accentSwatches');
+    ACCENTS.forEach(a => {
+      const el = document.createElement('button');
+      el.className = 'accent-swatch' + (a.id === root.dataset.accent ? ' active' : '');
+      el.dataset.accent = a.id;
+      const sw = root.dataset.theme, prev = root.dataset.accent;
+      el.innerHTML = `<span class="accent-swatch-dot"></span><span class="accent-swatch-name">${a.label}</span>`;
+      // color the dot using that accent's value regardless of current selection
+      el.querySelector('.accent-swatch-dot').style.background = `var(--swatch-${a.id})`;
+      el.addEventListener('click', () => setAccent(a.id));
+      swatchHost.appendChild(el);
+    });
+    // expose each accent's base color as a variable so swatches always show their own hue
+    const accentBase = { plasma:'oklch(0.65 0.22 290)', surge:'oklch(0.75 0.20 172)', frost:'oklch(0.72 0.18 220)', void:'oklch(0.62 0.26 260)', dusk:'oklch(0.78 0.17 60)', ember:'oklch(0.68 0.22 355)' };
+    Object.entries(accentBase).forEach(([k,v]) => root.style.setProperty(`--swatch-${k}`, v));
+    document.getElementById('accentBtn').addEventListener('click', () => {
+      const i = ACCENTS.findIndex(a => a.id === root.dataset.accent);
+      setAccent(ACCENTS[(i + 1) % ACCENTS.length].id);
+    });
+
+    /* ── tabs demo ── */
+    document.querySelectorAll('#tabs .tab').forEach(t => t.addEventListener('click', () => {
+      document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    }));
+
+    /* ════════ DOT-FIELD CANVAS — faithful port of DotFieldBackground ════════ */
+    const GRID = 14, DOT = 1, DASH_LEN = 7, MAX_CHAINS = 6, HOP_MS = 1000, MORPH_FRAC = 0.28,
+          SPAWN_MIN_MS = 160, SPAWN_MAX_MS = 420, MAX_CHAIN_HOPS = 6, SPAWN_BURST = 2;
+
+    function createNoise(seed = 0x5f3759df) {
+      const perm = new Uint8Array(512), src = new Uint8Array(256);
+      for (let i = 0; i < 256; i++) src[i] = i;
+      let s = seed >>> 0;
+      for (let i = 255; i > 0; i--) { s = (s * 1664525 + 1013904223) >>> 0; const j = s % (i + 1); const t = src[i]; src[i] = src[j]; src[j] = t; }
+      for (let i = 0; i < 512; i++) perm[i] = src[i & 255];
+      const grad = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+      const dot = (g,x,y) => g[0]*x + g[1]*y;
+      return function (x, y) {
+        const xi = Math.floor(x) & 255, yi = Math.floor(y) & 255, xf = x - Math.floor(x), yf = y - Math.floor(y);
+        const u = xf*xf*xf*(xf*(xf*6-15)+10), v = yf*yf*yf*(yf*(yf*6-15)+10);
+        const aa = perm[xi]+yi, ab = perm[xi+1]+yi;
+        const g00=grad[perm[aa]&7],g10=grad[perm[ab]&7],g01=grad[perm[aa+1]&7],g11=grad[perm[ab+1]&7];
+        const x1=dot(g00,xf,yf),x2=dot(g10,xf-1,yf),y1=x1+u*(x2-x1);
+        const x3=dot(g01,xf,yf-1),x4=dot(g11,xf-1,yf-1),y2=x3+u*(x4-x3);
+        return y1+v*(y2-y1);
+      };
+    }
+    function fbm(noise,x,y,oct=4){let val=0,amp=0.55,fr=1;for(let i=0;i<oct;i++){val+=amp*noise(x*fr,y*fr);amp*=0.5;fr*=2.1;}return val*0.5+0.5;}
+    function smoothstep(e0,e1,x){const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t);}
+    function easeOutDamped(t){const c=Math.max(0,Math.min(1,t));return 1-(1-c)**4*Math.cos(c*Math.PI*0.5);}
+    function easeInDamped(t){const c=Math.max(0,Math.min(1,t));return c**3;}
+    function parseColor(color){const m=color.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?\s*\)/);if(m)return{rgb:[+m[1],+m[2],+m[3]],alpha:m[4]?+m[4]:0.3};return{rgb:[255,255,255],alpha:0.3};}
+
+    function makeDotField(canvas) {
+      const ctx = canvas.getContext('2d', { alpha: true });
+      const noise = createNoise();
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let width=0,height=0,dpr=1,rgb=[255,255,255],baseAlpha=0.44,cols=0,rows=0,visible=new Set(),chains=[],animId=0,lastTs=0,nextSpawnAt=0;
+      const key=(c,r)=>c+','+r, center=(c,r)=>({x:c*GRID+GRID*0.5,y:r*GRID+GRID*0.5});
+      function readTheme(){const raw=getComputedStyle(document.documentElement).getPropertyValue('--dot-field-color').trim();const p=parseColor(raw);rgb=p.rgb;baseAlpha=p.alpha;if(reduced)draw(0);}
+      function rebuild(){visible=new Set();cols=Math.ceil(width/GRID)+1;rows=Math.ceil(height/GRID)+1;const scale=0.0044,th=0.57;for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const{x,y}=center(c,r);let d=fbm(noise,x*scale,y*scale);d+=fbm(noise,x*scale*2.2+4.2,y*scale*2.2-1.8,3)*0.42;d/=1.42;if(smoothstep(th-0.07,th+0.09,d)>=0.04)visible.add(key(c,r));}}
+      function resize(){dpr=Math.min(window.devicePixelRatio||1,2);const rect=canvas.getBoundingClientRect();width=rect.width;height=rect.height;canvas.width=Math.ceil(width*dpr);canvas.height=Math.ceil(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);rebuild();chains=[];nextSpawnAt=performance.now()+SPAWN_MIN_MS;}
+      const isVis=(c,r)=>visible.has(key(c,r));
+      function busy(){const b=new Set();for(const ch of chains){b.add(key(ch.fromCol,ch.fromRow));b.add(key(ch.toCol,ch.toRow));}return b;}
+      function neighbor(c,r,prev){const o=[{col:c-1,row:r,axis:'h'},{col:c+1,row:r,axis:'h'},{col:c,row:r-1,axis:'v'},{col:c,row:r+1,axis:'v'}].filter(n=>isVis(n.col,n.row)&&key(n.col,n.row)!==prev);return o.length?o[Math.floor(Math.random()*o.length)]:null;}
+      function startHop(fc,fr,hops,prev){const b=busy();if(b.has(key(fc,fr)))return false;const n=neighbor(fc,fr,prev);if(!n)return false;if(b.has(key(n.col,n.row)))return false;chains.push({fromCol:fc,fromRow:fr,toCol:n.col,toRow:n.row,axis:n.axis,t:0,hopsLeft:hops});return true;}
+      function spawn(now){if(now<nextSpawnAt)return;nextSpawnAt=now+SPAWN_MIN_MS+Math.random()*(SPAWN_MAX_MS-SPAWN_MIN_MS);for(let bu=0;bu<SPAWN_BURST&&chains.length<MAX_CHAINS;bu++){const b=busy(),cand=[];for(const k of visible)if(!b.has(k))cand.push(k);if(!cand.length)break;let ok=false;for(let a=0;a<8;a++){const[c,r]=cand[Math.floor(Math.random()*cand.length)].split(',').map(Number);if(startHop(c,r,2+Math.floor(Math.random()*(MAX_CHAIN_HOPS-1)))){ok=true;break;}}if(!ok)break;}}
+      function dash(x,y,axis,morph,alpha,vel=0){const dm=easeInDamped(morph);const w=axis==='h'?DOT+(DASH_LEN-DOT)*dm:DOT,h=axis==='v'?DOT+(DASH_LEN-DOT)*dm:DOT;const a=alpha*(0.72+0.28*(1-Math.min(1,vel*1.4)));ctx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;ctx.fillRect(x-w*0.5,y-h*0.5,w,h);}
+      function dot(x,y,a){ctx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;ctx.fillRect(x-DOT*0.5,y-DOT*0.5,DOT,DOT);}
+      function drawChain(ch){const f=center(ch.fromCol,ch.fromRow),t=center(ch.toCol,ch.toRow),a=baseAlpha;if(ch.t<MORPH_FRAC){dash(f.x,f.y,ch.axis,ch.t/MORPH_FRAC,a,0);return;}if(ch.t>1-MORPH_FRAC){const m=(1-ch.t)/MORPH_FRAC;dash(t.x,t.y,ch.axis,easeOutDamped(1-m),a,0);return;}const raw=(ch.t-MORPH_FRAC)/(1-MORPH_FRAC*2),tt=easeOutDamped(raw),vel=(1-raw)**2.2;dash(f.x+(t.x-f.x)*tt,f.y+(t.y-f.y)*tt,ch.axis,1,a,vel);}
+      function update(dt,now){const done=[];for(const ch of chains){ch.t+=dt/HOP_MS;if(ch.t>=1)done.push(ch);}chains=chains.filter(c=>c.t<1);for(const ch of done){if(ch.hopsLeft-1>0)startHop(ch.toCol,ch.toRow,ch.hopsLeft-1,key(ch.fromCol,ch.fromRow));}spawn(now);}
+      function draw(ts){const now=ts||performance.now();const dt=lastTs?Math.min(now-lastTs,50):0;lastTs=now;if(!reduced)update(dt,now);ctx.clearRect(0,0,width,height);const hidden=new Set();for(const ch of chains){hidden.add(key(ch.fromCol,ch.fromRow));if(ch.t<1-MORPH_FRAC*0.5)hidden.add(key(ch.toCol,ch.toRow));}for(const k of visible){if(hidden.has(k))continue;const[c,r]=k.split(',').map(Number);const{x,y}=center(c,r);dot(x,y,baseAlpha);}for(const ch of chains)drawChain(ch);if(!reduced)animId=requestAnimationFrame(draw);}
+      readTheme();resize();draw(0);
+      new MutationObserver(readTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','data-accent']});
+      window.addEventListener('resize',()=>{resize();if(reduced)draw(0);});
+    }
+    makeDotField(document.getElementById('dotfield'));
+    makeDotField(document.getElementById('dotfieldMini'));
+  </script>
+</body>
+</html>

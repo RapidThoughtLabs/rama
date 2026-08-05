@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rama — Logo in Motion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --display:'Martian Mono',var(--mono);
+  color-scheme:dark;
+}
+/* ---- DARK (default) ---- */
+:root,:root[data-theme="dark"]{
+  --page-bg:#06060a;
+  --sf:#0a0a12;
+  --sf-hi:#0e0e1a;
+  --ink:#ecebf6;
+  --ink-dim:#8a88a6;
+  --accent:oklch(0.65 0.22 290);
+  --accent-hi:oklch(0.78 0.24 290);
+  --accent-rgb:150 90 240;
+  --line:rgba(150,140,220,0.10);
+  --glow-a:0.16; --glow-b:0.12;
+  --card-shadow:0 24px 60px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.03);
+  --vig:rgba(0,0,0,0.7);
+  --grain-op:.05; --grain-blend:overlay;
+}
+/* ---- LIGHT ---- */
+:root[data-theme="light"]{
+  --page-bg:#f4f2fb;
+  --sf:#ffffff;
+  --sf-hi:#fbfaff;
+  --ink:#161320;
+  --ink-dim:#726f88;
+  --accent:oklch(0.55 0.23 290);
+  --accent-hi:oklch(0.62 0.25 290);
+  --accent-rgb:120 60 220;
+  --line:rgba(70,50,150,0.14);
+  --glow-a:0.10; --glow-b:0.08;
+  --card-shadow:0 20px 44px -28px rgba(60,40,120,.32), inset 0 1px 0 rgba(255,255,255,.7);
+  --vig:rgba(120,110,160,0.12);
+  --grain-op:.04; --grain-blend:multiply;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:
+    radial-gradient(1200px 800px at 70% -10%, rgba(var(--accent-rgb)/var(--glow-a)), transparent 60%),
+    radial-gradient(900px 700px at 10% 110%, rgba(var(--accent-rgb)/var(--glow-b)), transparent 55%),
+    var(--page-bg);
+  color:var(--ink);
+  font-family:var(--mono);
+  min-height:100%;
+  -webkit-font-smoothing:antialiased;
+  padding:56px 32px 96px;
+  position:relative;
+  overflow-x:hidden;
+  transition:background-color .5s ease,color .5s ease;
+}
+/* film grain */
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:var(--grain-op);mix-blend-mode:var(--grain-blend);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+/* vignette */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:49;
+  box-shadow:inset 0 0 240px 40px var(--vig);}
+
+header{max-width:1160px;margin:0 auto 44px;position:relative;z-index:2}
+.kicker{font-size:11px;letter-spacing:.42em;text-transform:uppercase;color:var(--accent-hi);opacity:.9}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(28px,4.4vw,46px);margin:.35em 0 .2em;letter-spacing:-.01em}
+.sub{color:var(--ink-dim);max-width:60ch;line-height:1.65;font-size:13.5px}
+.sub b{color:var(--ink);font-weight:500}
+
+.grid{max-width:1160px;margin:0 auto;display:grid;gap:22px;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));position:relative;z-index:2}
+.card{
+  position:relative;border:1px solid var(--line);border-radius:18px;
+  background:linear-gradient(180deg,var(--sf-hi),var(--sf));
+  aspect-ratio:1/1;display:grid;place-items:center;overflow:hidden;
+  box-shadow:var(--card-shadow);
+  transition:transform .5s cubic-bezier(.2,.8,.2,1),border-color .5s,box-shadow .5s,background .5s;
+}
+.card:hover{transform:translateY(-4px);border-color:rgba(var(--accent-rgb)/.4)}
+.card:hover .glow{opacity:1}
+.glow{position:absolute;inset:-40%;background:radial-gradient(circle at 50% 45%,rgba(var(--accent-rgb)/.18),transparent 55%);opacity:.5;transition:opacity .6s;pointer-events:none}
+.label{position:absolute;left:16px;bottom:14px;z-index:3;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim)}
+.label b{display:block;color:var(--ink);font-size:12px;letter-spacing:.14em;margin-bottom:2px;font-weight:500}
+.idx{position:absolute;right:16px;top:13px;z-index:3;font-size:10px;color:var(--ink-dim);opacity:.6;letter-spacing:.2em}
+
+.stage{width:66%;height:66%;display:grid;place-items:center}
+svg.rama{width:100%;height:100%;overflow:visible}
+.rama .ring{fill:none;stroke:var(--ink);stroke-width:4.4;stroke-linecap:round;
+  filter:drop-shadow(0 0 6px rgba(var(--accent-rgb)/.35));}
+.rama .core{fill:var(--ink);filter:drop-shadow(0 0 10px rgba(var(--accent-rgb)/.6));}
+
+/* ============ 1. AURORA SPIN — rings rotate at Fibonacci-scaled speeds ============ */
+.v-spin .ring,.v-spin .core{transform-box:fill-box;transform-origin:center}
+.v-spin .r0{animation:spin 34s linear infinite}
+.v-spin .r1{animation:spin 21s linear infinite reverse}
+.v-spin .r2{animation:spin 13s linear infinite}
+.v-spin .r3{animation:spin 8s linear infinite reverse}
+.v-spin .core{animation:pulseCore 3.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ============ 2. GENESIS — draw the spiral on, ring by ring, loop ============ */
+.v-draw .ring{stroke-dasharray:100;stroke-dashoffset:100;animation:draw 6s ease-in-out infinite}
+.v-draw .r0{animation-delay:0s}
+.v-draw .r1{animation-delay:.5s}
+.v-draw .r2{animation-delay:1s}
+.v-draw .r3{animation-delay:1.5s}
+.v-draw .core{animation:coreFade 6s ease-in-out infinite;animation-delay:2s}
+@keyframes draw{
+  0%{stroke-dashoffset:100;opacity:.15}
+  30%{opacity:1}
+  55%{stroke-dashoffset:0;opacity:1}
+  80%{stroke-dashoffset:0;opacity:1}
+  100%{stroke-dashoffset:-100;opacity:.15}
+}
+@keyframes coreFade{0%,25%{opacity:0;transform:scale(.2)}45%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:scale(.2)}}
+.v-draw .core{transform-box:fill-box;transform-origin:center}
+
+/* ============ 3. BREATHE — whole mark inhales, core is a heartbeat ============ */
+.v-breathe .grp{transform-box:fill-box;transform-origin:center;animation:breathe 5s ease-in-out infinite}
+.v-breathe .core{transform-box:fill-box;transform-origin:center;animation:heart 1.6s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(.94);filter:brightness(.85)}50%{transform:scale(1.04);filter:brightness(1.2)}}
+@keyframes heart{0%,100%{transform:scale(.7);opacity:.6}18%{transform:scale(1.15);opacity:1}36%{transform:scale(.85)}54%{transform:scale(1.05)}}
+
+/* ============ 4. THOUGHT RIPPLE — echoes expand outward from the core ============ */
+.v-ripple .ring{opacity:.28}
+.v-ripple .echo{fill:none;stroke:var(--accent-hi);stroke-width:3.6;transform-box:fill-box;transform-origin:center;opacity:0;animation:echo 3.6s ease-out infinite}
+.v-ripple .e1{animation-delay:0s}
+.v-ripple .e2{animation-delay:1.2s}
+.v-ripple .e3{animation-delay:2.4s}
+.v-ripple .core{animation:pulseCore 3.6s ease-out infinite}
+@keyframes echo{0%{transform:scale(.15);opacity:.9}70%{opacity:.35}100%{transform:scale(2.6);opacity:0}}
+
+/* ============ 5. ORBIT — a photon travels the golden spiral ============ */
+.v-orbit .ring{opacity:.35}
+.v-orbit .photon{offset-rotate:0deg;animation:orbit 5.5s cubic-bezier(.5,0,.5,1) infinite}
+.v-orbit .photon circle{fill:var(--accent-hi);filter:drop-shadow(0 0 8px var(--accent-hi)) drop-shadow(0 0 16px var(--accent))}
+.v-orbit .core{animation:pulseCore 2.4s ease-in-out infinite}
+@keyframes orbit{0%{offset-distance:0%;opacity:0}8%{opacity:1}92%{opacity:1}100%{offset-distance:100%;opacity:0}}
+
+/* ============ 6. PRISM — accent hue drifts, rings counter-rotate ============ */
+.v-prism{animation:hue 12s linear infinite}
+.v-prism .ring{stroke:var(--accent-hi)}
+.v-prism .grp{transform-box:fill-box;transform-origin:center;animation:spin 40s linear infinite}
+.v-prism .r1{transform-box:fill-box;transform-origin:center;animation:spin 24s linear infinite reverse}
+.v-prism .r2{transform-box:fill-box;transform-origin:center;animation:spin 16s linear infinite}
+.v-prism .core{animation:pulseCore 4s ease-in-out infinite}
+@keyframes hue{to{filter:hue-rotate(360deg)}}
+
+@keyframes pulseCore{0%,100%{opacity:.55;transform:scale(.8)}50%{opacity:1;transform:scale(1.12)}}
+.rama .core{transform-box:fill-box;transform-origin:center}
+
+.theme-toggle{position:fixed;top:22px;right:26px;z-index:60;display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);
+  background:linear-gradient(180deg,var(--sf-hi),var(--sf));border:1px solid var(--line);border-radius:999px;
+  padding:9px 15px;cursor:pointer;box-shadow:var(--card-shadow);transition:transform .3s,border-color .3s,background .5s,color .5s}
+.theme-toggle:hover{transform:translateY(-2px);border-color:rgba(var(--accent-rgb)/.4)}
+.theme-toggle .ic{font-size:13px;color:var(--accent-hi)}
+
+footer{max-width:1160px;margin:56px auto 0;color:var(--ink-dim);font-size:11px;letter-spacing:.14em;
+  display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;z-index:2;
+  border-top:1px solid var(--line);padding-top:18px}
+footer .dot{color:var(--accent-hi)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme"><span class="ic" id="themeIc">☾</span><span id="themeTxt">Dark</span></button>
+<header>
+  <div class="kicker">RapidThought Labs · Rama</div>
+  <h1>The mark, in motion.</h1>
+  <p class="sub">Six animated takes on the golden-ratio nautilus — nested rings spiralling toward a single <b>thought-core</b>. Reconstructed as live geometry so it breathes, draws, and ripples. Hover any tile.</p>
+</header>
+
+<main class="grid" id="grid"></main>
+
+<footer>
+  <span>φ = 1.618 · nested at 1/φ</span>
+  <span><span class="dot">◐</span> rama · the terminal that grew a UI</span>
+</footer>
+
+<script>
+const PHI = 1.618033988749;
+// Build the nested golden-ratio ring geometry once. 3 rings = simpler, bolder mark.
+function ramaRings(){
+  const rings=[]; let cx=48, cy=40, r=38, angle=0.34;
+  for(let i=0;i<3;i++){
+    rings.push({cx,cy,r});
+    const nr=r/PHI, d=r-nr;
+    cx += d*Math.sin(angle);
+    cy += d*Math.cos(angle);
+    angle += 0.72;
+    r=nr;
+  }
+  return rings;
+}
+const RINGS = ramaRings();
+const CORE = RINGS[RINGS.length-1]; // innermost becomes the solid thought-core
+
+// Golden logarithmic spiral path (for the orbit photon).
+function spiralPath(){
+  const cx=RINGS[2].cx, cy=RINGS[2].cy;
+  const b=Math.log(PHI)/(Math.PI/2); let d="";
+  for(let t=0;t<=Math.PI*3.4;t+=0.12){
+    const rad=2.4*Math.exp(b*t);
+    const x=cx+rad*Math.cos(t), y=cy+rad*Math.sin(t);
+    d+=(d?"L":"M")+x.toFixed(2)+" "+y.toFixed(2);
+  }
+  return d;
+}
+
+function ringsSVG(){
+  let s="";
+  RINGS.forEach((rg,i)=>{
+    if(i===RINGS.length-1){
+      // innermost = one solid filled disc (the thought-core), no gap
+      s+=`<circle class="core" cx="${rg.cx}" cy="${rg.cy}" r="${(rg.r+2.2).toFixed(2)}"/>`;
+    }else{
+      s+=`<circle class="ring r${i}" cx="${rg.cx}" cy="${rg.cy}" r="${rg.r}" pathLength="100"/>`;
+    }
+  });
+  return s;
+}
+
+const VARIANTS=[
+  {cls:"v-spin",    name:"Aurora Spin",    note:"fibonacci-timed rotation"},
+  {cls:"v-draw",    name:"Genesis",        note:"self-drawing spiral"},
+  {cls:"v-breathe", name:"Breathe",        note:"inhale · heartbeat core"},
+  {cls:"v-ripple",  name:"Thought Ripple", note:"echoes outward"},
+  {cls:"v-orbit",   name:"Orbit",          note:"photon on the spiral"},
+  {cls:"v-prism",   name:"Prism Drift",    note:"hue + counter-rotation"},
+];
+
+const grid=document.getElementById("grid");
+VARIANTS.forEach((v,i)=>{
+  const card=document.createElement("div");
+  card.className="card "+v.cls;
+
+  let extra="";
+  if(v.cls==="v-ripple"){
+    const c=CORE;
+    extra=`<circle class="echo e1" cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>
+           <circle class="echo e2" cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>
+           <circle class="echo e3" cx="${c.cx}" cy="${c.cy}" r="${c.r}"/>`;
+  }
+  let photon="";
+  if(v.cls==="v-orbit"){
+    photon=`<g class="photon"><circle r="4"/></g>`;
+  }
+
+  card.innerHTML=`
+    <div class="glow"></div>
+    <div class="idx">0${i+1}</div>
+    <div class="stage">
+      <svg class="rama" viewBox="0 0 100 100">
+        <g class="grp">${ringsSVG()}${extra}${photon}</g>
+      </svg>
+    </div>
+    <div class="label"><b>${v.name}</b>${v.note}</div>`;
+  grid.appendChild(card);
+
+  if(v.cls==="v-orbit"){
+    const ph=card.querySelector(".photon");
+    const p=spiralPath();
+    ph.style.offsetPath=`path('${p}')`;
+    ph.style.offsetPath=`path("${p}")`;
+  }
+});
+
+/* ---- theme toggle ---- */
+(function(){
+  const root=document.documentElement, btn=document.getElementById("themeToggle");
+  const ic=document.getElementById("themeIc"), txt=document.getElementById("themeTxt");
+  function apply(t){
+    root.setAttribute("data-theme",t);
+    ic.textContent = t==="dark" ? "☾" : "☀";
+    txt.textContent = t==="dark" ? "Dark" : "Light";
+  }
+  apply(localStorage.getItem("rama-theme") || "dark");
+  btn.addEventListener("click",()=>{
+    const next = root.getAttribute("data-theme")==="dark" ? "light" : "dark";
+    apply(next); localStorage.setItem("rama-theme",next);
+  });
+})();
+</script>
+</body>
+</html>

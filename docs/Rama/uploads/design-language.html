@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en" data-mode="dark" data-accent="plasma">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>rtl:// console — design language</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   RTL:// CONSOLE — DESIGN LANGUAGE REFERENCE
+   A single-file, live, self-documenting spec of the "heku" console design
+   system. Everything below is the real token set, lifted from the product,
+   with prose explaining *why* each decision was made so it can be ported.
+
+   The page dogfoods its own system — switch mode / accent in the top bar and
+   the entire document re-themes through the CSS custom properties.
+══════════════════════════════════════════════════════════════════════════ */
+
+/* ── DARK MODE DEFAULTS (the canonical baseline) ── */
+:root {
+  font-size: 13px;                 /* base rem anchor — user-adjustable 11–18px */
+
+  --accent-h: 255;                 /* accent is an HSL triplet, not a hex,      */
+  --accent-s: 100%;                /* so any hue can be swapped at runtime and  */
+  --accent-l: 71%;                 /* every tint/glow recomputes from it.       */
+  --accent:     hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+  --accent-dim: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.12);
+  --accent-txt: #0a0a0a;           /* text that sits ON the accent fill         */
+
+  --bg:       #0a0a0a;             /* near-black canvas                         */
+  --surface:  #141414;             /* raised panels (sidebar, cards, modals)    */
+  --surface2: #1c1c1c;             /* hover / nested surface                    */
+  --surface3: #222222;            /* deepest nested surface                    */
+  --border:   #242424;             /* hairline dividers                         */
+  --border2:  #303030;             /* interactive / emphasised borders          */
+  --cell-bg:  #111111;             /* code / terminal cell background           */
+
+  --text:     #e8e8e0;             /* primary — warm off-white, not pure #fff   */
+  --text-mid: #aaa8a0;             /* secondary                                 */
+  --text-dim: #787870;             /* tertiary / placeholder / muted labels     */
+
+  --red:    #ff5f57;               /* macOS traffic-light palette — familiar,   */
+  --yellow: #febc2e;               /* legible on dark, used for status/semantics*/
+  --green:  #28c840;
+  --blue:   #60a8f0;
+
+  --green-text: #28c840;
+  --green-dim:  rgba(40, 200, 64, 0.13);
+
+  /* Signature: 3-layer "halogen glow". Tight hot core → mid bloom → wide haze.
+     Applied on primary hover, active brand, focus. This is the house effect. */
+  --glow:
+    0 0 2px 1px  hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.70),
+    0 0 10px 3px hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.35),
+    0 0 28px 6px hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.15);
+
+  --cancel-glow:
+    0 0 2px 1px  hsla(0, 75%, 55%, 0.65),
+    0 0 10px 3px hsla(0, 75%, 55%, 0.30),
+    0 0 24px 5px hsla(0, 75%, 55%, 0.12);
+
+  /* doc-only helpers */
+  --doc-max: 1180px;
+}
+
+/* ── ACCENT PRESETS (dark) — swap one hue, whole UI follows ── */
+[data-accent="plasma"] { --accent-h: 255; --accent-s: 100%; --accent-l: 71%; }
+[data-accent="surge"]  { --accent-h: 165; --accent-s: 100%; --accent-l: 42%; }
+[data-accent="frost"]  { --accent-h: 193; --accent-s: 100%; --accent-l: 47%; }
+[data-accent="void"]   { --accent-h: 212; --accent-s: 100%; --accent-l: 50%; }
+[data-accent="dusk"]   { --accent-h: 31;  --accent-s: 100%; --accent-l: 58%; }
+[data-accent="ember"]  { --accent-h: 331; --accent-s: 93%;  --accent-l: 63%; }
+
+/* ── LIGHT MODE — warm paper, not cold white ── */
+[data-mode="light"] {
+  --bg:       #f0ede8;
+  --surface:  #e8e4de;
+  --surface2: #dedad4;
+  --surface3: #d4d0ca;
+  --border:   #b4b0a8;
+  --border2:  #a4a09a;
+  --cell-bg:  #ebe8e2;
+  --text:     #121210;
+  --text-mid: #484840;
+  --text-dim: #6e6c66;
+  --accent-txt: #ffffff;
+  --green-text: hsl(130, 40%, 32%);
+  --green-dim:  rgba(40, 200, 64, 0.10);
+}
+/* Accent presets get deeper, less-saturated shades on light backdrops */
+[data-mode="light"][data-accent="plasma"] { --accent-h: 258; --accent-s: 57%;  --accent-l: 41%; }
+[data-mode="light"][data-accent="surge"]  { --accent-h: 161; --accent-s: 100%; --accent-l: 22%; }
+[data-mode="light"][data-accent="frost"]  { --accent-h: 199; --accent-s: 100%; --accent-l: 26%; }
+[data-mode="light"][data-accent="void"]   { --accent-h: 221; --accent-s: 100%; --accent-l: 35%; }
+[data-mode="light"][data-accent="dusk"]   { --accent-h: 32;  --accent-s: 100%; --accent-l: 31%; }
+[data-mode="light"][data-accent="ember"]  { --accent-h: 327; --accent-s: 82%;  --accent-l: 34%; }
+
+/* ══════════ RESET ══════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+* { font-family: 'JetBrains Mono', monospace; }   /* monospace, everywhere. */
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s, color 0.25s;
+  padding-bottom: 120px;
+}
+::placeholder { color: var(--text-dim) !important; opacity: 0.45 !important; font-style: italic; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+a { color: var(--accent); }
+
+/* ══════════ ANIMATIONS (the product's motion vocabulary) ══════════ */
+@keyframes breathe { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-4px);opacity:1} }
+@keyframes overlayIn { from{opacity:0} to{opacity:1} }
+@keyframes modalIn { from{opacity:0;transform:scale(.96) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+@keyframes toastIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:translateX(0)} }
+@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes cursorBlink { 0%,100%{opacity:.8} 50%{opacity:0} }
+
+/* ══════════ DOC LAYOUT ══════════ */
+.wrap { max-width: var(--doc-max); margin: 0 auto; padding: 0 28px; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .row { display: flex; align-items: center; gap: 18px; height: 54px; }
+.topbar .brand { font-size: 0.69rem; letter-spacing: 0.20em; color: var(--text-dim); }
+.topbar .brand b { color: var(--accent); font-weight: 700; }
+.topbar .spacer { flex: 1; }
+.ctl-group { display: flex; align-items: center; gap: 8px; }
+.ctl-label { font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
+
+.hero { padding: 72px 0 48px; border-bottom: 1px solid var(--border); }
+.hero .kicker { font-size: 0.69rem; letter-spacing: 0.20em; color: var(--text-dim); margin-bottom: 18px; }
+.hero .kicker b { color: var(--accent); font-weight: 700; }
+.hero h1 { font-family: 'DM Mono', monospace; font-weight: 500; font-size: clamp(2.4rem, 6vw, 4rem); letter-spacing: -0.04em; line-height: 1.02; }
+.hero h1 .k { color: var(--accent); }
+.hero p { max-width: 640px; margin-top: 22px; color: var(--text-mid); font-size: 0.95rem; line-height: 1.7; letter-spacing: 0.01em; }
+
+section { padding: 64px 0; border-bottom: 1px solid var(--border); }
+.sec-num { font-size: 0.69rem; letter-spacing: 0.20em; color: var(--accent); text-transform: uppercase; }
+h2 { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 1.7rem; letter-spacing: -0.02em; margin: 10px 0 8px; }
+.lead { color: var(--text-mid); font-size: 0.9rem; line-height: 1.7; max-width: 720px; letter-spacing: 0.01em; }
+h3 { font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); margin: 40px 0 16px; font-weight: 600; }
+.note { color: var(--text-dim); font-size: 0.8rem; line-height: 1.65; letter-spacing: 0.01em; }
+.note code, p code, li code { background: var(--cell-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 0.85em; color: var(--accent); }
+
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(2, 1fr); }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 860px){ .g3,.g4{grid-template-columns:repeat(2,1fr)} .g2{grid-template-columns:1fr} }
+
+/* rationale cards */
+.principles { display: grid; grid-template-columns: repeat(2,1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 32px; }
+@media (max-width: 720px){ .principles{grid-template-columns:1fr} }
+.principle { background: var(--surface); padding: 24px; }
+.principle .n { font-size: 0.62rem; letter-spacing: 0.18em; color: var(--accent); }
+.principle h4 { margin: 10px 0 8px; font-size: 1rem; letter-spacing: -0.01em; font-weight: 600; }
+.principle p { color: var(--text-dim); font-size: 0.82rem; line-height: 1.65; }
+
+/* swatches */
+.swatch { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.swatch .chip { height: 72px; }
+.swatch .meta { padding: 10px 12px; }
+.swatch .name { font-size: 0.8rem; color: var(--text); letter-spacing: 0.02em; }
+.swatch .val { font-size: 0.69rem; color: var(--text-dim); margin-top: 3px; }
+
+/* accent preset dots */
+.accents { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 20px; }
+.accent-card { display: flex; align-items: center; gap: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px 10px 12px; }
+.accent-dot { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
+.accent-card .lbl { font-size: 0.8rem; letter-spacing: 0.02em; }
+.accent-card .hue { font-size: 0.62rem; color: var(--text-dim); margin-top: 2px; }
+
+/* type scale */
+.type-row { display: flex; align-items: baseline; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.type-row .tag { width: 130px; flex-shrink: 0; font-size: 0.69rem; color: var(--text-dim); letter-spacing: 0.06em; }
+.type-row .sample { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* generic demo surface */
+.demo { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 28px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.demo.col { flex-direction: column; align-items: stretch; }
+.demo-label { font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); margin: 24px 0 10px; }
+
+/* ── COMPONENT STYLES (ported 1:1 from the product) ── */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; transition: all 0.15s; user-select: none; outline: none;
+  letter-spacing: 0.04em; border: none; }
+.btn-md { padding: 9px 18px; font-size: 0.85rem; }
+.btn-sm { padding: 7px 14px; font-size: 0.77rem; }
+.btn-primary { background: var(--accent); color: var(--accent-txt); border-radius: 9999px; font-weight: 700; }
+.btn-primary:hover { filter: brightness(1.25); box-shadow: var(--glow); }
+.btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border2); border-radius: 9999px; }
+.btn-ghost:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.btn-cancel { background: transparent; color: hsla(0,75%,65%,0.8); border: 1px solid hsla(0,75%,55%,0.4); border-radius: 9999px; }
+.btn-cancel:hover { background: hsla(0,75%,55%,0.08); color: hsl(0,75%,72%); border-color: hsla(0,75%,55%,0.9); }
+.btn-icon { width: 30px; height: 30px; padding: 0; background: transparent; color: var(--text-dim); border: 1px solid var(--border2); border-radius: 4px; }
+.btn-icon:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.btn-link { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.btn-link:hover { opacity: 0.75; }
+
+.badge { font-size: 0.69rem; padding: 4px 8px; border-radius: 99px; letter-spacing: 0.08em; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.b-online, .b-info { background: var(--accent-dim); color: var(--accent); }
+.b-offline { background: rgba(120,120,112,0.12); color: var(--text-dim); }
+.b-error { background: rgba(255,95,87,0.1); color: var(--red); }
+.b-warn { background: rgba(254,188,46,0.1); color: var(--yellow); }
+.b-success { background: var(--green-dim); color: var(--green-text); }
+
+.seg { display: inline-flex; background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 2px; gap: 2px; }
+.seg button { padding: 6px 11px; font-size: 0.77rem; border-radius: 4px; border: none; cursor: pointer; letter-spacing: 0.06em;
+  transition: all 0.15s; font-family: inherit; background: transparent; color: var(--text-dim); }
+.seg button[aria-selected="true"] { background: var(--accent); color: var(--accent-txt); font-weight: 600; }
+
+.toggle { position: relative; width: 36px; height: 20px; border-radius: 10px; border: none; cursor: pointer;
+  background: var(--border2); transition: background 0.2s; flex-shrink: 0; padding: 0; }
+.toggle[aria-checked="true"] { background: var(--accent); }
+.toggle .knob { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text-dim); transition: left 0.2s, background 0.2s; }
+.toggle[aria-checked="true"] .knob { left: 19px; background: var(--accent-txt); }
+
+.field { width: 100%; background: var(--cell-bg); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 10px 12px; color: var(--text); font-family: inherit; font-size: 0.85rem; letter-spacing: 0.02em; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s; }
+.field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+/* content card w/ signature accent top stripe */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; }
+.card:hover { border-color: var(--border2); box-shadow: 0 2px 12px rgba(0,0,0,0.25); }
+.card .stripe { height: 2px; background: var(--accent); opacity: 0.7; }
+.card .body { padding: 14px; }
+.card .title { font-size: 0.92rem; font-weight: 600; letter-spacing: 0.04em; }
+.card .sub { font-size: 0.77rem; color: var(--text-dim); margin-top: 2px; }
+.card .desc { font-size: 0.77rem; color: var(--text-dim); line-height: 1.55; margin: 10px 0; }
+.card .foot { display: flex; align-items: center; gap: 8px; }
+.pill-tag { font-size: 0.62rem; padding: 3px 6px; border-radius: 99px; background: var(--accent-dim); color: var(--accent); letter-spacing: 0.06em; }
+.pill-neutral { font-size: 0.69rem; padding: 4px 7px; border-radius: 99px; background: var(--surface2); color: var(--text-dim); letter-spacing: 0.06em; }
+
+/* mini app shell mock */
+.shell { display: grid; grid-template-columns: 200px 1fr; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; height: 300px; }
+.shell .side { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.shell .side .brandbox { padding: 16px 16px 14px; border-bottom: 1px solid var(--border); }
+.shell .side .brandbox .tld { font-size: 0.62rem; letter-spacing: 0.20em; color: var(--text-dim); }
+.shell .side .brandbox .tld b { color: var(--accent); font-weight: 700; }
+.shell .side .brandbox .word { font-family: 'DM Mono', monospace; font-size: 1.2rem; letter-spacing: -0.03em; margin-top: 4px; }
+.shell .side .brandbox .word .k { color: var(--accent); }
+.shell .side .cap { font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim); padding: 14px 16px 6px; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 16px; font-size: 0.8rem; letter-spacing: 0.06em;
+  color: var(--text-dim); cursor: pointer; border-left: 2px solid transparent; transition: all 0.12s; }
+.nav-item:hover { background: var(--surface2); color: var(--text-mid); }
+.nav-item.active { color: var(--accent); background: var(--accent-dim); border-left-color: var(--accent); }
+.nav-item .ic { width: 14px; height: 14px; border-radius: 3px; background: currentColor; opacity: 0.9; flex-shrink: 0; }
+.shell .main { background: var(--bg); padding: 20px; }
+
+/* modal mock (static) */
+.modal-mock { background: var(--surface); border: 1px solid var(--border2); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7); max-width: 420px; }
+.modal-mock .stripe { height: 2px; background: var(--accent); opacity: 0.8; }
+.modal-mock .head { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
+.modal-mock .head .t { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; flex: 1; }
+.modal-mock .content { padding: 20px; color: var(--text-mid); font-size: 0.85rem; line-height: 1.6; }
+.modal-mock .actions { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* toast mock */
+.toast-mock { display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); font-size: 0.85rem;
+  color: var(--text-mid); letter-spacing: 0.03em; min-width: 240px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* radii + spacing viz */
+.radii { display: flex; flex-wrap: wrap; gap: 16px; }
+.radius-card { background: var(--surface2); border: 1px solid var(--border2); width: 96px; height: 72px; display: flex; align-items: flex-end; justify-content: center; padding: 8px; }
+.radius-card span { font-size: 0.62rem; color: var(--text-dim); }
+.motion-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+@media (max-width:720px){ .motion-grid{grid-template-columns:1fr} }
+.motion-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; }
+.motion-card .demo-dot { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); margin: 0 auto 14px; }
+.motion-card .n { font-size: 0.8rem; letter-spacing: 0.04em; }
+.motion-card .d { font-size: 0.69rem; color: var(--text-dim); margin-top: 4px; line-height: 1.5; }
+.spin { animation: spin 1.1s linear infinite; }
+.breathe { animation: breathe 1.6s ease-in-out infinite; }
+.pulse { animation: pulse 1.4s ease-in-out infinite; }
+
+.typing { display: inline-flex; gap: 4px; align-items: center; }
+.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: typingBounce 1.2s infinite; }
+.typing i:nth-child(2){ animation-delay: .15s; } .typing i:nth-child(3){ animation-delay: .3s; }
+
+/* checklist */
+.check { list-style: none; display: grid; gap: 10px; margin-top: 8px; }
+.check li { display: flex; gap: 12px; font-size: 0.85rem; color: var(--text-mid); line-height: 1.6; align-items: flex-start; }
+.check li::before { content: "▹"; color: var(--accent); flex-shrink: 0; }
+
+.foot-note { padding: 48px 0 8px; color: var(--text-dim); font-size: 0.75rem; letter-spacing: 0.04em; }
+
+/* control buttons in topbar */
+.mini-toggle { display: inline-flex; background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 2px; }
+.mini-toggle button { padding: 5px 10px; font-size: 0.69rem; border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 4px; letter-spacing: 0.06em; font-family: inherit; }
+.mini-toggle button.on { background: var(--accent); color: var(--accent-txt); font-weight: 600; }
+.hue-picker { display: inline-flex; gap: 6px; }
+.hue-picker button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.hue-picker button.on { border-color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- ══════════ TOP BAR — live theme controls ══════════ -->
+<div class="topbar">
+  <div class="wrap">
+    <div class="row">
+      <span class="brand"><b>rtl</b>://console · design</span>
+      <span class="spacer"></span>
+      <div class="ctl-group">
+        <span class="ctl-label">mode</span>
+        <div class="mini-toggle" id="modeToggle">
+          <button data-mode="dark" class="on">dark</button>
+          <button data-mode="light">light</button>
+        </div>
+      </div>
+      <div class="ctl-group">
+        <span class="ctl-label">accent</span>
+        <div class="hue-picker" id="huePicker">
+          <button data-accent="plasma" class="on" style="background:#926dff" title="Plasma"></button>
+          <button data-accent="surge"  style="background:#00d49f" title="Surge"></button>
+          <button data-accent="frost"  style="background:#00bbf1" title="Frost"></button>
+          <button data-accent="void"   style="background:#0077ff" title="Void"></button>
+          <button data-accent="dusk"   style="background:#ff992b" title="Dusk"></button>
+          <button data-accent="ember"  style="background:#f84b9f" title="Ember"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ HERO ══════════ -->
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker"><b>rtl</b>:// design language</div>
+    <h1>console<span class="k">.</span><br>as an operating<br>surface</h1>
+    <p>
+      The heku console reads like a terminal that grew a UI — monospace throughout,
+      near-black canvas, one hot accent hue, and a hardware-style glow. This document is the
+      complete, live token set and component vocabulary. Change the mode and accent above and the
+      whole page re-themes: that runtime themeability <em>is</em> the system. Everything here is
+      copy-ready CSS you can lift into a new product.
+    </p>
+  </div>
+</div>
+
+<!-- ══════════ 01 · PHILOSOPHY ══════════ -->
+<section id="philosophy"><div class="wrap">
+  <div class="sec-num">01 — Philosophy</div>
+  <h2>Decisions, not just tokens</h2>
+  <p class="lead">Five convictions drive every choice below. Port these first; the specific hex
+  values matter less than the reasoning.</p>
+
+  <div class="principles">
+    <div class="principle">
+      <div class="n">P1</div>
+      <h4>Monospace as identity</h4>
+      <p>One typeface family (JetBrains Mono) for <em>everything</em> — body, labels, numbers, buttons.
+      DM Mono is reserved only for the display wordmark. The uniform grid signals "tool for builders,"
+      keeps numeric data aligned, and removes an entire axis of decision-making.</p>
+    </div>
+    <div class="principle">
+      <div class="n">P2</div>
+      <h4>One accent, runtime-swappable</h4>
+      <p>The accent is stored as three HSL parts, never a hex. Tints, dims, and glows all derive from it,
+      so a single hue change re-skins the product. Six presets ship; the mechanism supports infinite.</p>
+    </div>
+    <div class="principle">
+      <div class="n">P3</div>
+      <h4>Dark-first, warm neutrals</h4>
+      <p>The baseline is near-black <code>#0a0a0a</code> with warm off-white text <code>#e8e8e0</code> —
+      never pure black on pure white. Light mode is warm paper, not clinical white. Surfaces step up in
+      four discrete tiers instead of using shadows to imply depth.</p>
+    </div>
+    <div class="principle">
+      <div class="n">P4</div>
+      <h4>The halogen glow</h4>
+      <p>Emphasis is expressed with a three-layer accent glow — a tight core, a mid bloom, a wide haze —
+      evoking lit hardware. It appears on primary hover, active brand, and focus, and is the single most
+      recognisable signature of the system.</p>
+    </div>
+    <div class="principle">
+      <div class="n">P5</div>
+      <h4>Dense, calm, flat</h4>
+      <p>13px base, tight radii (4–10px), hairline <code>#242424</code> dividers, and generous letter-spacing
+      on labels. No drop shadows for elevation, no gradients, no decoration. Motion is quick (0.12–0.22s) and
+      purposeful. The interface recedes so content leads.</p>
+    </div>
+    <div class="principle">
+      <div class="n">P6</div>
+      <h4>Traffic-light semantics</h4>
+      <p>Status colors borrow the macOS window controls — <span style="color:var(--red)">red</span>,
+      <span style="color:var(--yellow)">yellow</span>, <span style="color:var(--green)">green</span>,
+      <span style="color:var(--blue)">blue</span>. Instantly legible, culturally pre-loaded, and distinct from the
+      themeable accent so meaning never shifts when the accent does.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════ 02 · COLOR ══════════ -->
+<section id="color"><div class="wrap">
+  <div class="sec-num">02 — Color</div>
+  <h2>The token ladder</h2>
+  <p class="lead">Backgrounds climb in four opaque steps; text descends in three. Borders come in two
+  weights. Nothing uses opacity to fake depth except the accent tints. All values shown update live with mode.</p>
+
+  <div class="demo-label">Canvas &amp; surfaces</div>
+  <div class="grid g4">
+    <div class="swatch"><div class="chip" style="background:var(--bg)"></div><div class="meta"><div class="name">--bg</div><div class="val">canvas / deepest</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface)"></div><div class="meta"><div class="name">--surface</div><div class="val">panels, cards</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface2)"></div><div class="meta"><div class="name">--surface2</div><div class="val">hover / nested</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface3)"></div><div class="meta"><div class="name">--surface3</div><div class="val">deepest nested</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--cell-bg)"></div><div class="meta"><div class="name">--cell-bg</div><div class="val">code / inputs</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--border)"></div><div class="meta"><div class="name">--border</div><div class="val">hairline divider</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--border2)"></div><div class="meta"><div class="name">--border2</div><div class="val">interactive edge</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="meta"><div class="name">--accent</div><div class="val">the one hue</div></div></div>
+  </div>
+
+  <div class="demo-label">Text</div>
+  <div class="grid g3">
+    <div class="swatch"><div class="chip" style="background:var(--text)"></div><div class="meta"><div class="name">--text</div><div class="val">primary — warm off-white</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text-mid)"></div><div class="meta"><div class="name">--text-mid</div><div class="val">secondary</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--text-dim)"></div><div class="meta"><div class="name">--text-dim</div><div class="val">tertiary / muted</div></div></div>
+  </div>
+
+  <div class="demo-label">Semantic — the traffic lights (fixed, never themed)</div>
+  <div class="grid g4">
+    <div class="swatch"><div class="chip" style="background:var(--red)"></div><div class="meta"><div class="name">--red · #ff5f57</div><div class="val">error / destructive</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--yellow)"></div><div class="meta"><div class="name">--yellow · #febc2e</div><div class="val">warning / pending</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--green)"></div><div class="meta"><div class="name">--green · #28c840</div><div class="val">success / online</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--blue)"></div><div class="meta"><div class="name">--blue · #60a8f0</div><div class="val">info / links</div></div></div>
+  </div>
+
+  <p class="note" style="margin-top:24px;">Accent tints are always derived, never hand-picked:
+  <code>--accent-dim</code> = the accent at 12% alpha (backgrounds for active nav, badges, chips),
+  and <code>--accent-txt</code> is the foreground that sits on a solid accent fill
+  (<code>#0a0a0a</code> in dark, <code>#ffffff</code> in light).</p>
+</div></section>
+
+<!-- ══════════ 03 · ACCENTS ══════════ -->
+<section id="accents"><div class="wrap">
+  <div class="sec-num">03 — Accent presets</div>
+  <h2>Six hues, one mechanism</h2>
+  <p class="lead">Each preset sets only <code>--accent-h/s/l</code>. Light mode overrides the same three
+  vars with deeper, less-saturated values so the accent stays legible on paper. Click any dot in the top bar.</p>
+  <div class="accents">
+    <div class="accent-card"><span class="accent-dot" style="background:#926dff"></span><div><div class="lbl">Plasma</div><div class="hue">h 255 · violet · default</div></div></div>
+    <div class="accent-card"><span class="accent-dot" style="background:#00d49f"></span><div><div class="lbl">Surge</div><div class="hue">h 165 · teal</div></div></div>
+    <div class="accent-card"><span class="accent-dot" style="background:#00bbf1"></span><div><div class="lbl">Frost</div><div class="hue">h 193 · cyan</div></div></div>
+    <div class="accent-card"><span class="accent-dot" style="background:#0077ff"></span><div><div class="lbl">Void</div><div class="hue">h 212 · blue</div></div></div>
+    <div class="accent-card"><span class="accent-dot" style="background:#ff992b"></span><div><div class="lbl">Dusk</div><div class="hue">h 31 · orange</div></div></div>
+    <div class="accent-card"><span class="accent-dot" style="background:#f84b9f"></span><div><div class="lbl">Ember</div><div class="hue">h 331 · pink</div></div></div>
+  </div>
+</div></section>
+
+<!-- ══════════ 04 · TYPOGRAPHY ══════════ -->
+<section id="type"><div class="wrap">
+  <div class="sec-num">04 — Typography</div>
+  <h2>One family, tuned by tracking</h2>
+  <p class="lead"><b>JetBrains Mono</b> carries the entire UI; <b>DM Mono</b> is display-only (wordmarks, headings).
+  Because everything is monospace, hierarchy comes from <em>size, weight, and letter-spacing</em> rather than
+  typeface contrast. Note the rule: small uppercase labels get wide positive tracking (0.14–0.20em); large
+  display text gets tight negative tracking (−0.02 to −0.04em).</p>
+
+  <div style="margin-top:28px">
+    <div class="type-row"><span class="tag">display · DM Mono</span><span class="sample" style="font-family:'DM Mono',monospace;font-size:2rem;letter-spacing:-0.03em;">he<span style="color:var(--accent)">k</span>u console</span></div>
+    <div class="type-row"><span class="tag">1.38rem · 500</span><span class="sample" style="font-size:1.38rem;font-weight:500;letter-spacing:-0.02em;">Section heading</span></div>
+    <div class="type-row"><span class="tag">1rem · 700</span><span class="sample" style="font-size:1rem;font-weight:700;letter-spacing:-0.01em;">Modal / card title</span></div>
+    <div class="type-row"><span class="tag">0.92rem · 600</span><span class="sample" style="font-size:0.92rem;font-weight:600;letter-spacing:0.04em;">List item name</span></div>
+    <div class="type-row"><span class="tag">0.85rem · 400</span><span class="sample" style="font-size:0.85rem;letter-spacing:0.02em;">Body &amp; input text — the workhorse size</span></div>
+    <div class="type-row"><span class="tag">0.77rem · 400</span><span class="sample" style="font-size:0.77rem;color:var(--text-dim);letter-spacing:0.02em;">Secondary / metadata text</span></div>
+    <div class="type-row"><span class="tag">0.69rem · 600</span><span class="sample" style="font-size:0.69rem;color:var(--text-dim);letter-spacing:0.18em;text-transform:uppercase;">Overline label · tracked wide</span></div>
+    <div class="type-row"><span class="tag">0.62rem · 700</span><span class="sample" style="font-size:0.62rem;color:var(--accent);letter-spacing:0.06em;">TINY TAG / CHIP</span></div>
+  </div>
+
+  <h3>Weights &amp; rhythm</h3>
+  <p class="note">Base is <code>13px</code> on <code>:root</code> (user-adjustable 11–18px); all sizes are <code>rem</code>
+  so a single root change rescales the app. Weights used: <code>400</code> regular · <code>500</code> medium (display)
+  · <code>600</code> semibold (names, labels) · <code>700</code> bold (primary buttons, titles). Line-height sits at
+  <code>1.5–1.6</code> for body, <code>1</code>–<code>1.02</code> for display.</p>
+</div></section>
+
+<!-- ══════════ 05 · SPACE · RADII · ELEVATION ══════════ -->
+<section id="space"><div class="wrap">
+  <div class="sec-num">05 — Space, radius &amp; elevation</div>
+  <h2>Tight and deliberate</h2>
+  <p class="lead">Spacing follows a compact scale — <code>2 · 4 · 6 · 8 · 10 · 12 · 14 · 18 · 20 · 22</code>px.
+  Radii are role-based, not a single global value. Depth is drawn with borders and surface steps, never ambient shadow —
+  the only shadows in the system are modal lift and the accent glow.</p>
+
+  <h3>Corner radii by role</h3>
+  <div class="radii">
+    <div class="radius-card" style="border-radius:4px"><span>4px · icon btn, nav, chips</span></div>
+    <div class="radius-card" style="border-radius:6px"><span>6px · cards, seg control</span></div>
+    <div class="radius-card" style="border-radius:8px"><span>8px · inputs, toasts</span></div>
+    <div class="radius-card" style="border-radius:10px"><span>10px · modals, panels</span></div>
+    <div class="radius-card" style="border-radius:9999px"><span>full · buttons, badges</span></div>
+    <div class="radius-card" style="border-radius:50%;width:72px"><span>50% · dots</span></div>
+  </div>
+
+  <h3>The halogen glow (elevation = light, not shadow)</h3>
+  <div class="demo" style="justify-content:center;padding:44px;">
+    <button class="btn btn-md btn-primary" style="box-shadow:var(--glow);filter:brightness(1.25);">glowing primary</button>
+    <span style="width:56px;height:56px;border-radius:50%;background:var(--accent);box-shadow:var(--glow);"></span>
+    <span style="font-family:'DM Mono',monospace;font-size:1.4rem;color:var(--accent);text-shadow:0 0 6px var(--accent),0 0 14px var(--accent),0 0 28px var(--accent);">rtl://</span>
+  </div>
+  <p class="note" style="margin-top:16px;">The glow is a stacked triple <code>box-shadow</code>: a 2px hot core at 70% alpha,
+  a 10px bloom at 35%, and a 28px haze at 15% — all derived from the accent HSL. The wordmark hover uses the
+  equivalent as a triple <code>text-shadow</code>. A red-tinted <code>--cancel-glow</code> mirrors it for destructive emphasis.</p>
+</div></section>
+
+<!-- ══════════ 06 · COMPONENTS ══════════ -->
+<section id="components"><div class="wrap">
+  <div class="sec-num">06 — Components</div>
+  <h2>The vocabulary</h2>
+  <p class="lead">Every interactive element is one of a small, fixed set. All are pill or small-radius, monospace,
+  and transition <code>all 0.15s</code>. Hover reveals the accent; primary hover ignites the glow.</p>
+
+  <div class="demo-label">Buttons</div>
+  <div class="demo">
+    <button class="btn btn-md btn-primary">primary</button>
+    <button class="btn btn-md btn-ghost">ghost</button>
+    <button class="btn btn-md btn-cancel">cancel</button>
+    <button class="btn btn-icon" title="icon">◈</button>
+    <button class="btn btn-link">link action</button>
+    <button class="btn btn-sm btn-ghost">small</button>
+  </div>
+  <p class="note" style="margin-top:12px;">Primary = solid accent pill, 700 weight, glow on hover. Ghost = outlined pill
+  that fills with <code>--accent-dim</code> and adopts the accent border/text on hover. Cancel mirrors ghost in the fixed red.
+  Icon = 4px square. Link = underlined accent text.</p>
+
+  <div class="demo-label">Badges &amp; status</div>
+  <div class="demo">
+    <span class="badge b-success">installed</span>
+    <span class="badge b-warn">update</span>
+    <span class="badge b-error">failed</span>
+    <span class="badge b-info">soon</span>
+    <span class="badge b-online">online</span>
+    <span class="badge b-offline">offline</span>
+  </div>
+
+  <div class="demo-label">Segmented control · toggle · input</div>
+  <div class="demo">
+    <div class="seg" id="segDemo">
+      <button aria-selected="true">chat</button>
+      <button aria-selected="false">json</button>
+      <button aria-selected="false">diff</button>
+    </div>
+    <button class="toggle" aria-checked="true" id="tgl"><span class="knob"></span></button>
+    <input class="field" style="max-width:260px" placeholder="search the registry…" />
+  </div>
+
+  <div class="demo-label">Content card — accent stripe + hover lift</div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="stripe"></div>
+      <div class="body">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          <div style="flex:1;min-width:0">
+            <div class="title">Postgres Connector</div>
+            <div class="sub">rapidthought/postgres</div>
+          </div>
+          <span class="badge b-success">installed</span>
+        </div>
+        <div class="desc">Query and mutate Postgres over MCP with pooled connections and typed tool schemas.</div>
+        <div class="foot">
+          <span class="pill-neutral">HTTP</span>
+          <span style="display:flex;align-items:center;gap:2px;color:var(--accent);font-size:0.69rem;letter-spacing:0.04em;">◆ verified</span>
+          <span style="flex:1"></span>
+          <span style="color:var(--text-dim);font-size:0.77rem;">★ 1,204</span>
+          <span style="color:var(--text-dim);font-size:0.77rem;">↓ 8,930</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:8px;">
+          <span class="pill-tag">database</span><span class="pill-tag">sql</span><span class="pill-tag">official</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="stripe"></div>
+      <div class="body">
+        <div style="display:flex;align-items:flex-start;gap:8px;">
+          <div style="flex:1;min-width:0">
+            <div class="title">Slack Connector</div>
+            <div class="sub">community/slack</div>
+          </div>
+          <span class="badge b-warn">update</span>
+        </div>
+        <div class="desc">Post messages, read channels, and manage reactions from any agent loop.</div>
+        <div class="foot">
+          <span class="pill-neutral">gRPC</span>
+          <span style="flex:1"></span>
+          <span style="color:var(--text-dim);font-size:0.77rem;">★ 642</span>
+          <span style="color:var(--text-dim);font-size:0.77rem;">↓ 3,110</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:8px;">
+          <span class="pill-tag">chat</span><span class="pill-tag">notifications</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-label">Modal &amp; toast</div>
+  <div class="grid g2" style="align-items:start">
+    <div class="modal-mock">
+      <div class="stripe"></div>
+      <div class="head"><span class="t">Publish config</span><button class="btn btn-icon" style="width:22px;height:22px">✕</button></div>
+      <div class="content">Modals center on a <code>rgba(0,0,0,0.72)</code> backdrop with <code>blur(4px)</code>, animate in with a
+      spring-like <code>cubic-bezier(0.16,1,0.3,1)</code>, and always wear the 2px accent stripe.</div>
+      <div class="actions">
+        <button class="btn btn-sm btn-ghost">cancel</button>
+        <button class="btn btn-sm btn-primary">publish</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="toast-mock"><span class="dot" style="background:var(--green)"></span><span style="flex:1">Config published successfully</span><span style="color:var(--text-dim)">✕</span></div>
+      <div class="toast-mock"><span class="dot" style="background:var(--red)"></span><span style="flex:1">Connection refused — retry</span><span style="color:var(--text-dim)">✕</span></div>
+      <div class="toast-mock"><span class="dot" style="background:var(--accent)"></span><span style="flex:1">3 servers reconnected</span><span style="color:var(--text-dim)">✕</span></div>
+      <p class="note">Toasts stack bottom-right, auto-dismiss at 4s, and slide in from the right (<code>toastIn</code>).</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════ 07 · LAYOUT ══════════ -->
+<section id="layout"><div class="wrap">
+  <div class="sec-num">07 — Layout &amp; navigation</div>
+  <h2>The app shell</h2>
+  <p class="lead">A fixed three-column frame: a <b>220px sidebar</b>, a fluid <b>main</b> column, and an optional
+  right <b>panel</b>. The whole app is <code>100vh</code>, <code>overflow: hidden</code> — it never page-scrolls; regions
+  scroll internally. Columns are separated by 1px <code>--border</code> dividers, not gaps.</p>
+
+  <div class="shell" style="margin-top:28px">
+    <div class="side">
+      <div class="brandbox">
+        <div class="tld"><b>rtl</b>://</div>
+        <div class="word">he<span class="k">k</span>u</div>
+      </div>
+      <div class="cap">Navigate</div>
+      <div class="nav-item active"><span class="ic"></span>Demo</div>
+      <div class="nav-item"><span class="ic"></span>Configs</div>
+      <div class="nav-item"><span class="ic"></span>Registry</div>
+      <div class="nav-item"><span class="ic"></span>Logs</div>
+      <div class="nav-item"><span class="ic"></span>Prompts</div>
+    </div>
+    <div class="main">
+      <div style="font-size:0.69rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);">Main region</div>
+      <div style="font-family:'DM Mono',monospace;font-size:1.3rem;letter-spacing:-0.02em;margin-top:8px;">Content leads here</div>
+      <p class="note" style="margin-top:12px;max-width:none;">Active nav = accent text + <code>--accent-dim</code> fill + a 2px
+      accent left-border. Hover on inactive items lifts to <code>--surface2</code> with <code>--text-mid</code>. Every row is
+      icon + label, tracked at 0.06em.</p>
+    </div>
+  </div>
+
+  <h3>Brand treatment</h3>
+  <p class="note">The wordmark is the load-bearing brand device: a dim <code>rtl://</code> top-level-domain prefix (accent-colored
+  <code>rtl</code>), then the product name in DM Mono with a single letter tinted the accent (he<span style="color:var(--accent)">k</span>u).
+  On hover the prefix ignites the neon text-shadow glow. This "<code>protocol://product</code>" motif is the core identity — carry it
+  into the new product with its own name and highlighted letter.</p>
+</div></section>
+
+<!-- ══════════ 08 · MOTION ══════════ -->
+<section id="motion"><div class="wrap">
+  <div class="sec-num">08 — Motion</div>
+  <h2>Quick, functional, looping</h2>
+  <p class="lead">Transitions are <code>0.12–0.22s</code>; entrances use the spring <code>cubic-bezier(0.16,1,0.3,1)</code>.
+  A handful of named keyframes cover live/loading states. Motion communicates state — it never decorates.</p>
+
+  <div class="motion-grid" style="margin-top:28px">
+    <div class="motion-card"><div class="demo-dot spin" style="border-radius:6px;border:3px solid var(--accent-dim);border-top-color:var(--accent);background:transparent;"></div><div class="n">spin</div><div class="d">loaders · 1.1s linear</div></div>
+    <div class="motion-card"><div class="demo-dot breathe"></div><div class="n">breathe</div><div class="d">live status · scale+fade</div></div>
+    <div class="motion-card"><div class="demo-dot pulse"></div><div class="n">pulse</div><div class="d">pending · opacity</div></div>
+    <div class="motion-card"><div style="height:34px;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><span class="typing"><i></i><i></i><i></i></span></div><div class="n">typingBounce</div><div class="d">agent is thinking</div></div>
+    <div class="motion-card"><div class="demo-dot" style="animation:none"></div><div class="n">modalIn / overlayIn</div><div class="d">scale 0.96→1, blur fade</div></div>
+    <div class="motion-card"><div class="demo-dot" style="animation:none"></div><div class="n">toastIn / cursorBlink</div><div class="d">slide-in · caret blink</div></div>
+  </div>
+</div></section>
+
+<!-- ══════════ 09 · PORTING ══════════ -->
+<section id="port" style="border-bottom:none"><div class="wrap">
+  <div class="sec-num">09 — Porting checklist</div>
+  <h2>Taking this to a new product</h2>
+  <p class="lead">To carry the design language forward without cloning the product, do these in order.</p>
+  <ul class="check">
+    <li>Copy the <code>:root</code> token block, the six <code>[data-accent]</code> presets, and the <code>[data-mode="light"]</code> overrides verbatim — they are the entire foundation.</li>
+    <li>Load <b>JetBrains Mono</b> (UI) and <b>DM Mono</b> (display), set the universal <code>* { font-family }</code> rule and <code>13px</code> root.</li>
+    <li>Pick a default accent for the new product (or keep Plasma). Everything else recomputes from <code>--accent-h/s/l</code>.</li>
+    <li>Re-brand the wordmark: keep the <code>protocol://product</code> structure and the single accent-tinted letter; change the name.</li>
+    <li>Reuse the component classes as-is — buttons, badges, cards, seg control, toggle, modal, toast, nav item.</li>
+    <li>Preserve the signatures: the 3-layer <code>--glow</code>, the 2px accent stripe on cards/modals, hairline dividers, traffic-light semantics, and full-height no-page-scroll shell.</li>
+    <li>Wire the theme switch: set <code>data-mode</code> and <code>data-accent</code> on <code>&lt;html&gt;</code>, persist to <code>localStorage</code>. That's the whole theming engine.</li>
+    <li>Keep motion restrained — <code>0.15s</code> default transitions, the spring easing for entrances, named keyframes only for genuine live/loading states.</li>
+  </ul>
+
+  <p class="foot-note">rtl://console — design language reference · single-file, self-contained ·
+  switch mode &amp; accent above to preview the full system live.</p>
+</div></section>
+
+<script>
+// ── Live theme switching — mirrors the product's applyTheme() ──
+const html = document.documentElement;
+
+document.getElementById('modeToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  html.setAttribute('data-mode', btn.dataset.mode);
+  document.querySelectorAll('#modeToggle button').forEach(b => b.classList.toggle('on', b === btn));
+});
+
+document.getElementById('huePicker').addEventListener('click', (e) => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  html.setAttribute('data-accent', btn.dataset.accent);
+  document.querySelectorAll('#huePicker button').forEach(b => b.classList.toggle('on', b === btn));
+});
+
+// ── Interactive demos ──
+document.getElementById('segDemo').addEventListener('click', (e) => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  document.querySelectorAll('#segDemo button').forEach(b => b.setAttribute('aria-selected', b === btn));
+});
+const tgl = document.getElementById('tgl');
+tgl.addEventListener('click', () => tgl.setAttribute('aria-checked', tgl.getAttribute('aria-checked') !== 'true'));
+</script>
+</body>
+</html>

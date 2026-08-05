@@ -1,0 +1,171 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Rama canonical design tokens.
+
+   Reconciles the two token sets referenced by docs/IMPLEMENTATION_PLAN.md §0/§8:
+     - docs/Rama/uploads/design-system.html  → the OKLCH accent system + flat
+       component-class tokens (--bg-*, --text-*, --border-*), static
+       [data-theme]/[data-accent] attribute selectors.
+     - docs/Rama/Rama.dc.html                → the actual app-shell chrome:
+       translucent glass surfaces over a wallpaper (--page-bg/--ink/--sf-hi/
+       --sf-lo/--rc), the wallpaper stack, and the extended accent alpha ramp
+       used for glows/text-shadows throughout the chat UI.
+   docs/Rama/uploads/design-language.html uses hsl(), not oklch() — it's the
+   superseded predecessor to design-system.html and is NOT one of the two
+   sources merged here (see report for the explicit resolution of plan §8).
+
+   Both source systems already agree on the same six OKLCH accent hues and
+   near-identical base surface colors, so this is closer to a straight
+   union with one naming convention than a real conflict:
+     - the accent + surface + text + border tokens below are copied
+       verbatim from design-system.html (the more complete, hand-tuned set)
+     - the app-shell aliases (--page-bg, --ink, --sf-hi, --sf-lo, --rc, etc.)
+       and the wallpaper-stack vars are copied from Rama.dc.html and point
+       at the SAME underlying values, so control classes ported from
+       design-system.html (.btn, .badge, .input, .card, ...) and the glassy
+       app-shell chrome both read from one source of truth.
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --font-mono: "JetBrains Mono", monospace;      /* app body copy (Rama.dc.html) */
+  --font-display: "Martian Mono", monospace;     /* brand wordmark, section labels */
+  --font-code: "DM Mono", monospace;             /* inline code, dense data (design-system.html) */
+}
+
+/* ── ACCENT COLOR SYSTEM — six OKLCH hues, dark defaults ─────────────────
+   Copied verbatim from design-system.html; Rama.dc.html's ACCENTS table
+   encodes the identical six (L, C, H, L_hi, C_hi) tuples. */
+[data-accent="plasma"] { --accent: oklch(0.65 0.22 290); --accent-bright: oklch(0.75 0.24 290); --accent-dim: oklch(0.30 0.12 290); --accent-glow: oklch(0.65 0.22 290 / 0.35); --accent-tint: oklch(0.65 0.22 290 / 0.08); --accent-border: oklch(0.65 0.22 290 / 0.25); }
+[data-accent="surge"]  { --accent: oklch(0.75 0.20 172); --accent-bright: oklch(0.82 0.22 172); --accent-dim: oklch(0.28 0.10 172); --accent-glow: oklch(0.75 0.20 172 / 0.35); --accent-tint: oklch(0.75 0.20 172 / 0.08); --accent-border: oklch(0.75 0.20 172 / 0.25); }
+[data-accent="frost"]  { --accent: oklch(0.72 0.18 220); --accent-bright: oklch(0.80 0.20 220); --accent-dim: oklch(0.28 0.09 220); --accent-glow: oklch(0.72 0.18 220 / 0.35); --accent-tint: oklch(0.72 0.18 220 / 0.08); --accent-border: oklch(0.72 0.18 220 / 0.25); }
+[data-accent="void"]   { --accent: oklch(0.62 0.26 260); --accent-bright: oklch(0.72 0.28 260); --accent-dim: oklch(0.28 0.13 260); --accent-glow: oklch(0.62 0.26 260 / 0.35); --accent-tint: oklch(0.62 0.26 260 / 0.08); --accent-border: oklch(0.62 0.26 260 / 0.25); }
+[data-accent="dusk"]   { --accent: oklch(0.78 0.17 60);  --accent-bright: oklch(0.85 0.18 60);  --accent-dim: oklch(0.30 0.09 60);  --accent-glow: oklch(0.78 0.17 60 / 0.35);  --accent-tint: oklch(0.78 0.17 60 / 0.08);  --accent-border: oklch(0.78 0.17 60 / 0.25); }
+[data-accent="ember"]  { --accent: oklch(0.68 0.22 355); --accent-bright: oklch(0.76 0.24 355); --accent-dim: oklch(0.28 0.11 355); --accent-glow: oklch(0.68 0.22 355 / 0.35); --accent-tint: oklch(0.68 0.22 355 / 0.08); --accent-border: oklch(0.68 0.22 355 / 0.25); }
+
+/* Extended alpha ramp used throughout the app shell for glows / text-shadows
+   (Rama.dc.html: --a70 … --a06). Relative-color syntax so every accent ×
+   theme combination gets it for free instead of 84 hand-written rules. */
+:root {
+  --a70: oklch(from var(--accent) l c h / 0.70);
+  --a45: oklch(from var(--accent) l c h / 0.45);
+  --a35: oklch(from var(--accent) l c h / 0.35);
+  --a25: oklch(from var(--accent) l c h / 0.25);
+  --a16: oklch(from var(--accent) l c h / 0.16);
+  --a10: oklch(from var(--accent) l c h / 0.10);
+  --a06: oklch(from var(--accent) l c h / 0.06);
+}
+
+/* ── DARK THEME (default) ────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* flat surfaces / text / borders — design-system.html naming, used by
+     the ported control classes (.btn, .badge, .input, .card, ...) */
+  --bg-base: #06060a; --bg-deep: #09090f; --bg-surface: #0d0d16;
+  --bg-elevated: #111120; --bg-overlay: rgba(6, 6, 10, 0.88);
+  --text-1: #ede9fe; --text-2: #a78bfa;
+  --text-3: oklch(from var(--accent) 0.62 0.09 h);
+  --text-4: oklch(from var(--accent) 0.59 0.07 h);
+  --border-1: rgba(168, 85, 247, 0.06); --border-2: rgba(168, 85, 247, 0.10);
+  --border-3: rgba(168, 85, 247, 0.18); --border-4: rgba(168, 85, 247, 0.30);
+  --green: #34d399; --amber: #fbbf24; --red: #ff5f57;
+  --grain-opacity: 0.32; --grid-color: rgba(168, 85, 247, 0.06);
+  --dot-field-color: rgba(255, 255, 255, 0.44);
+  --nav-bg: rgba(6, 6, 10, 0.45);
+
+  /* app-shell glass-chrome aliases — Rama.dc.html naming, same values */
+  --page-bg: var(--bg-base);
+  --ink: 236, 234, 246;         /* rgb triplet, used as rgba(var(--ink), a) */
+  --ink-hi: #f2f0fc;
+  --sf-hi: 9, 9, 16;            /* titlebar / sidebar / artifacts panel glass */
+  --sf-lo: 7, 7, 13;            /* tab-strip / composer glass */
+  --rc: 5, 5, 10;               /* recessed wells: code blocks, inputs */
+  --good: var(--green);
+  --bad: var(--red);
+  --bad-2: #ff8d86;             /* softer red used for diff/status deltas in-chat */
+  --warn: var(--amber);
+  --warn-rgb: 251, 191, 36;
+  --grain-op: var(--grain-opacity);
+  --vig-a: 0.62;                /* vignette strength */
+  --shadow-menu: 0 24px 64px -16px rgba(0, 0, 0, 0.8), 0 0 28px -10px var(--a35);
+  --shadow-composer: 0 8px 32px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--a06);
+}
+
+/* ── LIGHT THEME ──────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #f4f2ee; --bg-deep: #ede9e1; --bg-surface: #e6e1d8;
+  --bg-elevated: #fff; --bg-overlay: rgba(244, 242, 238, 0.92);
+  --text-1: #0f0a1e; --text-2: #3730a3;
+  --text-3: oklch(from var(--accent) 0.40 0.07 h);
+  --text-4: oklch(from var(--accent) 0.48 0.06 h);
+  --border-1: rgba(80, 40, 180, 0.05); --border-2: rgba(80, 40, 180, 0.10);
+  --border-3: rgba(80, 40, 180, 0.18); --border-4: rgba(80, 40, 180, 0.32);
+  --green: #059669; --amber: #d97706; --red: #dc2626;
+  --grain-opacity: 0.12; --grid-color: rgba(80, 40, 180, 0.04);
+  --dot-field-color: rgba(0, 0, 0, 0.26);
+  --nav-bg: rgba(244, 242, 238, 0.5);
+
+  --page-bg: var(--bg-base);
+  --ink: 23, 21, 32;
+  --ink-hi: #08070d;
+  --sf-hi: 255, 255, 255;
+  --sf-lo: 250, 249, 253;
+  --rc: 235, 233, 241;
+  --good: var(--green);
+  --bad: var(--red);
+  --bad-2: #c23b32;
+  --warn: var(--amber);
+  --warn-rgb: 154, 91, 0;
+  --grain-op: var(--grain-opacity);
+  --vig-a: 0.24;
+  --shadow-menu: 0 20px 48px -14px rgba(23, 21, 32, 0.16), 0 0 22px -10px var(--a25);
+  --shadow-composer: 0 6px 20px -10px rgba(23, 21, 32, 0.12), 0 0 0 1px var(--a06);
+}
+
+/* Light theme needs its own (darker, more saturated) per-accent values —
+   the dark-mode swatch above is too pale to read as text/borders on a
+   light page. Verbatim from design-system.html. */
+[data-theme="light"][data-accent="plasma"] { --accent: oklch(0.42 0.18 290); --accent-bright: oklch(0.35 0.20 290); --accent-dim: oklch(0.90 0.06 290); --accent-tint: oklch(0.42 0.18 290 / 0.07); --accent-border: oklch(0.42 0.18 290 / 0.20); }
+[data-theme="light"][data-accent="surge"]  { --accent: oklch(0.45 0.16 172); --accent-bright: oklch(0.38 0.18 172); --accent-dim: oklch(0.90 0.05 172); --accent-tint: oklch(0.45 0.16 172 / 0.07); --accent-border: oklch(0.45 0.16 172 / 0.20); }
+[data-theme="light"][data-accent="frost"]  { --accent: oklch(0.42 0.15 220); --accent-bright: oklch(0.35 0.17 220); --accent-dim: oklch(0.90 0.05 220); --accent-tint: oklch(0.42 0.15 220 / 0.07); --accent-border: oklch(0.42 0.15 220 / 0.20); }
+[data-theme="light"][data-accent="void"]   { --accent: oklch(0.40 0.20 260); --accent-bright: oklch(0.33 0.22 260); --accent-dim: oklch(0.90 0.06 260); --accent-tint: oklch(0.40 0.20 260 / 0.07); --accent-border: oklch(0.40 0.20 260 / 0.20); }
+[data-theme="light"][data-accent="dusk"]   { --accent: oklch(0.50 0.13 60);  --accent-bright: oklch(0.44 0.15 60);  --accent-dim: oklch(0.92 0.04 60);  --accent-tint: oklch(0.50 0.13 60 / 0.07);  --accent-border: oklch(0.50 0.13 60 / 0.20); }
+[data-theme="light"][data-accent="ember"]  { --accent: oklch(0.46 0.18 355); --accent-bright: oklch(0.38 0.20 355); --accent-dim: oklch(0.90 0.06 355); --accent-tint: oklch(0.46 0.18 355 / 0.07); --accent-border: oklch(0.46 0.18 355 / 0.20); }
+
+/* ── WALLPAPER STACK — image → veil → vignette → accent wash → grain ──
+   --wp / --veil are set at runtime by the theme engine (packages/ui/src/theme.ts)
+   since they depend on the selected wallpaper + per-chat dim setting. */
+:root {
+  --wp: none;
+  --veil: 0.62;
+}
+
+/* ── FOUNDATIONS ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--page-bg);
+  color: rgb(var(--ink));
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s, color 0.25s;
+}
+* { scrollbar-width: thin; scrollbar-color: rgba(var(--ink), 0.16) transparent; }
+::selection { background: var(--a35); }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(var(--ink), 0.12); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--ink), 0.24); }
+
+.t-label { font-family: var(--font-display); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(var(--ink), 0.42); }
+.t-accent { color: var(--accent); }
+.t-muted { color: var(--text-3); }
+.t-dim { color: var(--text-4); }
+code { font-family: var(--font-code); font-size: 0.85em; color: var(--accent); }
+
+@keyframes blink { 0%, 54% { opacity: 1; } 55%, 100% { opacity: 0; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes vglow { 0%, 100% { opacity: 0.82; text-shadow: 0 0 8px var(--a45); } 50% { opacity: 1; text-shadow: 0 0 20px var(--a70); } }

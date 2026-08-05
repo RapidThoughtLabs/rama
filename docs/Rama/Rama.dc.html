@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&amp;family=Martian+Mono:wght@400;500;700;800&amp;display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #06060a; overflow: hidden; }
+    * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(var(--ink),0.16) transparent; }
+    ::selection { background: rgba(150,110,255,0.35); }
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(var(--ink),0.12); border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(var(--ink),0.24); }
+    @keyframes blink { 0%, 54% { opacity: 1; } 55%, 100% { opacity: 0; } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes vglow { 0%, 100% { opacity: 0.82; text-shadow: 0 0 8px var(--a45); } 50% { opacity: 1; text-shadow: 0 0 20px var(--a70); } }
+    @keyframes hekubob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    @keyframes hekushadow { 0%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(0.76); opacity: 0.55; } }
+    @keyframes hekusquish { 0% { transform: scale(1,1); } 30% { transform: scale(1.22,0.72); } 62% { transform: scale(0.92,1.12); } 100% { transform: scale(1,1); } }
+    @keyframes hekuhop { 0% { transform: translateY(0) scale(1,1); } 16% { transform: translateY(2px) scale(1.14,0.82); } 50% { transform: translateY(-30px) scale(0.95,1.08); } 84% { transform: translateY(2px) scale(1.1,0.86); } 100% { transform: translateY(0) scale(1,1); } }
+    @keyframes hekuspin { 0% { transform: rotate(0deg) scale(1); } 60% { transform: rotate(374deg) scale(0.94); } 100% { transform: rotate(360deg) scale(1); } }
+    @keyframes ink1 { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(-58px,28px) scale(0.3); opacity: 0; } }
+    @keyframes ink2 { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(-32px,56px) scale(0.3); opacity: 0; } }
+    @keyframes ink3 { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(-6px,66px) scale(0.3); opacity: 0; } }
+    @keyframes ink4 { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(22px,58px) scale(0.3); opacity: 0; } }
+    @keyframes ink5 { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(46px,34px) scale(0.3); opacity: 0; } }
+    @keyframes ink6 { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(62px,12px) scale(0.3); opacity: 0; } }
+    @keyframes bub1 { 0% { transform: translate(0,0); opacity: 0; } 20% { opacity: 0.9; } 100% { transform: translate(-9px,-38px); opacity: 0; } }
+    @keyframes bub2 { 0% { transform: translate(0,0); opacity: 0; } 20% { opacity: 0.9; } 100% { transform: translate(4px,-44px); opacity: 0; } }
+    @keyframes bub3 { 0% { transform: translate(0,0); opacity: 0; } 20% { opacity: 0.9; } 100% { transform: translate(12px,-32px); opacity: 0; } }
+  </style>
+</helmet>
+
+<div ref="{{ rootRef }}" data-screen-label="rama app" style="height:100vh;width:100vw;position:relative;overflow:hidden;background:var(--page-bg);font-family:'JetBrains Mono',monospace;font-size:13px;color:rgb(var(--ink));-webkit-font-smoothing:antialiased;--accent:oklch(0.65 0.22 290);--accent-hi:oklch(0.75 0.24 290);--a70:oklch(0.65 0.22 290 / 0.70);--a45:oklch(0.65 0.22 290 / 0.45);--a35:oklch(0.65 0.22 290 / 0.35);--a25:oklch(0.65 0.22 290 / 0.25);--a16:oklch(0.65 0.22 290 / 0.16);--a10:oklch(0.65 0.22 290 / 0.10);--a06:oklch(0.65 0.22 290 / 0.06);--wp:url('wallpapers/nebula-indigo.jpg');--veil:0.62;--page-bg:#06060a;--ink:236,234,246;--ink-hi:#f2f0fc;--sf-hi:9,9,16;--sf-lo:7,7,13;--rc:5,5,10;--good:#34d399;--bad:#ff8d86;--warn:#fbbf24;--warn-rgb:251,191,36;--grain-op:0.16;--vig-a:0.62;--shadow-menu:0 24px 64px -16px rgba(0,0,0,0.8), 0 0 28px -10px var(--a35);--shadow-composer:0 8px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px var(--a06);">
+
+  <!-- ── wallpaper stack: image → veil → vignette → accent wash → grain ── -->
+  <div style="position:absolute;inset:0;background-image:var(--wp);background-size:cover;background-position:center;"></div>
+  <div style="position:absolute;inset:0;background:var(--page-bg);opacity:var(--veil);"></div>
+  <div style="position:absolute;inset:0;background:radial-gradient(130% 100% at 50% 0%, transparent 40%, rgba(var(--rc),var(--vig-a)) 100%);"></div>
+  <div style="position:absolute;inset:0;background:radial-gradient(55% 44% at 14% 0%, var(--a10), transparent 70%);"></div>
+  <div style="position:absolute;inset:0;opacity:var(--grain-op);pointer-events:none;z-index:90;background-image:url(&quot;data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E&quot;);background-size:180px 180px;"></div>
+
+  <div style="position:relative;z-index:1;height:100%;display:grid;grid-template-rows:46px minmax(0,1fr) 27px;">
+
+    <!-- ══════════ TITLEBAR — traffic lights · session tabs · global controls ══════════ -->
+    <div data-screen-label="titlebar" style="display:flex;align-items:stretch;min-width:0;background:rgba(var(--sf-hi),0.52);backdrop-filter:blur(22px) saturate(1.3);-webkit-backdrop-filter:blur(22px) saturate(1.3);border-bottom:1px solid rgba(var(--ink),0.07);">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 16px 0 18px;flex-shrink:0;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+      </div>
+      <div style="width:1px;background:rgba(var(--ink),0.07);margin:11px 0;flex-shrink:0;"></div>
+      <div style="display:flex;align-items:stretch;min-width:0;overflow:hidden;">
+        <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="3">
+          <div onClick="{{ tab.pick }}" style="display:flex;align-items:center;gap:9px;padding:0 14px;min-width:168px;max-width:230px;cursor:pointer;position:relative;border-right:1px solid rgba(var(--ink),0.05);background:{{ tab.bg }};">
+            <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:{{ tab.dotBg }};border:{{ tab.dotBorder }};animation:{{ tab.dotAnim }};box-shadow:{{ tab.dotGlow }};"></span>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;letter-spacing:0.02em;color:{{ tab.color }};">{{ tab.title }}</span>
+            <span style="font-size:10px;color:rgba(var(--ink),0.35);opacity:{{ tab.xOp }};">✕</span>
+            <span style="position:absolute;left:10px;right:10px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:{{ tab.edge }};box-shadow:{{ tab.glow }};"></span>
+          </div>
+        </sc-for>
+        <div title="New tab (⌘T)" style="width:38px;display:flex;align-items:center;justify-content:center;color:rgba(var(--ink),0.4);font-size:15px;cursor:pointer;flex-shrink:0;" style-hover="color:var(--accent-hi);background:var(--a06);">+</div>
+      </div>
+      <div style="flex:1;min-width:24px;"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:0 16px;flex-shrink:0;">
+        <span style="display:flex;align-items:center;gap:7px;padding:4px 9px;border:1px solid rgba(var(--ink),0.1);border-radius:6px;font-size:10px;letter-spacing:0.05em;color:rgba(var(--ink),0.4);cursor:pointer;" style-hover="color:var(--accent);border-color:var(--a25);">⌘K<span style="opacity:0.65;">commands</span></span>
+        <span onClick="{{ cycleWallpaper }}" title="Cycle wallpaper" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(var(--ink),0.1);border-radius:6px;font-size:12px;color:rgba(var(--ink),0.45);cursor:pointer;" style-hover="color:var(--accent);border-color:var(--a25);background:var(--a06);">▨</span>
+        <span onClick="{{ cycleAccent }}" title="Cycle accent" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(var(--ink),0.1);border-radius:6px;cursor:pointer;" style-hover="border-color:var(--a25);background:var(--a06);"><span style="width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px var(--a70);"></span></span>
+        <span onClick="{{ toggleTheme }}" title="Switch to light / dark" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(var(--ink),0.1);border-radius:6px;font-size:12px;color:rgba(var(--ink),0.55);cursor:pointer;" style-hover="color:var(--accent);border-color:var(--a25);background:var(--a06);">{{ themeGlyph }}</span>
+        <span onClick="{{ togglePanel }}" title="Toggle artifacts panel" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(var(--ink),0.1);border-radius:6px;font-size:12px;color:var(--pbc, var(--accent));cursor:pointer;" style-hover="border-color:var(--a25);background:var(--a06);">◫</span>
+      </div>
+    </div>
+
+    <!-- ══════════ BODY — sidebar · chat · artifacts ══════════ -->
+    <div ref="{{ bodyRef }}" style="display:grid;grid-template-columns:264px minmax(0,1fr) 384px;min-height:0;transition:grid-template-columns 0.28s cubic-bezier(0.16,1,0.3,1);">
+
+      <!-- ────── SIDEBAR ────── -->
+      <div data-screen-label="sidebar" style="display:flex;flex-direction:column;min-height:0;min-width:0;background:rgba(var(--sf-hi),0.6);backdrop-filter:blur(26px) saturate(1.25);-webkit-backdrop-filter:blur(26px) saturate(1.25);border-right:1px solid rgba(var(--ink),0.07);">
+        <div style="padding:15px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-family:'Martian Mono',monospace;font-size:22px;font-weight:800;letter-spacing:-0.02em;line-height:1;color:var(--ink-hi);">ra<span style="color:#000;">m</span>a</div>
+          <span onClick="{{ newChat }}" title="New chat · ⌘N" style="width:27px;height:27px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--accent);color:#08080f;font-size:16px;font-weight:700;line-height:1;cursor:pointer;box-shadow:0 0 16px -4px var(--a70);" style-hover="box-shadow:0 0 20px -2px var(--a70);filter:brightness(1.08);">+</span>
+        </div>
+        <div style="padding:0 14px 10px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid rgba(var(--ink),0.08);border-radius:8px;background:rgba(var(--rc),0.5);color:rgba(var(--ink),0.32);font-size:11.5px;cursor:text;">
+            <span>⌕</span><span style="flex:1;font-style:italic;">search chats, files…</span>
+          </div>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:2px 8px 12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px 8px;">
+            <span style="font-family:'Martian Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:rgba(var(--ink),0.34);">projects</span>
+            <span style="font-size:10px;color:rgba(var(--ink),0.34);cursor:pointer;" style-hover="color:var(--accent);">+ add</span>
+          </div>
+
+          <!-- knotless -->
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;" style-hover="background:rgba(var(--ink),0.04);">
+              <span style="color:rgba(var(--ink),0.35);font-size:9px;">▾</span>
+              <span style="font-size:12.5px;font-weight:600;color:var(--ink-hi);">knotless</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:9px;color:rgba(var(--ink),0.42);border:1px solid rgba(var(--ink),0.1);padding:1px 7px;border-radius:99px;">⑂ main</span>
+            </div>
+            <div style="padding:0 8px 5px 28px;font-size:9.5px;color:rgba(var(--ink),0.3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">~/dev/knotless · repo linked</div>
+            <sc-for list="{{ knotChats }}" as="c" hint-placeholder-count="3">
+              <div onClick="{{ c.pick }}" style="display:flex;align-items:center;gap:8px;margin:1px 0 1px 14px;padding:6px 9px;border-radius:6px;cursor:pointer;border-left:2px solid {{ c.edge }};background:{{ c.bg }};" style-hover="background:rgba(var(--ink),0.05);">
+                <span style="width:5px;height:5px;border-radius:50%;flex-shrink:0;background:{{ c.dot }};animation:{{ c.anim }};"></span>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:{{ c.col }};">{{ c.name }}</span>
+                <span style="font-size:9.5px;color:{{ c.timeCol }};">{{ c.time }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- heku-console -->
+          <div style="margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;" style-hover="background:rgba(var(--ink),0.04);">
+              <span style="color:rgba(var(--ink),0.35);font-size:9px;">▾</span>
+              <span style="font-size:12.5px;font-weight:600;color:var(--ink-hi);">heku-console</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:9px;color:rgba(var(--ink),0.42);border:1px solid rgba(var(--ink),0.1);padding:1px 7px;border-radius:99px;">⑂ dev</span>
+            </div>
+            <div style="padding:0 8px 5px 28px;font-size:9.5px;color:rgba(var(--ink),0.3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">~/dev/heku · repo linked</div>
+            <sc-for list="{{ hekuChats }}" as="c" hint-placeholder-count="2">
+              <div onClick="{{ c.pick }}" style="display:flex;align-items:center;gap:8px;margin:1px 0 1px 14px;padding:6px 9px;border-radius:6px;cursor:pointer;border-left:2px solid {{ c.edge }};background:{{ c.bg }};" style-hover="background:rgba(var(--ink),0.05);">
+                <span style="width:5px;height:5px;border-radius:50%;flex-shrink:0;background:{{ c.dot }};animation:{{ c.anim }};"></span>
+                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:{{ c.col }};">{{ c.name }}</span>
+                <span style="font-size:9.5px;color:{{ c.timeCol }};">{{ c.time }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- scratch (namesake project, collapsed) -->
+          <div style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;" style-hover="background:rgba(var(--ink),0.04);">
+            <span style="color:rgba(var(--ink),0.35);font-size:9px;">▸</span>
+            <span style="font-size:12.5px;font-weight:600;color:rgba(var(--ink),0.6);">scratch</span>
+            <span style="font-size:8.5px;color:rgba(var(--ink),0.3);border:1px solid rgba(var(--ink),0.08);padding:1px 6px;border-radius:99px;">no repo</span>
+            <span style="flex:1;"></span>
+            <span style="font-size:10px;color:rgba(var(--ink),0.3);">4</span>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid rgba(var(--ink),0.07);padding:9px 12px 11px;display:flex;flex-direction:column;gap:1px;">
+          <div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:6px;font-size:12px;color:rgba(var(--ink),0.6);cursor:pointer;" style-hover="background:var(--a06);color:var(--accent-hi);">
+            <span style="width:16px;text-align:center;color:var(--accent);">✦</span><span style="flex:1;">skills</span><span style="font-size:10px;opacity:0.55;">12 installed</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:6px;font-size:12px;color:rgba(var(--ink),0.6);cursor:pointer;" style-hover="background:var(--a06);color:var(--accent-hi);">
+            <span style="width:16px;text-align:center;color:var(--accent);">▤</span><span style="flex:1;">docs</span><span style="font-size:8.5px;color:rgba(var(--ink),0.35);border:1px solid rgba(var(--ink),0.09);padding:1px 6px;border-radius:99px;">gitignored</span><span style="font-size:10px;opacity:0.55;">4</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:6px;font-size:12px;color:rgba(var(--ink),0.6);cursor:pointer;" style-hover="background:var(--a06);color:var(--accent-hi);">
+            <span style="width:16px;text-align:center;opacity:0.7;">⚙</span><span style="flex:1;">settings</span><span style="font-size:10px;opacity:0.55;">⌘,</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ────── CHAT COLUMN ────── -->
+      <div data-screen-label="chat" style="position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;">
+
+        <!-- ═══ TAB 0 · ws-reconnect fix (streaming) ═══ -->
+        <div data-screen-label="chat: ws-reconnect fix" style="display:var(--t0, flex);flex-direction:column;flex:1;min-height:0;">
+          <div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 18px;border-bottom:1px solid rgba(var(--ink),0.06);background:rgba(var(--sf-lo),0.32);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:10.5px;color:rgba(var(--ink),0.42);flex-shrink:0;">
+            <span style="color:rgba(var(--ink),0.65);">⌂ knotless</span><span style="opacity:0.4;">›</span><span style="color:var(--accent-hi);">ws-reconnect fix</span>
+            <span style="opacity:0.35;">·</span><span>⑂ main</span><span style="color:var(--good);">+2</span>
+            <span style="flex:1;"></span>
+            <span style="display:flex;align-items:center;gap:7px;">ctx<span style="width:64px;height:4px;border-radius:3px;background:rgba(var(--ink),0.09);overflow:hidden;display:inline-block;"><span style="display:block;width:41%;height:100%;border-radius:3px;background:linear-gradient(90deg, var(--accent), var(--accent-hi));box-shadow:0 0 8px var(--a45);"></span></span>82k / 200k</span>
+            <span style="opacity:0.35;">·</span><span>$0.83</span>
+          </div>
+
+          <div ref="{{ msgsRef }}" style="flex:1;min-height:0;overflow-y:auto;padding:22px 30px 16px;">
+            <div style="max-width:880px;line-height:1.7;">
+              <div style="font-size:10px;color:rgba(var(--ink),0.28);letter-spacing:0.07em;margin-bottom:16px;">── mon jul 6 · 09:41 · session #218 · restored from ~/.rama/sessions ──</div>
+
+              <div style="display:flex;gap:10px;margin:14px 0 8px;">
+                <span style="color:var(--accent-hi);font-weight:700;text-shadow:0 0 10px var(--a45);flex-shrink:0;">❯</span>
+                <span style="color:var(--ink-hi);font-weight:500;">the websocket client drops after laptop sleep and never reconnects — fix it and add a proper test</span>
+              </div>
+
+              <div style="margin:6px 0 6px 22px;font-size:11.5px;font-style:italic;color:rgba(var(--ink),0.34);cursor:pointer;" style-hover="color:rgba(var(--ink),0.55);">✻ thought for 9s <span style="opacity:0.6;">▸</span></div>
+
+              <div style="display:flex;gap:10px;margin:10px 0;">
+                <span style="color:var(--accent);flex-shrink:0;">◆</span>
+                <div style="color:rgba(var(--ink),0.86);min-width:0;">Found it — <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11.5px;color:var(--accent-hi);">SocketClient.connect()</span> never re-arms after a close, so a dropped socket just stays dropped. Plan: exponential backoff with jitter, wake-signal listeners, reset on open.</div>
+              </div>
+
+              <div onClick="{{ pickCode }}" style="margin:2px 0 2px 22px;cursor:pointer;border-radius:6px;padding:3px 8px 3px 6px;" style-hover="background:rgba(var(--ink),0.04);">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">read</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">src/realtime/socket.ts</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span>214 lines · added to context</span></div>
+              </div>
+
+              <div style="margin:2px 0 2px 22px;border-radius:6px;padding:3px 8px 3px 6px;">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">grep</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">"reconnect|backoff" src/</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span>6 matches across 3 files</span></div>
+              </div>
+
+              <div onClick="{{ pickDiff }}" style="margin:2px 0 2px 22px;cursor:pointer;border-radius:6px;padding:3px 8px 3px 6px;" style-hover="background:rgba(var(--ink),0.04);">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">edit</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">src/realtime/socket.ts</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span><span style="color:var(--good);">+48</span> <span style="color:var(--bad);">−12</span> · view in panel ↗</span></div>
+              </div>
+
+              <div style="margin:6px 0 8px 44px;border:1px solid rgba(var(--ink),0.08);border-radius:8px;overflow:hidden;background:rgba(var(--rc),0.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);max-width:640px;">
+                <div style="display:flex;justify-content:space-between;padding:5px 11px;border-bottom:1px solid rgba(var(--ink),0.06);font-size:9.5px;color:rgba(var(--ink),0.4);">
+                  <span>socket.ts · @@ -41,9 +41,26</span><span onClick="{{ pickDiff }}" style="color:var(--accent);cursor:pointer;">open in panel ↗</span>
+                </div>
+                <div style="padding:6px 0;font-size:11px;line-height:1.6;">
+                  <sc-for list="{{ diffMini }}" as="l" hint-placeholder-count="5">
+                    <div style="display:flex;background:{{ l.b }};"><span style="white-space:pre;padding:0 12px;color:{{ l.c }};">{{ l.t }}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div onClick="{{ pickCode }}" style="margin:2px 0 2px 22px;cursor:pointer;border-radius:6px;padding:3px 8px 3px 6px;" style-hover="background:rgba(var(--ink),0.04);">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">write</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">src/realtime/reconnect.test.ts</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span>created · 96 lines</span></div>
+              </div>
+
+              <div onClick="{{ pickTerm }}" style="margin:2px 0 2px 22px;cursor:pointer;border-radius:6px;padding:3px 8px 3px 6px;" style-hover="background:rgba(var(--ink),0.04);">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">bash</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">bun test reconnect</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span><span style="color:var(--good);">14 pass</span> · 0 fail · 412ms</span></div>
+              </div>
+
+              <div style="display:flex;gap:10px;margin:12px 0;">
+                <span style="color:var(--accent);flex-shrink:0;">◆</span>
+                <div style="color:rgba(var(--ink),0.86);min-width:0;">
+                  <div>All green. The client now survives sleep/wake:</div>
+                  <div style="margin-top:6px;display:grid;gap:3px;font-size:12.5px;color:rgba(var(--ink),0.7);">
+                    <div><span style="color:var(--accent);">▸</span> backoff <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11px;color:var(--accent-hi);">1s → 32s</span> cap, ±250ms jitter</div>
+                    <div><span style="color:var(--accent);">▸</span> re-arms on <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11px;color:var(--accent-hi);">online</span> <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11px;color:var(--accent-hi);">visibilitychange</span> <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11px;color:var(--accent-hi);">focus</span></div>
+                    <div><span style="color:var(--accent);">▸</span> 14 cases in <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11px;color:var(--accent-hi);">reconnect.test.ts</span>, incl. fake-timer wake</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;gap:10px;margin:16px 0 8px;">
+                <span style="color:var(--accent-hi);font-weight:700;text-shadow:0 0 10px var(--a45);flex-shrink:0;">❯</span>
+                <span style="color:var(--ink-hi);font-weight:500;">clean. write the approach up in docs so future-me remembers why</span>
+              </div>
+
+              <div onClick="{{ pickDoc }}" style="margin:6px 0 2px 22px;cursor:pointer;border-radius:6px;padding:3px 8px 3px 6px;" style-hover="background:rgba(var(--ink),0.04);">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="width:9px;height:9px;border:1.5px solid var(--a25);border-top-color:var(--accent);border-radius:50%;animation:spin 0.9s linear infinite;flex-shrink:0;"></span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">write</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">docs/RECONNECT_NOTES.md</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span style="color:var(--warn);">streaming · 1.4k chars</span></div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:9px;margin:14px 0 6px;flex-wrap:wrap;">
+                <span style="color:var(--accent-hi);font-style:italic;font-weight:600;animation:vglow 2.2s ease-in-out infinite;">✻ {{ verb }}…</span>
+                <span style="font-size:11px;color:rgba(var(--ink),0.35);">({{ elapsed }}s · ↑ 2.1k tok · esc to interrupt)</span>
+                <span style="display:inline-block;width:7px;height:15px;background:var(--accent);box-shadow:0 0 10px var(--a45);animation:blink 1.1s steps(1) infinite;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ TAB 1 · add oauth scopes (finished) ═══ -->
+        <div data-screen-label="chat: add oauth scopes" style="display:var(--t1, none);flex-direction:column;flex:1;min-height:0;">
+          <div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 18px;border-bottom:1px solid rgba(var(--ink),0.06);background:rgba(var(--sf-lo),0.32);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:10.5px;color:rgba(var(--ink),0.42);flex-shrink:0;">
+            <span style="color:rgba(var(--ink),0.65);">⌂ knotless</span><span style="opacity:0.4;">›</span><span style="color:var(--accent-hi);">add oauth scopes</span>
+            <span style="opacity:0.35;">·</span><span>⑂ main</span><span style="color:rgba(var(--ink),0.45);">clean</span>
+            <span style="flex:1;"></span>
+            <span style="display:flex;align-items:center;gap:7px;">ctx<span style="width:64px;height:4px;border-radius:3px;background:rgba(var(--ink),0.09);overflow:hidden;display:inline-block;"><span style="display:block;width:12%;height:100%;border-radius:3px;background:linear-gradient(90deg, var(--accent), var(--accent-hi));"></span></span>24k / 200k</span>
+            <span style="opacity:0.35;">·</span><span>$0.14</span>
+          </div>
+          <div style="flex:1;min-height:0;overflow-y:auto;padding:22px 30px 16px;">
+            <div style="max-width:880px;line-height:1.7;">
+              <div style="font-size:10px;color:rgba(var(--ink),0.28);letter-spacing:0.07em;margin-bottom:16px;">── session #217 · started 18m ago ──</div>
+              <div style="display:flex;gap:10px;margin:14px 0 8px;">
+                <span style="color:var(--accent-hi);font-weight:700;text-shadow:0 0 10px var(--a45);flex-shrink:0;">❯</span>
+                <span style="color:var(--ink-hi);font-weight:500;">make oauth scopes configurable per connector, default read-only</span>
+              </div>
+              <div style="margin:6px 0 6px 22px;font-size:11.5px;font-style:italic;color:rgba(var(--ink),0.34);cursor:pointer;" style-hover="color:rgba(var(--ink),0.55);">✻ thought for 4s <span style="opacity:0.6;">▸</span></div>
+              <div style="display:flex;gap:10px;margin:10px 0;">
+                <span style="color:var(--accent);flex-shrink:0;">◆</span>
+                <div style="color:rgba(var(--ink),0.86);min-width:0;">Scopes belong on <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11.5px;color:var(--accent-hi);">ConnectorConfig</span> — adding a <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11.5px;color:var(--accent-hi);">scopes?: Scope[]</span> field with a safe default.</div>
+              </div>
+              <div style="margin:2px 0 2px 22px;border-radius:6px;padding:3px 8px 3px 6px;">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">read</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">src/config/connector.ts</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span>82 lines · added to context</span></div>
+              </div>
+              <div style="margin:2px 0 2px 22px;border-radius:6px;padding:3px 8px 3px 6px;">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">edit</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">src/config/connector.ts</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span><span style="color:var(--good);">+22</span> <span style="color:var(--bad);">−3</span></span></div>
+              </div>
+              <div style="margin:2px 0 2px 22px;border-radius:6px;padding:3px 8px 3px 6px;">
+                <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);font-size:9px;">●</span><span style="font-weight:600;font-size:12.5px;color:rgba(var(--ink),0.88);">bash</span><span style="font-size:12.5px;color:rgba(var(--ink),0.55);">bun typecheck</span></div>
+                <div style="display:flex;gap:9px;font-size:11.5px;color:rgba(var(--ink),0.38);padding-left:3px;"><span>⎿</span><span style="color:var(--good);">clean · 0 errors</span></div>
+              </div>
+              <div style="display:flex;gap:10px;margin:12px 0;">
+                <span style="color:var(--accent);flex-shrink:0;">◆</span>
+                <div style="color:rgba(var(--ink),0.86);min-width:0;">Done — defaults to <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11.5px;color:var(--accent-hi);">["read"]</span>, override per connector in <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:11.5px;color:var(--accent-hi);">rama.config.ts</span>.</div>
+              </div>
+              <div style="font-size:10px;color:rgba(var(--ink),0.28);letter-spacing:0.07em;margin-top:16px;">── run finished · 41s · $0.14 ──</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ TAB 2 · welcome (fresh session) ═══ -->
+        <div data-screen-label="chat: welcome" style="display:var(--t2, none);flex-direction:column;flex:1;min-height:0;">
+          <div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 18px;border-bottom:1px solid rgba(var(--ink),0.06);background:rgba(var(--sf-lo),0.32);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:10.5px;color:rgba(var(--ink),0.42);flex-shrink:0;">
+            <span>no project linked</span><span style="opacity:0.35;">·</span><span style="color:var(--accent);">/init</span><span>to scaffold one</span>
+            <span style="flex:1;"></span><span>ctx 0%</span>
+          </div>
+          <div ref="{{ welcomeRef }}" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 36px;">
+
+            <!-- ── heku · resident pixel octopus ── -->
+            <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+              <div ref="{{ hekuRef }}" onClick="{{ hekuPoke }}" onMouseEnter="{{ hekuPetStart }}" onMouseLeave="{{ hekuPetEnd }}" title="heku — hover to pet, click to poke" style="position:relative;cursor:pointer;padding:12px 14px 0;user-select:none;-webkit-tap-highlight-color:transparent;">
+                <div style="display:{{ hekuBubbleDisp }};position:absolute;left:98px;bottom:126px;z-index:5;white-space:nowrap;padding:6px 11px;background:rgba(var(--sf-hi),0.94);border:1px solid var(--a35);box-shadow:4px 4px 0 rgba(var(--rc),0.6), 0 0 20px -6px var(--a45);font-size:11px;letter-spacing:0.01em;color:rgba(var(--ink),0.9);">
+                  <span>{{ hekuBubbleText }}</span><span style="display:inline-block;width:6px;height:12px;background:var(--accent);vertical-align:-2px;margin-left:3px;animation:blink 1.1s steps(1) infinite;"></span>
+                  <span style="position:absolute;left:11px;bottom:-6px;width:6px;height:6px;background:rgba(var(--sf-hi),0.94);border:1px solid var(--a35);"></span>
+                  <span style="position:absolute;left:5px;bottom:-12px;width:6px;height:6px;background:rgba(var(--sf-hi),0.94);border:1px solid var(--a35);"></span>
+                </div>
+                <div style="animation:hekubob 3.4s ease-in-out infinite;">
+                  <div style="animation:{{ hekuAnim }};transform-origin:50% 100%;filter:drop-shadow(0 5px 20px var(--a35));">
+                    <sc-for list="{{ hekuRows }}" as="hr" hint-placeholder-count="6">
+                      <div style="display:flex;">
+                        <sc-for list="{{ hr.cells }}" as="hc" hint-placeholder-count="9">
+                          <span style="width:7px;height:7px;flex-shrink:0;background:{{ hc.bg }};"></span>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <sc-for list="{{ hekuParts }}" as="hp" hint-placeholder-count="1">
+                  <span style="position:absolute;left:{{ hp.left }};top:{{ hp.top }};width:{{ hp.size }};height:{{ hp.size }};background:{{ hp.bg }};border:{{ hp.border }};animation:{{ hp.anim }};pointer-events:none;"></span>
+                </sc-for>
+                <div style="margin:9px auto 0;width:96px;height:10px;border-radius:50%;background:radial-gradient(50% 50% at 50% 50%, rgba(var(--rc),0.9), transparent 72%);animation:hekushadow 3.4s ease-in-out infinite;"></div>
+              </div>
+              <div style="margin-top:8px;font-size:9.5px;letter-spacing:0.09em;color:rgba(var(--ink),0.38);">heku · resident tool-finder · hover to pet · click to poke</div>
+            </div>
+
+            <div style="margin-top:24px;font-family:'Martian Mono',monospace;font-size:38px;font-weight:800;letter-spacing:-0.03em;color:var(--ink-hi);line-height:1;">ra<span style="color:var(--accent);text-shadow:0 0 24px var(--a70);">m</span>a<span style="display:inline-block;width:11px;height:28px;margin-left:7px;background:var(--accent);box-shadow:0 0 14px var(--a45);animation:blink 1.1s steps(1) infinite;"></span></div>
+            <div style="margin-top:10px;font-size:11.5px;color:rgba(var(--ink),0.42);letter-spacing:0.06em;">the terminal that grew a UI · open-source agentic harness</div>
+
+            <div style="margin-top:22px;width:min(540px,100%);border:1px solid var(--a25);border-radius:12px;background:rgba(var(--sf-lo),0.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 0 44px -18px var(--a45);padding:13px 18px;display:grid;gap:8px;font-size:11.5px;color:rgba(var(--ink),0.62);">
+              <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);">✓</span><span>heku tool index warm · <span style="color:var(--accent-hi);">128 tools</span> · 12 skills · 38ms</span></div>
+              <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--good);">✓</span><span>4 providers connected · 6 models ready</span></div>
+              <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);">▸</span><span><span style="color:var(--accent);">/model</span> · <span style="color:var(--accent);">/skills</span> · <span style="color:var(--accent);">/docs</span> · <span style="color:var(--accent);">@file</span> pulls any file into context</span></div>
+            </div>
+
+            <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+              <span style="padding:5px 13px;border:1px solid rgba(var(--ink),0.1);border-radius:99px;font-size:11px;color:rgba(var(--ink),0.5);cursor:pointer;" style-hover="border-color:var(--a25);color:var(--accent-hi);background:var(--a06);">fix a failing test</span>
+              <span style="padding:5px 13px;border:1px solid rgba(var(--ink),0.1);border-radius:99px;font-size:11px;color:rgba(var(--ink),0.5);cursor:pointer;" style-hover="border-color:var(--a25);color:var(--accent-hi);background:var(--a06);">explain this repo</span>
+              <span style="padding:5px 13px;border:1px solid rgba(var(--ink),0.1);border-radius:99px;font-size:11px;color:rgba(var(--ink),0.5);cursor:pointer;" style-hover="border-color:var(--a25);color:var(--accent-hi);background:var(--a06);">refactor a module</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ COMPOSER (shared) + model menu ═══ -->
+        <div style="position:relative;padding:10px 18px 14px;flex-shrink:0;">
+          <div style="display:var(--menu, none);position:absolute;left:18px;bottom:calc(100% - 4px);width:334px;z-index:50;border:1px solid rgba(var(--ink),0.12);border-radius:12px;background:rgba(var(--sf-hi),0.86);backdrop-filter:blur(30px) saturate(1.4);-webkit-backdrop-filter:blur(30px) saturate(1.4);box-shadow:var(--shadow-menu);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(var(--ink),0.07);">
+              <span style="font-family:'Martian Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:rgba(var(--ink),0.4);">model</span>
+              <span onClick="{{ closeMenu }}" style="font-size:10px;color:rgba(var(--ink),0.35);cursor:pointer;" style-hover="color:var(--accent);">esc ✕</span>
+            </div>
+            <div style="max-height:300px;overflow-y:auto;padding:6px;">
+              <sc-for list="{{ provs }}" as="p" hint-placeholder-count="2">
+                <div style="padding:8px 9px 4px;display:flex;align-items:center;gap:8px;">
+                  <span style="width:5px;height:5px;border-radius:50%;background:{{ p.dot }};flex-shrink:0;"></span>
+                  <span style="font-family:'Martian Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:rgba(var(--ink),0.4);white-space:nowrap;">{{ p.name }}</span>
+                  <span style="flex:1;height:1px;background:rgba(var(--ink),0.06);"></span>
+                </div>
+                <sc-for list="{{ p.models }}" as="m" hint-placeholder-count="2">
+                  <div onClick="{{ m.pick }}" style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;cursor:pointer;background:{{ m.bg }};" style-hover="background:rgba(var(--ink),0.06);">
+                    <span style="font-size:12px;color:{{ m.col }};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ m.id }}</span>
+                    <span style="font-size:8.5px;padding:1px 7px;border:1px solid rgba(var(--ink),0.1);border-radius:99px;color:rgba(var(--ink),0.4);white-space:nowrap;">{{ m.tag }}</span>
+                    <span style="color:var(--accent);font-size:11px;opacity:{{ m.check }};">✓</span>
+                  </div>
+                </sc-for>
+              </sc-for>
+            </div>
+            <div style="padding:9px 14px;border-top:1px solid rgba(var(--ink),0.07);display:flex;justify-content:space-between;font-size:10.5px;color:rgba(var(--ink),0.4);">
+              <span>◇ 4 providers connected</span><span style="color:var(--accent);cursor:pointer;">manage →</span>
+            </div>
+          </div>
+
+          <div style="border:1px solid rgba(var(--ink),0.1);border-radius:11px;background:rgba(var(--sf-lo),0.62);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);box-shadow:var(--shadow-composer);overflow:visible;">
+            <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px 10px;">
+              <span style="color:var(--accent-hi);font-weight:700;text-shadow:0 0 10px var(--a45);">❯</span>
+              <div style="flex:1;min-width:0;font-size:13px;color:var(--ink-hi);line-height:1.5;">{{ typed }}<span style="font-style:italic;color:rgba(var(--ink),0.3);">{{ ph }}</span><span style="display:inline-block;width:7px;height:15px;background:var(--accent);box-shadow:0 0 10px var(--a45);margin-left:2px;vertical-align:-2px;animation:blink 1.1s steps(1) infinite;"></span></div>
+              <span style="display:var(--queue, none);align-items:center;font-size:9.5px;color:var(--warn);border:1px solid rgba(var(--warn-rgb),0.25);background:rgba(var(--warn-rgb),0.07);padding:2px 8px;border-radius:99px;white-space:nowrap;">⏎ queues</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px 8px;border-top:1px solid rgba(var(--ink),0.05);flex-wrap:wrap;">
+              <div onClick="{{ toggleMenu }}" style="display:flex;align-items:center;gap:7px;padding:4px 11px;border:1px solid var(--a25);border-radius:99px;cursor:pointer;font-size:11px;color:var(--accent-hi);background:var(--a06);" style-hover="background:var(--a10);box-shadow:0 0 14px -4px var(--a45);">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--a70);"></span>
+                <span>{{ modelLabel }}</span><span style="opacity:0.55;font-size:9px;">▾</span>
+              </div>
+              <div style="display:flex;border:1px solid rgba(var(--ink),0.09);border-radius:99px;padding:2px;gap:2px;">
+                <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+                  <span onClick="{{ m.pick }}" style="padding:2px 10px;font-size:10.5px;border-radius:99px;cursor:pointer;color:{{ m.col }};background:{{ m.bg }};font-weight:{{ m.w }};">{{ m.label }}</span>
+                </sc-for>
+              </div>
+              <span style="flex:1;"></span>
+              <span style="font-size:10px;color:rgba(var(--ink),0.32);">@ files · / commands · ⇧⏎ newline</span>
+              <span style="display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(var(--ink),0.45);border:1px solid rgba(var(--ink),0.1);border-radius:6px;padding:3px 8px;cursor:pointer;" style-hover="color:var(--accent);border-color:var(--a25);">⏎ send</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ────── ARTIFACTS PANEL ────── -->
+      <div data-screen-label="artifacts panel" style="min-width:0;min-height:0;display:flex;flex-direction:column;background:rgba(var(--sf-hi),0.6);backdrop-filter:blur(26px) saturate(1.25);-webkit-backdrop-filter:blur(26px) saturate(1.25);border-left:1px solid rgba(var(--ink),0.07);overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-bottom:1px solid rgba(var(--ink),0.07);flex-shrink:0;">
+          <span style="font-family:'Martian Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:rgba(var(--ink),0.42);">artifacts</span>
+          <span style="font-size:9px;color:var(--accent-hi);background:var(--a10);border:1px solid var(--a25);border-radius:99px;padding:1px 7px;">4</span>
+          <span style="flex:1;"></span>
+          <span style="font-size:9.5px;color:var(--accent-hi);cursor:pointer;">all</span>
+          <span style="font-size:9.5px;color:rgba(var(--ink),0.35);cursor:pointer;" style-hover="color:rgba(var(--ink),0.6);">files</span>
+          <span style="font-size:9.5px;color:rgba(var(--ink),0.35);cursor:pointer;" style-hover="color:rgba(var(--ink),0.6);">tools</span>
+          <span onClick="{{ togglePanel }}" style="font-size:11px;color:rgba(var(--ink),0.35);cursor:pointer;margin-left:4px;" style-hover="color:var(--accent);">»</span>
+        </div>
+
+        <div style="padding:8px 10px 10px;display:grid;gap:3px;flex-shrink:0;">
+          <sc-for list="{{ arts }}" as="a" hint-placeholder-count="4">
+            <div onClick="{{ a.pick }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid {{ a.brd }};background:{{ a.bg }};" style-hover="background:rgba(var(--ink),0.05);">
+              <span style="width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:{{ a.gcol }};background:rgba(var(--ink),0.05);border:1px solid rgba(var(--ink),0.07);flex-shrink:0;">{{ a.glyph }}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;color:{{ a.ncol }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.name }}</div>
+                <div style="font-size:9.5px;color:rgba(var(--ink),0.34);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.meta }}</div>
+              </div>
+              <span style="font-size:9.5px;color:{{ a.bcol }};animation:{{ a.banim }};white-space:nowrap;">{{ a.badge }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid rgba(var(--ink),0.07);border-bottom:1px solid rgba(var(--ink),0.07);background:rgba(var(--rc),0.4);flex-shrink:0;">
+          <span style="font-size:11px;color:rgb(var(--ink));font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ pvName }}</span>
+          <span style="font-size:8.5px;color:rgba(var(--ink),0.4);border:1px solid rgba(var(--ink),0.1);border-radius:99px;padding:1px 7px;white-space:nowrap;">{{ pvTag }}</span>
+          <span style="flex:1;"></span>
+          <span title="Copy" style="font-size:11px;color:rgba(var(--ink),0.4);cursor:pointer;" style-hover="color:var(--accent);">⧉</span>
+          <span title="Open in editor" style="font-size:11px;color:rgba(var(--ink),0.4);cursor:pointer;" style-hover="color:var(--accent);">↗</span>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto;background:rgba(var(--rc),0.35);">
+          <!-- diff preview -->
+          <div style="display:var(--pv-diff, block);padding:8px 0;font-size:11px;line-height:1.62;">
+            <sc-for list="{{ diffLines }}" as="l" hint-placeholder-count="8">
+              <div style="display:flex;background:{{ l.b }};"><span style="width:36px;text-align:right;padding-right:11px;color:rgba(var(--ink),0.2);flex-shrink:0;user-select:none;">{{ l.n }}</span><span style="white-space:pre;color:{{ l.c }};padding-right:14px;">{{ l.t }}</span></div>
+            </sc-for>
+          </div>
+          <!-- code preview -->
+          <div style="display:var(--pv-code, none);padding:8px 0;font-size:11px;line-height:1.62;">
+            <sc-for list="{{ codeLines }}" as="l" hint-placeholder-count="8">
+              <div style="display:flex;"><span style="width:36px;text-align:right;padding-right:11px;color:rgba(var(--ink),0.2);flex-shrink:0;user-select:none;">{{ l.n }}</span><span style="white-space:pre;padding-right:14px;"><sc-for list="{{ l.parts }}" as="p" hint-placeholder-count="1"><span style="color:{{ p.c }};">{{ p.t }}</span></sc-for></span></div>
+            </sc-for>
+          </div>
+          <!-- terminal preview -->
+          <div style="display:var(--pv-term, none);padding:12px 16px;font-size:11px;line-height:1.7;">
+            <sc-for list="{{ termLines }}" as="l" hint-placeholder-count="8">
+              <div style="white-space:pre;color:{{ l.c }};">{{ l.t }}</div>
+            </sc-for>
+          </div>
+          <!-- doc preview -->
+          <div style="display:var(--pv-doc, none);padding:16px 18px;">
+            <div style="font-family:'Martian Mono',monospace;font-size:15px;font-weight:700;color:var(--ink-hi);">Reconnect strategy</div>
+            <div style="font-size:9.5px;color:rgba(var(--ink),0.35);margin-top:4px;">docs/RECONNECT_NOTES.md · local only — kept out of the repo by rama</div>
+            <div style="margin-top:12px;color:rgba(var(--ink),0.72);font-size:12px;line-height:1.75;">The socket client now survives sleep/wake. Reconnects are scheduled with exponential backoff and jitter; any wake signal short-circuits the wait.</div>
+            <div style="margin-top:10px;display:grid;gap:5px;font-size:11.5px;color:rgba(var(--ink),0.66);">
+              <div><span style="color:var(--accent);">▸</span> backoff <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:10.5px;color:var(--accent-hi);">1s → 32s</span>, ±250ms jitter</div>
+              <div><span style="color:var(--accent);">▸</span> wake signals: <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:10.5px;color:var(--accent-hi);">online</span> <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:10.5px;color:var(--accent-hi);">visibilitychange</span></div>
+              <div><span style="color:var(--accent);">▸</span> backoff resets on successful <span style="background:rgba(var(--ink),0.07);border:1px solid rgba(var(--ink),0.1);border-radius:4px;padding:0 5px;font-size:10.5px;color:var(--accent-hi);">open</span></div>
+            </div>
+            <div style="margin-top:14px;font-family:'Martian Mono',monospace;font-size:11.5px;font-weight:700;color:var(--ink-hi);">Test coverage</div>
+            <div style="margin-top:4px;font-size:12px;color:rgba(var(--ink),0.72);">14 cases in reconnect.test.ts, including fake-timer wake<span style="display:inline-block;width:6px;height:13px;background:var(--accent);box-shadow:0 0 8px var(--a45);margin-left:3px;vertical-align:-2px;animation:blink 1.1s steps(1) infinite;"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ STATUS BAR ══════════ -->
+    <div data-screen-label="status bar" style="display:flex;align-items:center;gap:14px;padding:0 16px;background:rgba(var(--sf-lo),0.6);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(var(--ink),0.07);font-size:9.5px;letter-spacing:0.04em;color:rgba(var(--ink),0.42);min-width:0;overflow:hidden;">
+      <span style="white-space:nowrap;">⑂ main</span>
+      <span style="white-space:nowrap;"><span style="color:var(--good);">+48</span> <span style="color:var(--bad);">−12</span></span>
+      <span style="display:flex;align-items:center;gap:5px;white-space:nowrap;color:var(--accent-hi);"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 7px var(--a70);animation:pulse 1.3s ease-in-out infinite;"></span>1 running</span>
+      <span style="opacity:0.4;">│</span>
+      <span style="display:flex;align-items:center;gap:5px;white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:var(--good);"></span>anthropic</span>
+      <span style="display:flex;align-items:center;gap:5px;white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:var(--good);"></span>openai</span>
+      <span style="display:flex;align-items:center;gap:5px;white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:var(--warn);"></span>google · rate-limited</span>
+      <span style="display:flex;align-items:center;gap:5px;white-space:nowrap;"><span style="width:5px;height:5px;border-radius:50%;background:var(--good);"></span>ollama · local</span>
+      <span style="flex:1;"></span>
+      <span style="white-space:nowrap;">◇ rtl-labs/rama</span>
+      <span style="white-space:nowrap;">★ 12.4k</span>
+      <span style="white-space:nowrap;">MIT</span>
+      <span style="white-space:nowrap;color:rgba(var(--ink),0.3);">v0.4.2</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1600, &quot;height&quot;: 980 },
+  &quot;theme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;dark&quot;, &quot;light&quot;], &quot;default&quot;: &quot;dark&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;theme&quot; },
+  &quot;accent&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;plasma&quot;, &quot;surge&quot;, &quot;frost&quot;, &quot;void&quot;, &quot;dusk&quot;, &quot;ember&quot;], &quot;default&quot;: &quot;plasma&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;theme&quot; },
+  &quot;wallpaper&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;indigo&quot;, &quot;inferno&quot;, &quot;rose&quot;, &quot;none&quot;], &quot;default&quot;: &quot;indigo&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;theme&quot; },
+  &quot;dim&quot;: { &quot;editor&quot;: &quot;range&quot;, &quot;min&quot;: 0, &quot;max&quot;: 100, &quot;step&quot;: 2, &quot;default&quot;: 62, &quot;unit&quot;: &quot;%&quot;, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;theme&quot; },
+  &quot;mascotChatter&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;heku&quot; }
+}">
+class Component extends DCLogic {
+  state = { tab: 2, artifact: 'diff', model: 'claude-sonnet-4.6', mode: 'agent', menu: false, panel: true, verb: 0, secs: 14, wp: null, acc: null, hFrame: 0, hBlink: false, hEye: 'idle', hLook: { x: 0, y: 0 }, hAnim: 'none', hBubble: '', hShown: 0, hParts: [], hHover: false };
+
+  ACCENTS = {
+    plasma: [0.65, 0.22, 290, 0.75, 0.24],
+    surge:  [0.75, 0.20, 172, 0.82, 0.22],
+    frost:  [0.72, 0.18, 220, 0.80, 0.20],
+    void:   [0.62, 0.26, 260, 0.72, 0.28],
+    dusk:   [0.78, 0.17, 60,  0.85, 0.18],
+    ember:  [0.68, 0.22, 355, 0.76, 0.24],
+  };
+  WPS = ['indigo', 'inferno', 'rose', 'none'];
+  VERBS = ['Composting', 'Percolating', 'Transmuting', 'Reticulating', 'Annealing', 'Splining', 'Marinating', 'Tessellating', 'Defragmenting', 'Ruminating'];
+
+  // ── heku · resident pixel octopus ──
+  HEKU_HEAD = [
+    '......######......',
+    '....#+++######....',
+    '...++##########...',
+    '..##############..',
+    '..###WWW##WWW###..',
+    '..###WWW##WWW###..',
+    '..###WWW##WWW###..',
+    '..##############..',
+    '..##############..',
+    '...#-########-#...',
+  ];
+  HEKU_LEGS = [
+    ['..##..##..##..##..', '.##...##..##...##.', '.##..##....##..##.', '##..##......##..##'],
+    ['..##..##..##..##..', '..##..##..##..##..', '...##..####..##...', '..##..##..##..##..'],
+  ];
+  HEKU_TIPS = ['$ heku find "resize img" → 2 tools', '128 tools indexed · warm in 38ms', 'blub. blub.', 'try /skills — 12 installed', 'zero deps. eight arms.', '@file me anything'];
+  HEKU_POKES = ['ok that tickled', 'ink buffer flushed ✓', '8 arms · 0 deadlocks', 'careful — load-bearing octopus', 're-indexing… done ✓', 'found 3 tools for that poke'];
+
+  hekuRefCb = (el) => { this.hekuEl = el; };
+  welcomeRefCb = (el) => { if (el && !el.__hekuMM) { el.__hekuMM = true; el.addEventListener('mousemove', this.hekuMouse); } };
+  hekuMouse = (e) => {
+    this.hLastMouse = Date.now();
+    const el = this.hekuEl; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const cl = (v) => Math.max(-1, Math.min(1, v));
+    const qx = cl(Math.round((e.clientX - (r.left + r.width / 2)) / 130));
+    const qy = cl(Math.round((e.clientY - (r.top + r.height / 2 - 8)) / 100));
+    const L = this.state.hLook;
+    if (L.x !== qx || L.y !== qy) this.setState({ hLook: { x: qx, y: qy } });
+  };
+  hekuShowBubble(text, dur) {
+    clearInterval(this.hTypeInt); clearTimeout(this.hBubTo);
+    const len = text.length;
+    const t0 = Date.now();
+    this.setState({ hBubble: text, hShown: 0 });
+    this.hTypeInt = setInterval(() => {
+      const n = Math.min(len, Math.ceil((Date.now() - t0) / 26));
+      if (n >= len) clearInterval(this.hTypeInt);
+      this.setState({ hShown: n });
+    }, 80);
+    this.hBubTo = setTimeout(() => this.setState({ hBubble: '', hShown: 0 }), dur || 3800);
+  }
+  hekuSpawn(parts, ttl) {
+    const stamped = parts.map(p => Object.assign({ id: Math.random().toString(36).slice(2) }, p));
+    this.setState(s => ({ hParts: s.hParts.concat(stamped) }));
+    setTimeout(() => {
+      const ids = stamped.map(p => p.id);
+      this.setState(s => ({ hParts: s.hParts.filter(p => ids.indexOf(p.id) === -1) }));
+    }, ttl);
+  }
+  hekuInk() {
+    const parts = [];
+    for (let i = 0; i < 11; i++) {
+      const ink = Math.random() < 0.6;
+      parts.push({
+        left: (62 + Math.random() * 26).toFixed(0) + 'px',
+        top: (84 + Math.random() * 16).toFixed(0) + 'px',
+        size: (3 + Math.random() * 4).toFixed(1) + 'px',
+        bg: ink ? '#0b0b14' : (Math.random() < 0.5 ? 'var(--accent)' : 'var(--accent-dk)'),
+        border: 'none',
+        anim: 'ink' + (1 + Math.floor(Math.random() * 6)) + ' ' + (0.55 + Math.random() * 0.35).toFixed(2) + 's ease-out forwards',
+      });
+    }
+    this.hekuSpawn(parts, 1000);
+  }
+  hekuBlubs() {
+    const parts = [];
+    for (let i = 0; i < 3; i++) {
+      parts.push({
+        left: (88 + Math.random() * 22).toFixed(0) + 'px',
+        top: (8 + Math.random() * 10).toFixed(0) + 'px',
+        size: (3 + Math.random() * 3).toFixed(1) + 'px',
+        bg: 'transparent', border: '1px solid var(--a45)',
+        anim: 'bub' + (1 + i) + ' ' + (1.4 + Math.random() * 0.9).toFixed(2) + 's ease-out ' + (i * 0.22).toFixed(2) + 's both',
+      });
+    }
+    this.hekuSpawn(parts, 3400);
+  }
+  hekuSetAnim(a) {
+    clearTimeout(this.hAnimTo);
+    this.hAnimN = (this.hAnimN || 0) + 1;
+    const parts = a.split(' ');
+    const dur = (parseFloat(parts[1]) + (this.hAnimN % 7) * 0.001 + 0.001).toFixed(3);
+    parts[1] = dur + 's';
+    this.setState({ hAnim: parts.join(' ') });
+    this.hAnimTo = setTimeout(() => this.setState({ hAnim: 'none' }), Math.round(parseFloat(dur) * 1000) + 80);
+  }
+  hekuPoke = () => {
+    const now = Date.now();
+    this.hPokes = (this.hPokes || []).filter(t => now - t < 2600);
+    this.hPokes.push(now);
+    this.hekuInk();
+    clearTimeout(this.hEyeTo);
+    if (this.hPokes.length >= 5) {
+      this.hPokes = [];
+      this.hekuSetAnim('hekuspin 0.9s cubic-bezier(0.45,0.05,0.25,1)');
+      this.setState({ hEye: 'dizzy' });
+      this.hekuShowBubble('too many interrupts x_x', 2600);
+      this.hEyeTo = setTimeout(() => this.setState(s => ({ hEye: s.hHover ? 'happy' : 'idle' })), 2400);
+    } else {
+      this.hClickN = (this.hClickN || 0) + 1;
+      const anims = [
+        'hekusquish 0.55s cubic-bezier(0.34,1.56,0.64,1)',
+        'hekuhop 0.62s cubic-bezier(0.36,1.2,0.46,1)',
+        'hekusquish 0.55s cubic-bezier(0.34,1.56,0.64,1)',
+        'hekuspin 0.85s cubic-bezier(0.45,0.05,0.25,1)',
+      ];
+      this.hekuSetAnim(anims[this.hClickN % 4]);
+      this.setState({ hEye: 'surprised' });
+      this.hekuShowBubble(this.HEKU_POKES[Math.floor(Math.random() * this.HEKU_POKES.length)], 3200);
+      this.hEyeTo = setTimeout(() => this.setState(s => ({ hEye: s.hHover ? 'happy' : 'idle' })), 560);
+    }
+  };
+  hekuPetStart = () => this.setState(s => ({ hHover: true, hEye: s.hEye === 'idle' ? 'happy' : s.hEye }));
+  hekuPetEnd = () => this.setState(s => ({ hHover: false, hEye: s.hEye === 'happy' ? 'idle' : s.hEye }));
+
+  rootRefCb = (el) => { this.rootEl = el; if (el) this.applyVars(); };
+  bodyRefCb = (el) => { this.bodyEl = el; if (el) this.applyVars(); };
+  msgsRefCb = (el) => { if (el) el.scrollTop = el.scrollHeight; };
+
+  componentDidMount() {
+    this.applyVars();
+    this.vt = setInterval(() => this.setState(s => ({ verb: (s.verb + 1) % this.VERBS.length })), 2400);
+    this.et = setInterval(() => this.setState(s => ({ secs: s.secs + 1 })), 1000);
+    this.hFrameInt = setInterval(() => {
+      this.hTickN = (this.hTickN || 0) + 1;
+      const fast = this.state.hHover || this.state.hEye === 'dizzy' || this.state.hEye === 'surprised';
+      if (fast || this.hTickN % 3 === 0) this.setState(s => ({ hFrame: (s.hFrame + 1) % 2 }));
+    }, 150);
+    const blinkLoop = () => {
+      this.hBlinkTo = setTimeout(() => {
+        if (this.state.hEye === 'idle') {
+          this.setState({ hBlink: true });
+          setTimeout(() => this.setState({ hBlink: false }), 170);
+        }
+        blinkLoop();
+      }, 2600 + Math.random() * 3400);
+    };
+    blinkLoop();
+    const chatterLoop = () => {
+      this.hChatTo = setTimeout(() => {
+        if (this.props.mascotChatter !== false && !this.state.hBubble) {
+          if (Math.random() < 0.35) this.hekuBlubs();
+          else this.hekuShowBubble(this.HEKU_TIPS[Math.floor(Math.random() * this.HEKU_TIPS.length)], 4200);
+        }
+        chatterLoop();
+      }, 9000 + Math.random() * 8000);
+    };
+    chatterLoop();
+    const glanceLoop = () => {
+      this.hGlanceTo = setTimeout(() => {
+        if (!this.hLastMouse || Date.now() - this.hLastMouse > 3500) {
+          const dirs = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }];
+          this.setState({ hLook: dirs[Math.floor(Math.random() * dirs.length)] });
+          setTimeout(() => { if (!this.hLastMouse || Date.now() - this.hLastMouse > 3500) this.setState({ hLook: { x: 0, y: 0 } }); }, 1100);
+        }
+        glanceLoop();
+      }, 5200 + Math.random() * 5200);
+    };
+    glanceLoop();
+    setTimeout(() => this.hekuShowBubble('heku online · 128 tools indexed ✓', 4200), 1100);
+  }
+  componentWillUnmount() {
+    [this.vt, this.et, this.hFrameInt, this.hTypeInt].forEach(t => clearInterval(t));
+    [this.hBlinkTo, this.hChatTo, this.hGlanceTo, this.hBubTo, this.hEyeTo, this.hAnimTo].forEach(t => clearTimeout(t));
+  }
+  componentDidUpdate() { this.applyVars(); }
+
+  accName() { return this.state.acc || this.props.accent || 'plasma'; }
+  wpName() { return this.state.wp || this.props.wallpaper || 'indigo'; }
+  themeName() { return this.state.theme || this.props.theme || 'dark'; }
+
+  applyVars() {
+    const el = this.rootEl; if (!el) return;
+    const S = this.state;
+    const isLight = this.themeName() === 'light';
+    const a = this.ACCENTS[this.accName()] || this.ACCENTS.plasma;
+    const set = (k, v) => el.style.setProperty(k, v);
+    const base = isLight ? ('0.5 ' + (a[1] + 0.02).toFixed(2) + ' ' + a[2]) : (a[0] + ' ' + a[1] + ' ' + a[2]);
+    set('--accent', 'oklch(' + base + ')');
+    set('--accent-hi', isLight ? ('oklch(0.36 ' + (a[1] + 0.03).toFixed(2) + ' ' + a[2] + ')') : ('oklch(' + a[3] + ' ' + a[4] + ' ' + a[2] + ')'));
+    [['--a70', 0.70], ['--a45', 0.45], ['--a35', 0.35], ['--a25', 0.25], ['--a16', 0.16], ['--a10', 0.10], ['--a06', 0.06]]
+      .forEach(p => set(p[0], 'oklch(' + base + ' / ' + p[1] + ')'));
+    set('--accent-dk', isLight ? ('oklch(0.40 ' + a[1].toFixed(2) + ' ' + a[2] + ')') : ('oklch(' + Math.max(0.3, a[0] - 0.17).toFixed(2) + ' ' + Math.max(0.08, a[1] - 0.02).toFixed(2) + ' ' + a[2] + ')'));
+
+    const P = isLight ? {
+      pageBg: '#f5f4f9', ink: '23,21,32', inkHi: '#08070d',
+      sfHi: '255,255,255', sfLo: '250,249,253', rc: '235,233,241',
+      good: '#178a55', bad: '#c23b32', warn: '#9a5b00', warnRgb: '154,91,0',
+      grainOp: '0.05', vigA: '0.24',
+      shadowMenu: '0 20px 48px -14px rgba(23,21,32,0.16), 0 0 22px -10px var(--a25)',
+      shadowComposer: '0 6px 20px -10px rgba(23,21,32,0.12), 0 0 0 1px var(--a06)',
+    } : {
+      pageBg: '#06060a', ink: '236,234,246', inkHi: '#f2f0fc',
+      sfHi: '9,9,16', sfLo: '7,7,13', rc: '5,5,10',
+      good: '#34d399', bad: '#ff8d86', warn: '#fbbf24', warnRgb: '251,191,36',
+      grainOp: '0.16', vigA: '0.62',
+      shadowMenu: '0 24px 64px -16px rgba(0,0,0,0.8), 0 0 28px -10px var(--a35)',
+      shadowComposer: '0 8px 32px -12px rgba(0,0,0,0.6), 0 0 0 1px var(--a06)',
+    };
+    set('--page-bg', P.pageBg); set('--ink', P.ink); set('--ink-hi', P.inkHi);
+    set('--sf-hi', P.sfHi); set('--sf-lo', P.sfLo); set('--rc', P.rc);
+    set('--good', P.good); set('--bad', P.bad); set('--warn', P.warn); set('--warn-rgb', P.warnRgb);
+    set('--grain-op', P.grainOp); set('--vig-a', P.vigA);
+    set('--shadow-menu', P.shadowMenu); set('--shadow-composer', P.shadowComposer);
+    if (el.ownerDocument && el.ownerDocument.body) {
+      el.ownerDocument.documentElement.style.background = P.pageBg;
+      el.ownerDocument.body.style.background = P.pageBg;
+    }
+
+    const wp = this.wpName();
+    set('--wp', wp === 'none' ? 'none' : "url('wallpapers/nebula-" + wp + ".jpg')");
+    const dv = Number(this.props.dim);
+    const dim = (isNaN(dv) ? 62 : dv) / 100;
+    const floor = isLight ? 0.93 : (wp === 'none' ? 0.96 : 0);
+    set('--veil', String(Math.max(dim, floor)));
+    set('--t0', S.tab === 0 ? 'flex' : 'none');
+    set('--t1', S.tab === 1 ? 'flex' : 'none');
+    set('--t2', S.tab === 2 ? 'flex' : 'none');
+    set('--menu', S.menu ? 'block' : 'none');
+    set('--queue', S.tab === 0 ? 'inline-flex' : 'none');
+    ['diff', 'code', 'term', 'doc'].forEach(id => set('--pv-' + id, S.artifact === id ? 'block' : 'none'));
+    set('--pbc', S.panel ? 'var(--accent)' : 'rgba(var(--ink),0.45)');
+    if (this.bodyEl) this.bodyEl.style.gridTemplateColumns = S.panel ? '264px minmax(0,1fr) 384px' : '264px minmax(0,1fr) 0px';
+  }
+
+  renderVals() {
+    const S = this.state;
+    const isLight = this.themeName() === 'light';
+    const DIM = 'rgba(var(--ink),0.5)';
+    const PLAIN = 'rgba(var(--ink),0.78)';
+    const KW = 'var(--accent-hi)';
+    const FN = isLight ? '#1c6fb0' : '#7cc7ff';
+    const STR = isLight ? '#15794f' : '#8ce8bd';
+    const NUM = isLight ? '#9a5b00' : '#ffce7a';
+    const CM = 'rgba(var(--ink),0.32)';
+    const ADD = { c: STR, b: isLight ? 'rgba(21,122,85,0.10)' : 'rgba(52,211,153,0.08)' };
+    const DEL = { c: 'var(--bad)', b: isLight ? 'rgba(196,37,30,0.10)' : 'rgba(255,95,87,0.08)' };
+    const CTX = { c: DIM, b: 'transparent' };
+
+    const tabs = [
+      { title: 'ws-reconnect fix', run: true },
+      { title: 'add oauth scopes' },
+      { title: 'welcome', fresh: true },
+    ].map((t, i) => {
+      const on = S.tab === i;
+      return {
+        title: t.title,
+        pick: () => this.setState({ tab: i }),
+        bg: on ? 'linear-gradient(180deg, var(--a16), rgba(0,0,0,0))' : 'transparent',
+        color: on ? 'var(--ink-hi)' : 'rgba(var(--ink),0.44)',
+        edge: on ? 'var(--accent)' : 'transparent',
+        glow: on ? '0 0 14px var(--a45)' : 'none',
+        dotBg: t.run ? 'var(--accent)' : (t.fresh ? 'transparent' : 'rgba(var(--ink),0.25)'),
+        dotAnim: t.run ? 'pulse 1.3s ease-in-out infinite' : 'none',
+        dotBorder: t.fresh ? '1px dashed rgba(var(--ink),0.4)' : 'none',
+        dotGlow: t.run ? '0 0 8px var(--a70)' : 'none',
+        xOp: on ? '0.55' : '0',
+      };
+    });
+
+    const mkChat = (name, time, idx) => {
+      const on = idx >= 0 && idx === S.tab;
+      const open = idx >= 0;
+      return {
+        name, time,
+        pick: open ? () => this.setState({ tab: idx }) : () => {},
+        edge: on ? 'var(--accent)' : 'transparent',
+        bg: on ? 'linear-gradient(90deg, var(--a10), rgba(0,0,0,0))' : 'transparent',
+        col: on ? 'var(--accent-hi)' : (open ? 'rgba(var(--ink),0.78)' : 'rgba(var(--ink),0.48)'),
+        dot: idx === 0 ? 'var(--accent)' : (open ? 'rgba(var(--ink),0.3)' : 'rgba(var(--ink),0.14)'),
+        anim: idx === 0 ? 'pulse 1.3s ease-in-out infinite' : 'none',
+        timeCol: idx === 0 ? 'var(--accent)' : 'rgba(var(--ink),0.28)',
+      };
+    };
+    const knotChats = [mkChat('ws-reconnect fix', 'live', 0), mkChat('add oauth scopes', '18m', 1), mkChat('migrate to bun', '2d', -1)];
+    const hekuChats = [mkChat('registry pagination', '1d', -1), mkChat('glow token audit', '3d', -1)];
+
+    const arts = [
+      { id: 'diff', glyph: '±', name: 'socket.ts', meta: 'edit · src/realtime', badge: '+48 −12', bcol: 'var(--good)', gcol: NUM },
+      { id: 'code', glyph: '❋', name: 'reconnect.test.ts', meta: 'new file · src/realtime', badge: '96 lines', bcol: 'rgba(var(--ink),0.45)', gcol: 'var(--good)' },
+      { id: 'term', glyph: '❯', name: 'bun test reconnect', meta: 'tool run · bash · 412ms', badge: '14 pass', bcol: 'var(--good)', gcol: 'var(--accent-hi)' },
+      { id: 'doc', glyph: '✎', name: 'RECONNECT_NOTES.md', meta: 'docs/ · local · gitignored', badge: '● writing', bcol: 'var(--warn)', banim: 'pulse 1.2s ease-in-out infinite', gcol: 'rgba(var(--ink),0.6)' },
+    ].map(a => {
+      const on = S.artifact === a.id;
+      return Object.assign({}, a, {
+        banim: a.banim || 'none',
+        pick: () => this.setState({ artifact: a.id, panel: true }),
+        bg: on ? 'linear-gradient(90deg, var(--a10), rgba(0,0,0,0))' : 'transparent',
+        brd: on ? 'var(--a25)' : 'transparent',
+        ncol: on ? 'var(--accent-hi)' : 'rgba(var(--ink),0.82)',
+      });
+    });
+
+    const pvMeta = {
+      diff: { name: 'src/realtime/socket.ts', tag: 'diff · +48 −12' },
+      code: { name: 'src/realtime/reconnect.test.ts', tag: 'typescript · new' },
+      term: { name: 'bun test reconnect', tag: 'exit 0 · 412ms' },
+      doc: { name: 'docs/RECONNECT_NOTES.md', tag: 'markdown · streaming' },
+    }[S.artifact] || { name: '', tag: '' };
+
+    const dl = (n, t, s) => Object.assign({ n, t }, s);
+    const diffLines = [
+      dl('@@', '@@ -41,9 +41,26 @@ export class SocketClient', { c: 'var(--accent-hi)', b: 'var(--a06)' }),
+      dl('41', '   private url: string;', CTX),
+      dl('42', '-  private backoff = 1000;', DEL),
+      dl('42', '+  private backoff = INITIAL_BACKOFF;', ADD),
+      dl('43', '+  private attempts = 0;', ADD),
+      dl('44', '+  private wake = () => this.reconnectNow();', ADD),
+      dl('45', '', CTX),
+      dl('46', '   connect() {', CTX),
+      dl('47', '     this.ws = new WebSocket(this.url);', CTX),
+      dl('48', '+    this.ws.addEventListener("open", () => this.reset());', ADD),
+      dl('49', '+    window.addEventListener("online", this.wake);', ADD),
+      dl('50', '+    document.addEventListener("visibilitychange", this.wake);', ADD),
+      dl('51', '   }', CTX),
+      dl('52', '+', ADD),
+      dl('53', '+  private scheduleReconnect() {', ADD),
+      dl('54', '+    const jitter = Math.random() * 250;', ADD),
+      dl('55', '+    const delay = Math.min(this.backoff * 2 ** this.attempts++, MAX_BACKOFF);', ADD),
+      dl('56', '+    this.timer = setTimeout(() => this.connect(), delay + jitter);', ADD),
+      dl('57', '+  }', ADD),
+    ];
+    const diffMini = diffLines.slice(2, 6).concat(diffLines.slice(9, 13));
+
+    const cp = (t, c) => ({ t, c });
+    const codeLines = [
+      { n: '1', parts: [cp('import', KW), cp(' { describe, expect, it } ', PLAIN), cp('from', KW), cp(' "bun:test"', STR), cp(';', PLAIN)] },
+      { n: '2', parts: [cp('import', KW), cp(' { SocketClient } ', PLAIN), cp('from', KW), cp(' "../socket"', STR), cp(';', PLAIN)] },
+      { n: '3', parts: [cp(' ', PLAIN)] },
+      { n: '4', parts: [cp('describe', FN), cp('(', PLAIN), cp('"reconnect"', STR), cp(', () => {', PLAIN)] },
+      { n: '5', parts: [cp('  ', PLAIN), cp('it', FN), cp('(', PLAIN), cp('"backs off exponentially"', STR), cp(', ', PLAIN), cp('async', KW), cp(' () => {', PLAIN)] },
+      { n: '6', parts: [cp('    ', PLAIN), cp('const', KW), cp(' client = ', PLAIN), cp('new', KW), cp(' SocketClient(FAKE_URL);', PLAIN)] },
+      { n: '7', parts: [cp('    ', PLAIN), cp('const', KW), cp(' delays = captureDelays(client);', PLAIN)] },
+      { n: '8', parts: [cp('    ', PLAIN), cp('await', KW), cp(' dropConnection(client, { times: ', PLAIN), cp('4', NUM), cp(' });', PLAIN)] },
+      { n: '9', parts: [cp('    ', PLAIN), cp('expect', FN), cp('(delays).toEqual([', PLAIN), cp('1000, 2000, 4000, 8000', NUM), cp(']);', PLAIN)] },
+      { n: '10', parts: [cp('  });', PLAIN)] },
+      { n: '11', parts: [cp(' ', PLAIN)] },
+      { n: '12', parts: [cp('  ', PLAIN), cp('it', FN), cp('(', PLAIN), cp('"resumes after wake from sleep"', STR), cp(', ', PLAIN), cp('async', KW), cp(' () => {', PLAIN)] },
+      { n: '13', parts: [cp('    clock.sleep(', PLAIN), cp('90_000', NUM), cp(');  ', PLAIN), cp('// laptop lid closed', CM)] },
+      { n: '14', parts: [cp('    ', PLAIN), cp('expect', FN), cp('(client.state).toBe(', PLAIN), cp('"open"', STR), cp(');', PLAIN)] },
+      { n: '15', parts: [cp('  });', PLAIN)] },
+      { n: '16', parts: [cp('});', PLAIN)] },
+    ];
+
+    const tl = (t, c) => ({ t, c: c || 'rgba(var(--ink),0.45)' });
+    const termLines = [
+      tl('❯ bun test reconnect', 'var(--accent-hi)'),
+      tl('bun test v1.3.2 (canary)'),
+      tl(' '),
+      tl('src/realtime/reconnect.test.ts', 'rgba(var(--ink),0.8)'),
+      tl(' ✓ backs off exponentially [12ms]', STR),
+      tl(' ✓ adds jitter within bounds [3ms]', STR),
+      tl(' ✓ caps delay at MAX_BACKOFF [2ms]', STR),
+      tl(' ✓ resets after successful open [9ms]', STR),
+      tl(' ✓ resumes after wake from sleep [88ms]', STR),
+      tl(' ✓ ignores manual close() [4ms]', STR),
+      tl(' … 8 more', 'rgba(var(--ink),0.35)'),
+      tl(' '),
+      tl(' 14 pass', 'var(--good)'),
+      tl(' 0 fail'),
+      tl(' 23 expect() calls'),
+      tl('Ran 14 tests across 1 file [412ms]'),
+    ];
+
+    const provs = [
+      { name: 'anthropic', dot: 'var(--good)', models: [{ id: 'claude-sonnet-4.6', tag: 'default' }, { id: 'claude-opus-4.5', tag: 'deep' }] },
+      { name: 'openai', dot: 'var(--good)', models: [{ id: 'gpt-5.2-codex', tag: 'code' }, { id: 'o5-mini', tag: 'fast' }] },
+      { name: 'google', dot: 'var(--warn)', models: [{ id: 'gemini-3-pro', tag: '1m ctx' }] },
+      { name: 'ollama · local', dot: 'var(--good)', models: [{ id: 'qwen3-coder-30b', tag: 'free' }] },
+    ].map(p => Object.assign({}, p, {
+      models: p.models.map(m => {
+        const on = S.model === m.id;
+        return Object.assign({}, m, {
+          pick: () => this.setState({ model: m.id, menu: false }),
+          bg: on ? 'var(--a10)' : 'transparent',
+          col: on ? 'var(--accent-hi)' : 'rgba(var(--ink),0.72)',
+          check: on ? '1' : '0',
+        });
+      }),
+    }));
+
+    const modes = ['agent', 'plan', 'ask'].map(m => ({
+      label: m,
+      pick: () => this.setState({ mode: m }),
+      bg: S.mode === m ? 'var(--accent)' : 'transparent',
+      col: S.mode === m ? '#08080f' : 'rgba(var(--ink),0.45)',
+      w: S.mode === m ? '700' : '400',
+    }));
+
+    // ── heku sprite: frame + eye/mouth overlays ──
+    const HF = this.HEKU_HEAD.concat(this.HEKU_LEGS[S.hFrame]);
+    const hOv = {};
+    const oset = (r, c, ch) => { hOv[r + ',' + c] = ch; };
+    const eyeCols = [5, 6, 7, 10, 11, 12];
+    const clearWhites = () => { for (let r = 4; r <= 6; r++) eyeCols.forEach(c => oset(r, c, '#')); };
+    if (S.hEye === 'dizzy') {
+      clearWhites();
+      [[4, 5], [4, 7], [5, 6], [6, 5], [6, 7]].forEach(p => { oset(p[0], p[1], 'P'); oset(p[0], p[1] + 5, 'P'); });
+    } else if (S.hBlink) {
+      clearWhites();
+      eyeCols.forEach(c => oset(5, c, 'P'));
+    } else if (S.hEye === 'happy') {
+      clearWhites();
+      [[5, 5], [4, 6], [5, 7]].forEach(p => { oset(p[0], p[1], 'P'); oset(p[0], p[1] + 5, 'P'); });
+    } else if (S.hEye === 'surprised') {
+      [[5, 6], [4, 6], [6, 6], [5, 5], [5, 7]].forEach(p => { oset(p[0], p[1], 'P'); oset(p[0], p[1] + 5, 'P'); });
+      [[8, 8], [8, 9], [9, 8], [9, 9]].forEach(p => oset(p[0], p[1], 'P'));
+    } else {
+      oset(5 + S.hLook.y, 6 + S.hLook.x, 'P');
+      oset(5 + S.hLook.y, 11 + S.hLook.x, 'P');
+    }
+    const HC = { '.': 'transparent', '#': 'var(--accent)', '+': 'var(--accent-hi)', '-': 'var(--accent-dk)', 'W': '#fbfaff', 'P': '#0b0b14' };
+    const hekuRows = HF.map((row, r) => ({
+      cells: row.split('').map((ch, c) => ({ bg: HC[hOv[r + ',' + c] || ch] || 'transparent' })),
+    }));
+
+    return {
+      hekuRows,
+      hekuAnim: S.hAnim || 'none',
+      hekuParts: S.hParts,
+      hekuBubbleDisp: S.hBubble ? 'block' : 'none',
+      hekuBubbleText: S.hBubble.slice(0, S.hShown),
+      hekuRef: this.hekuRefCb,
+      welcomeRef: this.welcomeRefCb,
+      hekuPoke: this.hekuPoke,
+      hekuPetStart: this.hekuPetStart,
+      hekuPetEnd: this.hekuPetEnd,
+      rootRef: this.rootRefCb,
+      bodyRef: this.bodyRefCb,
+      msgsRef: this.msgsRefCb,
+      tabs, knotChats, hekuChats,
+      arts, pvName: pvMeta.name, pvTag: pvMeta.tag,
+      diffLines, diffMini, codeLines, termLines,
+      provs, modes,
+      modelLabel: S.model,
+      toggleMenu: () => this.setState(s => ({ menu: !s.menu })),
+      closeMenu: () => this.setState({ menu: false }),
+      togglePanel: () => this.setState(s => ({ panel: !s.panel })),
+      newChat: () => this.setState({ tab: 2 }),
+      cycleWallpaper: () => this.setState({ wp: this.WPS[(this.WPS.indexOf(this.wpName()) + 1) % this.WPS.length] }),
+      cycleAccent: () => { const k = Object.keys(this.ACCENTS); this.setState({ acc: k[(k.indexOf(this.accName()) + 1) % k.length] }); },
+      toggleTheme: () => this.setState({ theme: this.themeName() === 'light' ? 'dark' : 'light' }),
+      themeGlyph: this.themeName() === 'light' ? '☀' : '☾',
+      pickDiff: () => this.setState({ artifact: 'diff', panel: true }),
+      pickCode: () => this.setState({ artifact: 'code', panel: true }),
+      pickTerm: () => this.setState({ artifact: 'term', panel: true }),
+      pickDoc: () => this.setState({ artifact: 'doc', panel: true }),
+      verb: this.VERBS[S.verb],
+      elapsed: String(S.secs),
+      typed: S.tab === 0 ? 'add a jitter option to the reconnect config' : '',
+      ph: S.tab === 0 ? '' : (S.tab === 1 ? 'reply — @ files · / commands · ⇧⏎ newline' : 'what are we building today?'),
+    };
+  }
+}
+</script>
+</body>
+</html>

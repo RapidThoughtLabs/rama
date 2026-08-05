@@ -1,0 +1,456 @@
+.rama-root {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--page-bg);
+}
+
+.rama-frame {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr) 27px;
+}
+
+/* ══════════ TITLEBAR ══════════ */
+.rama-titlebar {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  background: rgba(var(--sf-hi), 0.52);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  border-bottom: 1px solid rgba(var(--ink), 0.07);
+  /* Tabs are a custom pointer-drag gesture (tear-off / reorder — see Titlebar.tsx). Without
+     this a drag across a tab label selects its text instead of starting the drag, and the
+     native window drag-region (data-tauri-drag-region) can't grab either. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Native macOS overlay traffic lights live here — leave the OS-standard inset clear. */
+.rama-titlebar-traffic-gap {
+  width: 78px;
+  flex-shrink: 0;
+}
+.rama-titlebar-divider {
+  width: 1px;
+  background: rgba(var(--ink), 0.07);
+  margin: 11px 0;
+  flex-shrink: 0;
+}
+.rama-tabstrip {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  /* Beyond a handful of tabs this strip runs out of room — scroll instead of clipping tabs off
+     the edge with no way back to them. Scrollbar hidden (still fully scrollable via trackpad /
+     shift+wheel) to keep the custom chrome clean; see the active-tab scrollIntoView below for
+     how you get back to an off-screen tab without a visible scrollbar to grab. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  box-shadow: inset 0 0 0 0 transparent;
+  transition: box-shadow 0.12s ease;
+}
+.rama-tabstrip::-webkit-scrollbar { display: none; }
+/* Phase 5: live highlight while a tab dragged from another window is hovering this window's
+   strip (drag-hover event, src-tauri/src/drag.rs -> WindowTabsProvider). */
+.rama-tabstrip-drop-target {
+  box-shadow: inset 0 0 0 1.5px var(--accent), inset 0 0 12px var(--a25);
+  background: var(--a06);
+}
+.rama-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  /* Elastically shrinks (default flex-shrink) down to this floor as tabs pile up; past that the
+     strip scrolls (see .rama-tabstrip) instead of clipping tabs into unreachable space. */
+  flex-shrink: 1;
+  min-width: 120px;
+  max-width: 230px;
+  cursor: pointer;
+  position: relative;
+  border-right: 1px solid rgba(var(--ink), 0.05);
+  background: transparent;
+}
+.rama-tab-item[aria-selected="true"] { background: var(--a06); }
+.rama-tab-item:hover { background: rgba(var(--ink), 0.04); }
+/* Phase 5 fluidity fix: applied imperatively (not via React state, see Titlebar.tsx) while a
+   tab is picked up — mid-reorder or about to tear off — so it visibly reads as "stuck to the
+   cursor" instead of jumping around with no feedback. */
+.rama-tab-item-dragging {
+  position: relative;
+  z-index: 5;
+  cursor: grabbing;
+  background: var(--a10);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--a25);
+  transition: box-shadow 0.12s ease;
+}
+.rama-tab-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: rgba(var(--ink), 0.3); }
+.rama-tab-dot-running { background: var(--accent); box-shadow: 0 0 8px var(--a70); animation: pulse 1.3s ease-in-out infinite; }
+.rama-tab-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; letter-spacing: 0.02em; color: rgba(var(--ink), 0.55); }
+.rama-tab-item[aria-selected="true"] .rama-tab-title { color: var(--ink-hi); }
+.rama-tab-edge { position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px 2px 0 0; background: transparent; }
+.rama-tab-item[aria-selected="true"] .rama-tab-edge { background: var(--accent); box-shadow: 0 0 8px var(--a45); }
+.rama-tab-new {
+  width: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--ink), 0.4);
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+}
+.rama-tab-new:hover { color: var(--accent); background: var(--a06); }
+.rama-titlebar-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.rama-cmdk-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 9px;
+  border: 1px solid rgba(var(--ink), 0.1);
+  border-radius: 6px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: rgba(var(--ink), 0.4);
+  cursor: pointer;
+}
+.rama-cmdk-pill:hover { color: var(--accent); border-color: var(--a25); }
+.rama-accent-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 9px var(--a70); }
+
+/* ══════════ BODY GRID ══════════ */
+.rama-body {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 384px;
+  min-height: 0;
+  transition: grid-template-columns 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rama-body-panel-collapsed { grid-template-columns: 264px minmax(0, 1fr) 0px; }
+/* Detached (non-main) windows have no chats sidebar — just the terminal UI + artifacts panel
+   (see AppShell.tsx). Drop the sidebar column so the chat column fills its place. */
+.rama-body-no-sidebar { grid-template-columns: minmax(0, 1fr) 384px; }
+.rama-body-no-sidebar.rama-body-panel-collapsed { grid-template-columns: minmax(0, 1fr) 0px; }
+
+/* ── SIDEBAR ── */
+.rama-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: rgba(var(--sf-hi), 0.6);
+  backdrop-filter: blur(26px) saturate(1.25);
+  -webkit-backdrop-filter: blur(26px) saturate(1.25);
+  border-right: 1px solid rgba(var(--ink), 0.07);
+}
+.rama-sidebar-header {
+  padding: 15px 16px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rama-wordmark {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink-hi);
+}
+.rama-wordmark-m { color: var(--accent); text-shadow: 0 0 16px var(--a70); }
+.rama-new-chat-btn {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--bg-base);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 16px -4px var(--a70);
+}
+.rama-new-chat-btn:hover { filter: brightness(1.08); }
+.rama-sidebar-search { padding: 0 14px 10px; }
+.rama-sidebar-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 12px; }
+.rama-sidebar-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+}
+.rama-project {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.rama-project:hover { background: rgba(var(--ink), 0.04); }
+.rama-project-name { font-size: 12.5px; font-weight: 600; color: var(--ink-hi); }
+.rama-project-branch {
+  font-size: 9px;
+  color: rgba(var(--ink), 0.42);
+  border: 1px solid rgba(var(--ink), 0.1);
+  padding: 1px 7px;
+  border-radius: 99px;
+}
+.rama-project-path { padding: 0 8px 5px 28px; font-size: 9.5px; color: rgba(var(--ink), 0.3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rama-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 1px 0 1px 14px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.rama-chat-row:hover { background: rgba(var(--ink), 0.05); }
+.rama-chat-row[aria-selected="true"] { border-left-color: var(--accent); background: var(--a06); }
+.rama-chat-row-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: rgba(var(--ink), 0.3); }
+.rama-chat-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: rgba(var(--ink), 0.72); }
+.rama-chat-row[aria-selected="true"] .rama-chat-row-name { color: var(--ink-hi); }
+.rama-chat-row-time { font-size: 9.5px; color: rgba(var(--ink), 0.32); }
+.rama-sidebar-footer { border-top: 1px solid rgba(var(--ink), 0.07); padding: 9px 12px 11px; display: flex; flex-direction: column; gap: 1px; }
+.rama-sidebar-footer-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(var(--ink), 0.6);
+  cursor: pointer;
+}
+.rama-sidebar-footer-row:hover { background: var(--a06); color: var(--accent-hi, var(--accent)); }
+
+/* ── CHAT COLUMN ── */
+.rama-chat-column { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rama-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(var(--ink), 0.06);
+  background: rgba(var(--sf-lo), 0.32);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 10.5px;
+  color: rgba(var(--ink), 0.42);
+  flex-shrink: 0;
+}
+.rama-ctx-meter { width: 64px; height: 4px; border-radius: 3px; background: rgba(var(--ink), 0.09); overflow: hidden; display: inline-block; }
+.rama-ctx-meter-fill { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-bright)); box-shadow: 0 0 8px var(--a45); }
+.rama-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 30px 16px; }
+.rama-messages-inner { max-width: 880px; line-height: 1.7; }
+.rama-msg-meta { font-size: 10px; color: rgba(var(--ink), 0.28); letter-spacing: 0.07em; margin-bottom: 16px; }
+.rama-msg-user { display: flex; gap: 10px; margin: 14px 0 8px; }
+.rama-msg-user-glyph { color: var(--accent-bright, var(--accent)); font-weight: 700; text-shadow: 0 0 10px var(--a45); flex-shrink: 0; }
+.rama-msg-user-text { color: var(--ink-hi); font-weight: 500; }
+.rama-msg-assistant { display: flex; gap: 10px; margin: 10px 0; }
+.rama-msg-assistant-glyph { color: var(--accent); flex-shrink: 0; }
+.rama-msg-assistant-text { color: rgba(var(--ink), 0.86); min-width: 0; }
+.rama-inline-code { background: rgba(var(--ink), 0.07); border: 1px solid rgba(var(--ink), 0.1); border-radius: 4px; padding: 0 5px; font-size: 11.5px; color: var(--accent-bright, var(--accent)); }
+.rama-tool-call { margin: 2px 0 2px 22px; border-radius: 6px; padding: 3px 8px 3px 6px; }
+.rama-tool-call:hover { background: rgba(var(--ink), 0.04); cursor: pointer; }
+.rama-tool-call-head { display: flex; align-items: center; gap: 9px; }
+.rama-tool-call-status { color: var(--good); font-size: 9px; }
+.rama-tool-call-name { font-weight: 600; font-size: 12.5px; color: rgba(var(--ink), 0.88); }
+.rama-tool-call-target { font-size: 12.5px; color: rgba(var(--ink), 0.55); }
+.rama-tool-call-result { display: flex; gap: 9px; font-size: 11.5px; color: rgba(var(--ink), 0.38); padding-left: 3px; }
+.rama-status-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 0 6px;
+  flex-wrap: wrap;
+}
+.rama-status-verb { color: var(--accent-bright, var(--accent)); font-style: italic; font-weight: 600; animation: vglow 2.2s ease-in-out infinite; }
+.rama-status-meta { font-size: 11px; color: rgba(var(--ink), 0.35); }
+.rama-caret { display: inline-block; width: 7px; height: 15px; background: var(--accent); box-shadow: 0 0 10px var(--a45); animation: blink 1.1s steps(1) infinite; }
+
+/* ── COMPOSER ── */
+.rama-composer-wrap { position: relative; padding: 10px 18px 14px; flex-shrink: 0; }
+.rama-composer {
+  border: 1px solid rgba(var(--ink), 0.1);
+  border-radius: 11px;
+  background: rgba(var(--sf-lo), 0.62);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: var(--shadow-composer);
+}
+.rama-composer-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px 10px; }
+.rama-composer-glyph { color: var(--accent-bright, var(--accent)); font-weight: 700; text-shadow: 0 0 10px var(--a45); }
+.rama-composer-text { flex: 1; min-width: 0; font-size: 13px; color: var(--ink-hi); line-height: 1.5; }
+.rama-composer-placeholder { font-style: italic; color: rgba(var(--ink), 0.3); }
+.rama-composer-toolbar { display: flex; align-items: center; gap: 8px; padding: 7px 10px 8px; border-top: 1px solid rgba(var(--ink), 0.05); flex-wrap: wrap; }
+.rama-model-picker { position: relative; }
+.rama-model-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border: 1px solid var(--a25);
+  border-radius: 99px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--accent-bright, var(--accent));
+  background: var(--a06);
+}
+.rama-model-pill:hover { background: var(--a10); box-shadow: 0 0 14px -4px var(--a45); }
+.rama-model-pill:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+.rama-model-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 260px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(var(--ink), 0.12);
+  border-radius: 10px;
+  background: rgba(var(--sf-hi), 0.96);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.45);
+  z-index: 20;
+}
+.rama-model-menu-group + .rama-model-menu-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(var(--ink), 0.06); }
+.rama-model-menu-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(var(--ink), 0.45);
+}
+.rama-model-menu-hint { color: var(--warn); text-transform: none; letter-spacing: 0; }
+.rama-model-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-hi);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rama-model-menu-item:hover { background: var(--a08); }
+.rama-model-menu-item-active { color: var(--accent-bright, var(--accent)); }
+.rama-model-menu-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  border: 1px solid var(--a25);
+  color: var(--accent-bright, var(--accent));
+}
+
+.rama-provider-settings { display: flex; flex-direction: column; gap: 14px; min-width: 320px; }
+.rama-provider-settings-row { display: flex; flex-direction: column; gap: 6px; }
+.rama-provider-settings-head { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.rama-provider-settings-label { color: var(--ink-hi); }
+.rama-provider-settings-status { color: rgba(var(--ink), 0.45); font-size: 10px; }
+.rama-provider-settings-input-row { display: flex; align-items: center; gap: 8px; }
+.rama-provider-settings-input-row .rama-input { flex: 1; }
+.rama-provider-settings-hint { font-size: 11px; color: rgba(var(--ink), 0.4); }
+.rama-composer-hint { font-size: 10px; color: rgba(var(--ink), 0.32); }
+.rama-composer-send {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: rgba(var(--ink), 0.45);
+  border: 1px solid rgba(var(--ink), 0.1);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  background: none;
+}
+.rama-composer-send:hover { color: var(--accent); border-color: var(--a25); }
+
+/* ── ARTIFACTS PANEL ── */
+.rama-artifacts-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(var(--sf-hi), 0.6);
+  backdrop-filter: blur(26px) saturate(1.25);
+  -webkit-backdrop-filter: blur(26px) saturate(1.25);
+  border-left: 1px solid rgba(var(--ink), 0.07);
+  overflow: hidden;
+}
+.rama-artifacts-header { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-bottom: 1px solid rgba(var(--ink), 0.07); flex-shrink: 0; }
+.rama-artifacts-list { padding: 8px 10px 10px; display: grid; gap: 3px; flex-shrink: 0; }
+.rama-artifact-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.rama-artifact-row:hover { background: rgba(var(--ink), 0.05); }
+.rama-artifact-row[aria-selected="true"] { border-color: var(--a25); background: var(--a06); }
+.rama-artifact-glyph { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: rgba(var(--ink), 0.55); background: rgba(var(--ink), 0.05); border: 1px solid rgba(var(--ink), 0.07); flex-shrink: 0; }
+.rama-artifact-name { font-size: 12px; color: rgba(var(--ink), 0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rama-artifact-meta { font-size: 9.5px; color: rgba(var(--ink), 0.34); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rama-artifact-badge { font-size: 9.5px; color: rgba(var(--ink), 0.4); white-space: nowrap; }
+.rama-artifact-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-top: 1px solid rgba(var(--ink), 0.07);
+  border-bottom: 1px solid rgba(var(--ink), 0.07);
+  background: rgba(var(--rc), 0.4);
+  flex-shrink: 0;
+}
+.rama-artifact-preview-body { flex: 1; min-height: 0; overflow: auto; background: rgba(var(--rc), 0.35); padding: 8px 0; font-size: 11px; line-height: 1.62; font-family: var(--font-code); }
+.rama-diff-line { display: flex; }
+.rama-diff-line-num { width: 36px; text-align: right; padding-right: 11px; color: rgba(var(--ink), 0.2); flex-shrink: 0; user-select: none; }
+.rama-diff-line-text { white-space: pre; padding-right: 14px; }
+.rama-diff-add { background: rgba(52, 211, 153, 0.08); color: var(--good); }
+.rama-diff-del { background: rgba(255, 95, 87, 0.08); color: var(--bad); }
+.rama-diff-ctx { color: rgba(var(--ink), 0.55); }
+
+/* ══════════ STATUS BAR ══════════ */
+.rama-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  background: rgba(var(--sf-lo), 0.6);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(var(--ink), 0.07);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: rgba(var(--ink), 0.42);
+  min-width: 0;
+  overflow: hidden;
+}
+.rama-statusbar-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.rama-statusbar-spacer { flex: 1; }

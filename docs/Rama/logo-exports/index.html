@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rama — Static Logo Exports</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Martian+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;padding:48px 32px 80px;background:#06060a;color:#ecebf6;
+  font-family:'JetBrains Mono',ui-monospace,monospace;
+  background-image:radial-gradient(1000px 700px at 70% -10%,rgba(139,92,246,.14),transparent 60%);}
+h1{font-family:'Martian Mono',monospace;font-weight:600;font-size:26px;margin:0 0 4px}
+.sub{color:#8a88a6;font-size:12.5px;margin:0 0 36px}
+.grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));max-width:1180px}
+figure{margin:0}
+.tile{border:1px solid rgba(150,140,220,.12);border-radius:16px;overflow:hidden;aspect-ratio:1;
+  display:grid;place-items:center;background:#0a0a12}
+.tile.checker{background:
+  linear-gradient(45deg,#15151f 25%,transparent 25%,transparent 75%,#15151f 75%),
+  linear-gradient(45deg,#15151f 25%,#0d0d15 25%,#0d0d15 75%,#15151f 75%);
+  background-size:18px 18px;background-position:0 0,9px 9px}
+.tile img{width:72%;height:72%}
+figcaption{margin-top:10px;font-size:11px;letter-spacing:.06em}
+figcaption b{display:block;color:#fff;font-size:12.5px;margin-bottom:2px}
+figcaption span{color:#8a88a6}
+.sec{grid-column:1/-1;margin:26px 0 -4px;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:#a884ff}
+</style></head><body>
+<h1>Rama · static logo exports</h1>
+<p class="sub">Frozen frame of each animated variant + practical mono marks. All SVG — scale to any size. Files in <code>docs/Rama/logo-exports/</code>.</p>
+<div class="grid" id="g"></div>
+<script>
+const items=[
+ {sec:"Frozen variants"},
+ {f:"rama-01-aurora-spin.svg",n:"Aurora Spin",d:"white mark · soft glow"},
+ {f:"rama-02-genesis.svg",n:"Genesis",d:"flat line · no glow"},
+ {f:"rama-03-breathe.svg",n:"Breathe",d:"bloom glow · peak"},
+ {f:"rama-04-thought-ripple.svg",n:"Thought Ripple",d:"violet echoes"},
+ {f:"rama-05-orbit.svg",n:"Orbit",d:"spiral + photon"},
+ {f:"rama-06-prism.svg",n:"Prism",d:"gradient rings"},
+ {sec:"Practical marks"},
+ {f:"rama-00-mono-light.svg",n:"Mono / Light",d:"dark ink on light"},
+ {f:"rama-00-mono-transparent-dark.svg",n:"Mono / White",d:"transparent bg",checker:1},
+ {f:"rama-00-mono-transparent-light.svg",n:"Mono / Dark",d:"transparent bg",checker:1},
+];
+const g=document.getElementById("g");
+for(const it of items){
+  if(it.sec){const h=document.createElement("div");h.className="sec";h.textContent=it.sec;g.appendChild(h);continue;}
+  const fig=document.createElement("figure");
+  fig.innerHTML=`<div class="tile ${it.checker?'checker':''}"><img src="${it.f}" alt="${it.n}"></div>
+    <figcaption><b>${it.n}</b><span>${it.d}</span></figcaption>`;
+  g.appendChild(fig);
+}
+</script></body></html>

@@ -1,0 +1,20 @@
+{
+  "name": "@rama/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.12",
+    "@ai-sdk/openai-compatible": "^3.0.7",
+    "@rama/protocol": "workspace:*",
+    "ai": "^7.0.22",
+    "diff": "^9.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "bun-types": "^1"
+  }
+}

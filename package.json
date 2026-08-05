@@ -1,0 +1,12 @@
+{
+  "name": "rama",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "engine",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/desktop tauri dev"
+  }
+}

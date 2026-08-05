@@ -1,0 +1,266 @@
+/* Core primitives. .btn/.badge/.input/.tabs/.card/.avatar/.conn-pill/.tool-badge
+   are ported near-verbatim from design-system.html's "05 · Controls" section
+   (docs/Rama/uploads/design-system.html), re-pointed at the reconciled tokens
+   in tokens.css. SegmentedControl/Toggle/Modal/Toast aren't in either design
+   doc — they're new, built in the same visual language (Martian Mono labels,
+   accent-tint fills, hairline borders) to match the mode-toggle pills and
+   model-menu popover seen in Rama.dc.html. */
+
+/* ── Button ───────────────────────────────────────────────────────────── */
+.rama-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 7px;
+  padding: 8px 18px;
+  transition: background 0.25s, color 0.25s, box-shadow 0.25s, border-color 0.25s, transform 0.15s;
+}
+.rama-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.rama-btn-primary { background: var(--accent); color: var(--bg-base); }
+[data-theme="dark"] .rama-btn-primary { box-shadow: 0 0 24px var(--accent-glow); }
+.rama-btn-primary:not(:disabled):hover { background: var(--accent-bright); transform: translateY(-1px); }
+.rama-btn-ghost { background: transparent; color: var(--text-3); border: 1px solid var(--border-3); }
+.rama-btn-ghost:not(:disabled):hover { border-color: var(--accent-border); color: var(--accent); }
+.rama-btn-icon { width: 26px; height: 26px; padding: 0; justify-content: center; border: 1px solid var(--border-3); background: transparent; color: rgba(var(--ink), 0.55); border-radius: 6px; }
+.rama-btn-icon:not(:disabled):hover { color: var(--accent); border-color: var(--accent-border); background: var(--accent-tint); }
+.rama-btn-sm { padding: 4px 12px; font-size: 10.5px; }
+
+/* ── Badge ────────────────────────────────────────────────────────────── */
+.rama-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid transparent;
+}
+.rama-badge-accent { background: var(--accent-tint); border-color: var(--accent-border); color: var(--accent); }
+.rama-badge-good { background: rgba(52, 211, 153, 0.08); border-color: rgba(52, 211, 153, 0.20); color: var(--good); }
+.rama-badge-warn { background: rgba(var(--warn-rgb), 0.08); border-color: rgba(var(--warn-rgb), 0.22); color: var(--warn); }
+.rama-badge-dim { background: var(--border-1); border-color: var(--border-2); color: var(--text-3); }
+.rama-badge-dot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+
+/* ── Input ────────────────────────────────────────────────────────────── */
+.rama-input {
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: var(--text-1);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-3);
+  border-radius: 8px;
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.rama-input::placeholder { color: var(--text-4); font-style: italic; }
+.rama-input:focus { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-tint); }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────── */
+.rama-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-2); }
+.rama-tab {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.rama-tab:hover { color: var(--accent); }
+.rama-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── SegmentedControl (mode toggle: agent / plan / ask) ──────────────── */
+.rama-segmented {
+  display: inline-flex;
+  border: 1px solid var(--border-2);
+  border-radius: 99px;
+  padding: 2px;
+  gap: 2px;
+}
+.rama-segmented-option {
+  padding: 3px 12px;
+  font-size: 10.5px;
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 99px;
+  border: none;
+  background: none;
+  color: rgba(var(--ink), 0.45);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.rama-segmented-option[aria-pressed="true"] { color: var(--accent-hi, var(--accent)); background: var(--accent-tint); font-weight: 700; }
+
+/* ── Toggle (switch) ──────────────────────────────────────────────────── */
+.rama-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.rama-toggle-track {
+  width: 34px;
+  height: 19px;
+  border-radius: 99px;
+  background: var(--border-3);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.rama-toggle[aria-checked="true"] .rama-toggle-track { background: var(--accent); box-shadow: 0 0 10px var(--a35); }
+.rama-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--ink-hi);
+  transition: transform 0.2s;
+}
+.rama-toggle[aria-checked="true"] .rama-toggle-thumb { transform: translateX(15px); }
+.rama-toggle-label { font-size: 12px; color: rgba(var(--ink), 0.7); }
+
+/* ── Card ─────────────────────────────────────────────────────────────── */
+.rama-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.25s, background 0.25s;
+}
+.rama-card:hover { border-color: var(--accent-border); background: var(--bg-elevated); }
+
+/* ── Avatar ───────────────────────────────────────────────────────────── */
+.rama-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  border: 2px solid var(--accent-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ── Connection pill / tool badge (status bar, tool-call cards) ───────── */
+.rama-conn-pill {
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.rama-tool-badge {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 1px solid;
+  border-radius: 4px;
+}
+.rama-tool-badge-read { color: var(--good); border-color: rgba(52, 211, 153, 0.25); background: rgba(52, 211, 153, 0.06); }
+.rama-tool-badge-write { color: var(--warn); border-color: rgba(var(--warn-rgb), 0.25); background: rgba(var(--warn-rgb), 0.06); }
+
+/* ── Modal ────────────────────────────────────────────────────────────── */
+.rama-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--rc), 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.rama-modal {
+  width: min(480px, calc(100vw - 48px));
+  border-radius: 12px;
+  border: 1px solid rgba(var(--ink), 0.12);
+  background: rgba(var(--sf-hi), 0.96);
+  backdrop-filter: blur(30px) saturate(1.4);
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  box-shadow: var(--shadow-menu);
+  overflow: hidden;
+}
+.rama-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(var(--ink), 0.07);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-hi);
+}
+.rama-modal-close { font-size: 11px; color: rgba(var(--ink), 0.4); cursor: pointer; border: none; background: none; }
+.rama-modal-close:hover { color: var(--accent); }
+.rama-modal-body { padding: 16px; font-size: 13px; color: rgba(var(--ink), 0.82); line-height: 1.6; }
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+.rama-toast-viewport {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 300;
+  pointer-events: none;
+}
+.rama-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(var(--ink), 0.1);
+  background: rgba(var(--sf-hi), 0.92);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: var(--shadow-composer);
+  font-size: 12px;
+  color: rgba(var(--ink), 0.85);
+  animation: rama-toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rama-toast-accent { border-left: 2px solid var(--accent); }
+.rama-toast-good { border-left: 2px solid var(--good); }
+.rama-toast-warn { border-left: 2px solid var(--warn); }
+.rama-toast-bad { border-left: 2px solid var(--bad); }
+@keyframes rama-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
