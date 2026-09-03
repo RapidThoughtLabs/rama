@@ -35,3 +35,7 @@ lerna-debug.log*
 # Claude Code local state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Local session changelogs
+CHANGELOG_FILES.md
+CHANGELOG_CONTEXT.md
