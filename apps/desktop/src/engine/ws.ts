@@ -2,13 +2,21 @@ import type { ClientCommand, SessionEvent } from "@rama/protocol";
 import { getEngineConnection } from "./client";
 
 type Listener = (chatId: string, event: SessionEvent) => void;
+type ThemesListener = () => void;
 
-interface WireEnvelope {
+interface ChatEnvelope {
   chatId: string;
   event: SessionEvent;
 }
 
+// SETTINGS_PLAN.md Phase S1's live-reload push — engine/src/ws.ts's broadcastThemes sends this to
+// every connection's fixed "themes" topic, no chatId envelope since it isn't scoped to a chat.
+interface ThemesEnvelope {
+  type: "themes.changed";
+}
+
 const listeners = new Set<Listener>();
+const themesListeners = new Set<ThemesListener>();
 let socketPromise: Promise<WebSocket> | null = null;
 
 async function connect(): Promise<WebSocket> {
@@ -20,13 +28,17 @@ async function connect(): Promise<WebSocket> {
     ws.addEventListener("open", () => resolve(ws));
     ws.addEventListener("error", () => reject(new Error("engine websocket connection failed")));
     ws.addEventListener("message", (e) => {
-      let envelope: WireEnvelope;
+      let envelope: ChatEnvelope | ThemesEnvelope;
       try {
         envelope = JSON.parse(String(e.data));
       } catch {
         return;
       }
-      for (const listener of listeners) listener(envelope.chatId, envelope.event);
+      if ("chatId" in envelope) {
+        for (const listener of listeners) listener(envelope.chatId, envelope.event);
+      } else if (envelope.type === "themes.changed") {
+        for (const listener of themesListeners) listener();
+      }
     });
   });
 }
@@ -39,6 +51,14 @@ function getSocket(): Promise<WebSocket> {
 export function onEvent(listener: Listener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function onThemesChanged(listener: ThemesListener): () => void {
+  themesListeners.add(listener);
+  // Fire-and-forget: makes sure the socket actually opens (and thus subscribes to "themes") even
+  // if nothing else on this window has sent a chat command yet.
+  void getSocket();
+  return () => themesListeners.delete(listener);
 }
 
 export async function send(command: ClientCommand): Promise<void> {

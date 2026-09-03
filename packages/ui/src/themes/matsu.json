@@ -1,0 +1,13 @@
+{
+  "id": "matsu",
+  "label": "Matsu",
+  "family": "green",
+  "mode": "dark",
+  "ground": "#131e18",
+  "ink": "#d6dcc9",
+  "inkLoud": "#f2ede0",
+  "accent": "#8fae91",
+  "semantic": { "good": "#7fb8d9" },
+  "texture": { "grain": 0.28, "vignette": 0.58 },
+  "wallpaper": { "image": "/wallpapers/sansui-green.jpg", "veil": 0.80, "fit": "100% auto", "position": "center 30%" }
+}

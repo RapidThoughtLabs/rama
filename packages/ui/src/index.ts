@@ -3,6 +3,7 @@ import "./wallpaper.css";
 import "./primitives.css";
 
 export * from "./theme";
+export * from "./themes";
 export * from "./DotFieldBackground";
 export * from "./WallpaperStack";
 export * from "./components/Button";
@@ -12,5 +13,7 @@ export * from "./components/Tabs";
 export * from "./components/SegmentedControl";
 export * from "./components/Toggle";
 export * from "./components/Card";
+export * from "./components/Fluke";
+export * from "./components/Icons";
 export * from "./components/Modal";
 export * from "./components/Toast";

@@ -1,38 +1,43 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { BUILTIN_THEMES, DEFAULT_THEME_ID, getTheme, seedTokens, sortThemes, type RamaTheme, type ThemeId } from "./themes";
 
-/* Theme engine — docs/IMPLEMENTATION_PLAN.md Phase 0: "data-theme / data-accent
-   + wallpaper stack ..., runtime switch, persisted."
+/* Theme engine — SETTINGS_PLAN.md Phase S0/S1 (supersedes docs/REDESIGN_PLAN.md Phase R0's
+   version, which also owned a per-user wallpaper/dim setting; both are gone — a theme's
+   wallpaper is authored data now, seeded by seedTokens() like every other token).
 
-   Phase 0 persistence is localStorage (single global default). Phase 1 moves
-   this to per-chat SQLite rows (`chats.wallpaper/accent/theme`) and this
-   engine's setters are what the chat-switch handler will call into. */
+   Persistence here is localStorage (single global default) for a window that hasn't loaded a
+   chat yet; once a chat is active its theme lives in SQLite (`chats.theme_id`) and this engine's
+   setter is what the chat-switch handler calls into via `applyTheme`.
 
-export type ThemeMode = "dark" | "light";
-export type Accent = "plasma" | "surge" | "frost" | "void" | "dusk" | "ember";
-export type Wallpaper = "indigo" | "inferno" | "rose" | "none";
+   Also caches the *resolved seed tokens* of the active theme, not just its id — SETTINGS_PLAN.md
+   Phase S1's first-paint fix. A theme fetched from ~/.rama/themes isn't available until the
+   engine responds; without a cached copy of what it resolved to last time, a persisted themeId
+   naming a user theme flashes the default on every launch.
 
-export const ACCENTS: { id: Accent; label: string }[] = [
-  { id: "plasma", label: "Plasma" },
-  { id: "surge", label: "Surge" },
-  { id: "frost", label: "Frost" },
-  { id: "void", label: "Void" },
-  { id: "dusk", label: "Dusk" },
-  { id: "ember", label: "Ember" },
+   `fontScale` (SETTINGS_PLAN.md Phase S3) lives in this same state/storage blob for convenience,
+   but is deliberately NOT part of the per-chat sync path below (applyTheme's partial type only
+   ever accepts `themeId`) — a chat's theme travels with it (SQLite's chats.theme_id, R3's
+   pop-out-window risk register), but font size is a reading preference of this window, not
+   something a chat should carry or overwrite when you switch to one authored on a different
+   machine/scale. */
+
+export type FontScale = 0.9 | 1 | 1.12 | 1.25;
+export const FONT_SCALES: { value: FontScale; label: string }[] = [
+  { value: 0.9, label: "compact" },
+  { value: 1, label: "default" },
+  { value: 1.12, label: "large" },
+  { value: 1.25, label: "larger" },
 ];
 
-export const WALLPAPERS: Wallpaper[] = ["indigo", "inferno", "rose", "none"];
-
 export interface ThemeState {
-  theme: ThemeMode;
-  accent: Accent;
-  wallpaper: Wallpaper;
-  /** 0-100, matches the prototype's "dim" preview knob. */
-  dim: number;
+  themeId: ThemeId;
+  fontScale: FontScale;
 }
 
-const DEFAULT_STATE: ThemeState = { theme: "dark", accent: "plasma", wallpaper: "indigo", dim: 62 };
+const DEFAULT_STATE: ThemeState = { themeId: DEFAULT_THEME_ID, fontScale: 1 };
 const STORAGE_KEY = "rama.theme";
+const SEED_CACHE_KEY = "rama.theme.seed";
 
 function loadPersisted(): ThemeState {
   if (typeof window === "undefined") return DEFAULT_STATE;
@@ -46,85 +51,82 @@ function loadPersisted(): ThemeState {
   }
 }
 
-function defaultResolveWallpaperUrl(wallpaper: Wallpaper): string {
-  return wallpaper === "none" ? "none" : `url('/wallpapers/nebula-${wallpaper}.jpg')`;
+function applyTokens(tokens: Record<string, string>): void {
+  const root = document.documentElement;
+  for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v);
 }
 
+// Runs once at module load, synchronously, before React has painted anything — applies whatever
+// theme was cached from the previous launch so there's no flash of the default theme while
+// ThemeProvider's own effect (which needs the merged theme list, possibly still loading over
+// HTTP) catches up. Safe to re-apply the same values a moment later; this is purely a paint-order
+// optimization, not a second source of truth.
+(function applyPersistedThemeSync() {
+  if (typeof window === "undefined") return;
+  try {
+    const cached = window.localStorage.getItem(SEED_CACHE_KEY);
+    const persisted = loadPersisted();
+    document.documentElement.dataset.rtheme = persisted.themeId;
+    document.documentElement.style.setProperty("--font-scale", String(persisted.fontScale));
+    if (cached) applyTokens(JSON.parse(cached));
+  } catch {
+    // best-effort — ThemeProvider's effect below is the real source of truth
+  }
+})();
+
 export interface ThemeContextValue extends ThemeState {
-  setTheme: (theme: ThemeMode) => void;
-  setAccent: (accent: Accent) => void;
-  setWallpaper: (wallpaper: Wallpaper) => void;
-  setDim: (dim: number) => void;
-  toggleTheme: () => void;
-  cycleAccent: () => void;
-  cycleWallpaper: () => void;
-  /** Bulk setter — used when switching chats so theme/accent/wallpaper land in one update
-      instead of three, and so the per-chat persistence effect only fires once per switch. */
-  applyTheme: (partial: Partial<Pick<ThemeState, "theme" | "accent" | "wallpaper">>) => void;
+  /** The full available set — bundled builtins merged with anything from ~/.rama/themes, sorted
+      for gallery display. Defaults to builtins only when no app-level merge is provided (e.g. a
+      consumer of @rama/ui with no engine connection). */
+  themes: RamaTheme[];
+  setThemeId: (themeId: ThemeId) => void;
+  cycleTheme: () => void;
+  /** Bulk setter — used when switching chats so the persistence effect only fires once per
+      switch instead of per-field. Only `themeId` flows through here (S0 dropped wallpaper/dim,
+      which used to also flow through this) — `fontScale` deliberately doesn't, so switching chats
+      never touches it. */
+  applyTheme: (partial: Partial<Pick<ThemeState, "themeId">>) => void;
+  setFontScale: (fontScale: FontScale) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider(props: {
-  children: ReactNode;
-  resolveWallpaperUrl?: (wallpaper: Wallpaper) => string;
-}) {
+export function ThemeProvider({ children, themes }: { children: ReactNode; themes?: RamaTheme[] }) {
   const [state, setState] = useState<ThemeState>(loadPersisted);
-  const resolveWallpaperUrl = props.resolveWallpaperUrl ?? defaultResolveWallpaperUrl;
+  const resolvedThemes = useMemo(() => sortThemes(themes ?? BUILTIN_THEMES), [themes]);
 
   useEffect(() => {
+    const theme = getTheme(state.themeId, resolvedThemes);
     const root = document.documentElement;
-    root.dataset.theme = state.theme;
-    root.dataset.accent = state.accent;
-    root.style.setProperty("--wp", resolveWallpaperUrl(state.wallpaper));
-
-    const isLight = state.theme === "light";
-    const floor = isLight ? 0.93 : state.wallpaper === "none" ? 0.96 : 0;
-    const veil = Math.max(state.dim / 100, floor);
-    root.style.setProperty("--veil", String(veil));
+    root.dataset.rtheme = theme.id;
+    root.dataset.rmode = theme.mode;
+    const seeds = seedTokens(theme);
+    applyTokens(seeds);
+    root.style.setProperty("--font-scale", String(state.fontScale));
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state, resolveWallpaperUrl]);
+    window.localStorage.setItem(SEED_CACHE_KEY, JSON.stringify(seeds));
+  }, [state, resolvedThemes]);
 
-  const setTheme = useCallback((theme: ThemeMode) => setState((s) => ({ ...s, theme })), []);
-  const setAccent = useCallback((accent: Accent) => setState((s) => ({ ...s, accent })), []);
-  const setWallpaper = useCallback((wallpaper: Wallpaper) => setState((s) => ({ ...s, wallpaper })), []);
-  const setDim = useCallback((dim: number) => setState((s) => ({ ...s, dim })), []);
-  const toggleTheme = useCallback(() => setState((s) => ({ ...s, theme: s.theme === "dark" ? "light" : "dark" })), []);
-  const cycleAccent = useCallback(() => {
+  const setThemeId = useCallback((themeId: ThemeId) => setState((s) => ({ ...s, themeId })), []);
+  const cycleTheme = useCallback(() => {
     setState((s) => {
-      const i = ACCENTS.findIndex((a) => a.id === s.accent);
-      return { ...s, accent: ACCENTS[(i + 1) % ACCENTS.length].id };
+      const i = resolvedThemes.findIndex((t) => t.id === s.themeId);
+      return { ...s, themeId: resolvedThemes[(i + 1) % resolvedThemes.length].id };
     });
-  }, []);
-  const cycleWallpaper = useCallback(() => {
-    setState((s) => {
-      const i = WALLPAPERS.indexOf(s.wallpaper);
-      return { ...s, wallpaper: WALLPAPERS[(i + 1) % WALLPAPERS.length] };
-    });
-  }, []);
+  }, [resolvedThemes]);
   const applyTheme = useCallback(
-    (partial: Partial<Pick<ThemeState, "theme" | "accent" | "wallpaper">>) =>
-      setState((s) => ({ ...s, ...partial })),
+    (partial: Partial<Pick<ThemeState, "themeId">>) => setState((s) => ({ ...s, ...partial })),
     [],
   );
+  const setFontScale = useCallback((fontScale: FontScale) => setState((s) => ({ ...s, fontScale })), []);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({
-      ...state,
-      setTheme,
-      setAccent,
-      setWallpaper,
-      setDim,
-      toggleTheme,
-      cycleAccent,
-      cycleWallpaper,
-      applyTheme,
-    }),
-    [state, setTheme, setAccent, setWallpaper, setDim, toggleTheme, cycleAccent, cycleWallpaper, applyTheme],
+    () => ({ ...state, themes: resolvedThemes, setThemeId, cycleTheme, applyTheme, setFontScale }),
+    [state, resolvedThemes, setThemeId, cycleTheme, applyTheme, setFontScale],
   );
 
-  return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {

@@ -1,49 +1,36 @@
 /* ════════════════════════════════════════════════════════════════════════
-   Rama canonical design tokens.
+   Rama canonical design tokens — SETTINGS_PLAN.md Phase S1 (supersedes
+   docs/REDESIGN_PLAN.md Phase R0's original hand-authored-per-theme version).
 
-   Reconciles the two token sets referenced by docs/IMPLEMENTATION_PLAN.md §0/§8:
-     - docs/Rama/uploads/design-system.html  → the OKLCH accent system + flat
-       component-class tokens (--bg-*, --text-*, --border-*), static
-       [data-theme]/[data-accent] attribute selectors.
-     - docs/Rama/Rama.dc.html                → the actual app-shell chrome:
-       translucent glass surfaces over a wallpaper (--page-bg/--ink/--sf-hi/
-       --sf-lo/--rc), the wallpaper stack, and the extended accent alpha ramp
-       used for glows/text-shadows throughout the chat UI.
-   docs/Rama/uploads/design-language.html uses hsl(), not oklch() — it's the
-   superseded predecessor to design-system.html and is NOT one of the two
-   sources merged here (see report for the explicit resolution of plan §8).
+   A theme is a JSON file (packages/ui/src/themes/*.json, loader in themes.ts)
+   supplying four required colours — ground / ink / inkLoud / accent — plus an
+   optional wallpaper. Two things turn that into the ~24-token contract every
+   component actually reads:
 
-   Both source systems already agree on the same six OKLCH accent hues and
-   near-identical base surface colors, so this is closer to a straight
-   union with one naming convention than a real conflict:
-     - the accent + surface + text + border tokens below are copied
-       verbatim from design-system.html (the more complete, hand-tuned set)
-     - the app-shell aliases (--page-bg, --ink, --sf-hi, --sf-lo, --rc, etc.)
-       and the wallpaper-stack vars are copied from Rama.dc.html and point
-       at the SAME underlying values, so control classes ported from
-       design-system.html (.btn, .badge, .input, .card, ...) and the glassy
-       app-shell chrome both read from one source of truth.
-   ════════════════════════════════════════════════════════════════════════ */
+     1. seedTokens() (themes.ts) computes the tokens that have to be raw hex or
+        "R, G, B" triplet strings — the ground ramp (--bg-, --sf-, --rc), ink,
+        the wallpaper vars — and writes them as inline styles on :root
+        (theme.tsx's apply effect).
+     2. The two [data-rmode] blocks below hold everything that's pure
+        oklch()/rgb() *relative*-colour math off --accent and doesn't care
+        which theme set it — text-3/4, the accent variants, the border ramp,
+        the dot field, the elevation shadows. This is what's genuinely
+        mode-dependent (a dark ground needs a lighter accent-dim than a light
+        one) rather than theme-dependent, which is what let the old ~25-line
+        per-theme block shrink to four colours in a JSON file.
+
+   Adding a theme means adding one JSON file to ./themes; nothing here should
+   need to change. ════════════════════════════════════════════════════════ */
 
 :root {
-  --font-mono: "JetBrains Mono", monospace;      /* app body copy (Rama.dc.html) */
+  --font-mono: "JetBrains Mono", monospace;      /* app body copy */
   --font-display: "Martian Mono", monospace;     /* brand wordmark, section labels */
-  --font-code: "DM Mono", monospace;             /* inline code, dense data (design-system.html) */
+  --font-code: "DM Mono", monospace;             /* inline code, dense data */
 }
 
-/* ── ACCENT COLOR SYSTEM — six OKLCH hues, dark defaults ─────────────────
-   Copied verbatim from design-system.html; Rama.dc.html's ACCENTS table
-   encodes the identical six (L, C, H, L_hi, C_hi) tuples. */
-[data-accent="plasma"] { --accent: oklch(0.65 0.22 290); --accent-bright: oklch(0.75 0.24 290); --accent-dim: oklch(0.30 0.12 290); --accent-glow: oklch(0.65 0.22 290 / 0.35); --accent-tint: oklch(0.65 0.22 290 / 0.08); --accent-border: oklch(0.65 0.22 290 / 0.25); }
-[data-accent="surge"]  { --accent: oklch(0.75 0.20 172); --accent-bright: oklch(0.82 0.22 172); --accent-dim: oklch(0.28 0.10 172); --accent-glow: oklch(0.75 0.20 172 / 0.35); --accent-tint: oklch(0.75 0.20 172 / 0.08); --accent-border: oklch(0.75 0.20 172 / 0.25); }
-[data-accent="frost"]  { --accent: oklch(0.72 0.18 220); --accent-bright: oklch(0.80 0.20 220); --accent-dim: oklch(0.28 0.09 220); --accent-glow: oklch(0.72 0.18 220 / 0.35); --accent-tint: oklch(0.72 0.18 220 / 0.08); --accent-border: oklch(0.72 0.18 220 / 0.25); }
-[data-accent="void"]   { --accent: oklch(0.62 0.26 260); --accent-bright: oklch(0.72 0.28 260); --accent-dim: oklch(0.28 0.13 260); --accent-glow: oklch(0.62 0.26 260 / 0.35); --accent-tint: oklch(0.62 0.26 260 / 0.08); --accent-border: oklch(0.62 0.26 260 / 0.25); }
-[data-accent="dusk"]   { --accent: oklch(0.78 0.17 60);  --accent-bright: oklch(0.85 0.18 60);  --accent-dim: oklch(0.30 0.09 60);  --accent-glow: oklch(0.78 0.17 60 / 0.35);  --accent-tint: oklch(0.78 0.17 60 / 0.08);  --accent-border: oklch(0.78 0.17 60 / 0.25); }
-[data-accent="ember"]  { --accent: oklch(0.68 0.22 355); --accent-bright: oklch(0.76 0.24 355); --accent-dim: oklch(0.28 0.11 355); --accent-glow: oklch(0.68 0.22 355 / 0.35); --accent-tint: oklch(0.68 0.22 355 / 0.08); --accent-border: oklch(0.68 0.22 355 / 0.25); }
-
-/* Extended alpha ramp used throughout the app shell for glows / text-shadows
-   (Rama.dc.html: --a70 … --a06). Relative-color syntax so every accent ×
-   theme combination gets it for free instead of 84 hand-written rules. */
+/* Extended alpha ramp used throughout the app shell for glows / text-shadows.
+   Relative-color syntax so every theme gets it for free from its own --accent
+   instead of it needing to be hand-written per theme. */
 :root {
   --a70: oklch(from var(--accent) l c h / 0.70);
   --a45: oklch(from var(--accent) l c h / 0.45);
@@ -51,94 +38,105 @@
   --a25: oklch(from var(--accent) l c h / 0.25);
   --a16: oklch(from var(--accent) l c h / 0.16);
   --a10: oklch(from var(--accent) l c h / 0.10);
+  --a08: oklch(from var(--accent) l c h / 0.08);
   --a06: oklch(from var(--accent) l c h / 0.06);
 }
 
-/* ── DARK THEME (default) ────────────────────────────────────────────── */
-[data-theme="dark"] {
+/* ── DARK formula block ──────────────────────────────────────────────────
+   Applies to every dark-mode theme (kanagawa, sumi, tsubaki, shu, matsu,
+   rokusho). Selector is [data-rmode], not [data-rtheme] — the theme engine
+   sets both, but only mode changes which formulas apply. */
+:root[data-rmode="dark"] {
   color-scheme: dark;
 
-  /* flat surfaces / text / borders — design-system.html naming, used by
-     the ported control classes (.btn, .badge, .input, .card, ...) */
-  --bg-base: #06060a; --bg-deep: #09090f; --bg-surface: #0d0d16;
-  --bg-elevated: #111120; --bg-overlay: rgba(6, 6, 10, 0.88);
-  --text-1: #ede9fe; --text-2: #a78bfa;
-  --text-3: oklch(from var(--accent) 0.62 0.09 h);
-  --text-4: oklch(from var(--accent) 0.59 0.07 h);
-  --border-1: rgba(168, 85, 247, 0.06); --border-2: rgba(168, 85, 247, 0.10);
-  --border-3: rgba(168, 85, 247, 0.18); --border-4: rgba(168, 85, 247, 0.30);
-  --green: #34d399; --amber: #fbbf24; --red: #ff5f57;
-  --grain-opacity: 0.32; --grid-color: rgba(168, 85, 247, 0.06);
-  --dot-field-color: rgba(255, 255, 255, 0.44);
-  --nav-bg: rgba(6, 6, 10, 0.45);
+  --text-3: oklch(from var(--accent) 0.66 0.08 h);
+  --text-4: oklch(from var(--accent) 0.60 0.06 h);
+  --border-1: rgb(from var(--accent) r g b / 0.06);
+  --border-2: rgb(from var(--accent) r g b / 0.11);
+  --border-3: rgb(from var(--accent) r g b / 0.20);
 
-  /* app-shell glass-chrome aliases — Rama.dc.html naming, same values */
-  --page-bg: var(--bg-base);
-  --ink: 236, 234, 246;         /* rgb triplet, used as rgba(var(--ink), a) */
-  --ink-hi: #f2f0fc;
-  --sf-hi: 9, 9, 16;            /* titlebar / sidebar / artifacts panel glass */
-  --sf-lo: 7, 7, 13;            /* tab-strip / composer glass */
-  --rc: 5, 5, 10;               /* recessed wells: code blocks, inputs */
-  --good: var(--green);
-  --bad: var(--red);
-  --bad-2: #ff8d86;             /* softer red used for diff/status deltas in-chat */
-  --warn: var(--amber);
-  --warn-rgb: 251, 191, 36;
-  --grain-op: var(--grain-opacity);
-  --vig-a: 0.62;                /* vignette strength */
-  --shadow-menu: 0 24px 64px -16px rgba(0, 0, 0, 0.8), 0 0 28px -10px var(--a35);
-  --shadow-composer: 0 8px 32px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--a06);
+  --accent-bright: oklch(from var(--accent) calc(l + 0.08) calc(c + 0.02) h);
+  --accent-hi: oklch(from var(--accent) calc(l + 0.14) calc(c + 0.02) h);
+  --accent-dim: oklch(from var(--accent) 0.29 calc(c * 0.5) h);
+  --accent-glow: oklch(from var(--accent) l c h / 0.35);
+  --accent-tint: oklch(from var(--accent) l c h / 0.08);
+  --accent-border: oklch(from var(--accent) l c h / 0.25);
+
+  --dot-field-color: rgb(from var(--accent) r g b / 0.32);
+  --grain-op: 0.29;
+  --vig-a: 0.59;
+  --shadow-menu: 0 24px 64px -16px rgba(var(--rc), 0.8), 0 0 28px -10px var(--a35);
+  --shadow-composer: 0 8px 32px -12px rgba(var(--rc), 0.6), 0 0 0 1px var(--a06);
+  --shadow-btn-primary: 0 0 24px var(--accent-glow);
 }
 
-/* ── LIGHT THEME ──────────────────────────────────────────────────────── */
-[data-theme="light"] {
+/* ── LIGHT formula block ─────────────────────────────────────────────────
+   Applies to nami, sakura, wakaba. */
+:root[data-rmode="light"] {
   color-scheme: light;
 
-  --bg-base: #f4f2ee; --bg-deep: #ede9e1; --bg-surface: #e6e1d8;
-  --bg-elevated: #fff; --bg-overlay: rgba(244, 242, 238, 0.92);
-  --text-1: #0f0a1e; --text-2: #3730a3;
   --text-3: oklch(from var(--accent) 0.40 0.07 h);
   --text-4: oklch(from var(--accent) 0.48 0.06 h);
-  --border-1: rgba(80, 40, 180, 0.05); --border-2: rgba(80, 40, 180, 0.10);
-  --border-3: rgba(80, 40, 180, 0.18); --border-4: rgba(80, 40, 180, 0.32);
-  --green: #059669; --amber: #d97706; --red: #dc2626;
-  --grain-opacity: 0.12; --grid-color: rgba(80, 40, 180, 0.04);
-  --dot-field-color: rgba(0, 0, 0, 0.26);
-  --nav-bg: rgba(244, 242, 238, 0.5);
+  --border-1: rgb(from var(--accent) r g b / 0.05);
+  --border-2: rgb(from var(--accent) r g b / 0.10);
+  --border-3: rgb(from var(--accent) r g b / 0.18);
 
-  --page-bg: var(--bg-base);
-  --ink: 23, 21, 32;
-  --ink-hi: #08070d;
-  --sf-hi: 255, 255, 255;
-  --sf-lo: 250, 249, 253;
-  --rc: 235, 233, 241;
-  --good: var(--green);
-  --bad: var(--red);
-  --bad-2: #c23b32;
-  --warn: var(--amber);
-  --warn-rgb: 154, 91, 0;
-  --grain-op: var(--grain-opacity);
-  --vig-a: 0.24;
-  --shadow-menu: 0 20px 48px -14px rgba(23, 21, 32, 0.16), 0 0 22px -10px var(--a25);
-  --shadow-composer: 0 6px 20px -10px rgba(23, 21, 32, 0.12), 0 0 0 1px var(--a06);
+  --accent-bright: oklch(from var(--accent) calc(l + 0.08) calc(c + 0.02) h);
+  --accent-hi: oklch(from var(--accent) calc(l + 0.14) calc(c + 0.02) h);
+  --accent-dim: oklch(from var(--accent) 0.90 calc(c * 0.35) h);
+  --accent-glow: oklch(from var(--accent) l c h / 0.35);
+  --accent-tint: oklch(from var(--accent) l c h / 0.07);
+  --accent-border: oklch(from var(--accent) l c h / 0.20);
+
+  --dot-field-color: oklch(from var(--accent) 0.20 calc(c * 0.55) h / 0.30);
+  --grain-op: 0.12;
+  --vig-a: 0.22;
+  --shadow-menu: 0 20px 48px -14px rgba(var(--ink), 0.16), 0 0 22px -10px var(--a25);
+  --shadow-composer: 0 6px 20px -10px rgba(var(--ink), 0.12), 0 0 0 1px var(--a06);
+  --shadow-btn-primary: none;
 }
 
-/* Light theme needs its own (darker, more saturated) per-accent values —
-   the dark-mode swatch above is too pale to read as text/borders on a
-   light page. Verbatim from design-system.html. */
-[data-theme="light"][data-accent="plasma"] { --accent: oklch(0.42 0.18 290); --accent-bright: oklch(0.35 0.20 290); --accent-dim: oklch(0.90 0.06 290); --accent-tint: oklch(0.42 0.18 290 / 0.07); --accent-border: oklch(0.42 0.18 290 / 0.20); }
-[data-theme="light"][data-accent="surge"]  { --accent: oklch(0.45 0.16 172); --accent-bright: oklch(0.38 0.18 172); --accent-dim: oklch(0.90 0.05 172); --accent-tint: oklch(0.45 0.16 172 / 0.07); --accent-border: oklch(0.45 0.16 172 / 0.20); }
-[data-theme="light"][data-accent="frost"]  { --accent: oklch(0.42 0.15 220); --accent-bright: oklch(0.35 0.17 220); --accent-dim: oklch(0.90 0.05 220); --accent-tint: oklch(0.42 0.15 220 / 0.07); --accent-border: oklch(0.42 0.15 220 / 0.20); }
-[data-theme="light"][data-accent="void"]   { --accent: oklch(0.40 0.20 260); --accent-bright: oklch(0.33 0.22 260); --accent-dim: oklch(0.90 0.06 260); --accent-tint: oklch(0.40 0.20 260 / 0.07); --accent-border: oklch(0.40 0.20 260 / 0.20); }
-[data-theme="light"][data-accent="dusk"]   { --accent: oklch(0.50 0.13 60);  --accent-bright: oklch(0.44 0.15 60);  --accent-dim: oklch(0.92 0.04 60);  --accent-tint: oklch(0.50 0.13 60 / 0.07);  --accent-border: oklch(0.50 0.13 60 / 0.20); }
-[data-theme="light"][data-accent="ember"]  { --accent: oklch(0.46 0.18 355); --accent-bright: oklch(0.38 0.20 355); --accent-dim: oklch(0.90 0.06 355); --accent-tint: oklch(0.46 0.18 355 / 0.07); --accent-border: oklch(0.46 0.18 355 / 0.20); }
+/* --page-bg is a pure alias — kept as its own token because it's the name
+   half the app reaches for (body background), while --bg-base is the name
+   the surface ramp derives from (seedTokens, themes.ts). */
+:root {
+  --page-bg: var(--bg-base);
+}
 
-/* ── WALLPAPER STACK — image → veil → vignette → accent wash → grain ──
-   --wp / --veil are set at runtime by the theme engine (packages/ui/src/theme.ts)
-   since they depend on the selected wallpaper + per-chat dim setting. */
+/* ── WALLPAPER — image/gradient → veil → vignette → accent wash → grain ──
+   --wp/--veil/--wp-blend/--wp-fit/--wp-position are theme-authored now
+   (SETTINGS_PLAN.md Phase S0 — wallpaper moved from a user setting into the
+   theme record) and set at runtime by seedTokens()/theme.tsx. These are
+   fallback values only, for the instant before the theme engine's effect
+   runs on first paint. */
 :root {
   --wp: none;
-  --veil: 0.62;
+  --veil: 1;
+  --wp-blend: normal;
+  --wp-fit: cover;
+  --wp-position: center;
+}
+
+/* ── TYPE RAMP — SETTINGS_PLAN.md Phase S3 ───────────────────────────────
+   Replaces 62+14 hardcoded font-size declarations (app-shell.css,
+   primitives.css) — twelve half-pixel-apart values that were independent
+   guesses, not a scale. Six named steps; every text-size declaration in the
+   app now reads one of these instead of a literal px number, so
+   --font-scale (the Appearance pane's compact/default/large/larger control,
+   set by theme.tsx — see useFontScale) resizes the whole app at once,
+   xterm.js included (TerminalView.tsx wires it in separately since xterm
+   doesn't read CSS custom properties). --font-scale itself lives outside
+   the theme system: it's global, not per-chat (SETTINGS_PLAN.md Phase S3's
+   "scope" call — a chat's theme travels with it when popped out; font size
+   is a reading preference, not part of a chat's identity). */
+:root {
+  --font-scale: 1;
+  --fs-micro: calc(9px * var(--font-scale));
+  --fs-xs: calc(10.5px * var(--font-scale));
+  --fs-sm: calc(11.5px * var(--font-scale));
+  --fs-md: calc(12.5px * var(--font-scale));
+  --fs-lg: calc(14px * var(--font-scale));
+  --fs-xl: calc(16px * var(--font-scale));
 }
 
 /* ── FOUNDATIONS ──────────────────────────────────────────────────────── */
@@ -146,7 +144,7 @@
 html, body { margin: 0; padding: 0; height: 100%; }
 body {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-lg);
   background: var(--page-bg);
   color: rgb(var(--ink));
   -webkit-font-smoothing: antialiased;
@@ -159,7 +157,7 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(var(--ink), 0.12); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(var(--ink), 0.24); }
 
-.t-label { font-family: var(--font-display); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(var(--ink), 0.42); }
+.t-label { font-family: var(--font-display); font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(var(--ink), 0.42); }
 .t-accent { color: var(--accent); }
 .t-muted { color: var(--text-3); }
 .t-dim { color: var(--text-4); }

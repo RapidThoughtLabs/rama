@@ -25,10 +25,18 @@ fn emit_tabs_changed(app: &AppHandle, window_label: &str, chat_ids: Vec<String>)
     let _ = app.emit_to(window_label, "tabs-changed", TabsChangedPayload { chat_ids });
 }
 
+/// Broadcast (not window-scoped, unlike `tabs-changed` above) — tells every window that
+/// *someone's* tab ownership changed, without saying whose. docs/REDESIGN_PLAN.md Phase R2: the
+/// sidebar's cross-window ownership glyph is the only consumer today; it just re-pulls
+/// `list_all_window_tabs` in response rather than trying to diff the payload.
+pub fn emit_registry_changed(app: &AppHandle) {
+    let _ = app.emit("registry-changed", ());
+}
+
 /// Seeds a window's tab list the first time it's asked for one; a no-op if it already has an
-/// entry. Windows spawned by a drag are pre-seeded by `begin_tab_drag` before their HTML loads,
-/// so this only ever fires for a cold-booted `main` window (or one whose registry entry was
-/// dropped and is being recreated on next launch, since the registry isn't persisted).
+/// entry. Windows spawned by `pop_out_chat` (drag.rs) are pre-seeded before their HTML loads, so
+/// this only ever fires for a cold-booted `main` window (or one whose registry entry was dropped
+/// and is being recreated on next launch, since the registry isn't persisted).
 #[tauri::command]
 pub fn initialize_window_tabs(
     app: AppHandle,
@@ -43,11 +51,20 @@ pub fn initialize_window_tabs(
     guard.insert(window_label.clone(), chat_ids.clone());
     drop(guard);
     emit_tabs_changed(&app, &window_label, chat_ids);
+    emit_registry_changed(&app);
 }
 
 #[tauri::command]
 pub fn get_window_tabs(state: tauri::State<WindowRegistry>, window_label: String) -> Vec<String> {
     state.0.lock().unwrap().get(&window_label).cloned().unwrap_or_default()
+}
+
+/// The whole registry, window label -> its owned chat ids. docs/REDESIGN_PLAN.md Phase R2 — the
+/// sidebar uses this (main window only) to show which chats are tabs elsewhere; every other
+/// consumer only ever needs its own window's slice (`get_window_tabs`).
+#[tauri::command]
+pub fn list_all_window_tabs(state: tauri::State<WindowRegistry>) -> HashMap<String, Vec<String>> {
+    state.0.lock().unwrap().clone()
 }
 
 /// Adds `chat_id` as a tab of `window_label`. If it's already owned by a *different* window,
@@ -78,13 +95,39 @@ pub fn add_chat_to_window(
     let chat_ids = entry.clone();
     drop(guard);
     emit_tabs_changed(&app, &window_label, chat_ids);
+    emit_registry_changed(&app);
     None
 }
 
+/// Drops `chat_id` from whichever window currently owns it as a tab (a chat is a tab of at most
+/// one window), for when the chat itself has been deleted rather than just moved — same removal
+/// + "close the now-empty window" logic as `pop_out_chat`'s source-window step (drag.rs), just
+/// without a destination window to hand the tab to afterward.
 #[tauri::command]
-pub fn reorder_window_tabs(app: AppHandle, state: tauri::State<WindowRegistry>, window_label: String, chat_ids: Vec<String>) {
-    state.0.lock().unwrap().insert(window_label.clone(), chat_ids.clone());
-    emit_tabs_changed(&app, &window_label, chat_ids);
+pub fn remove_chat_from_windows(app: AppHandle, state: tauri::State<WindowRegistry>, chat_id: String) {
+    let owner = {
+        let guard = state.0.lock().unwrap();
+        guard
+            .iter()
+            .find(|(_, ids)| ids.contains(&chat_id))
+            .map(|(label, _)| label.clone())
+    };
+    let Some(label) = owner else { return };
+
+    let mut guard = state.0.lock().unwrap();
+    let Some(list) = guard.get_mut(&label) else { return };
+    list.retain(|id| id != &chat_id);
+    let remaining = list.clone();
+    drop(guard);
+
+    if remaining.is_empty() && label != "main" {
+        if let Some(win) = app.get_webview_window(&label) {
+            let _ = win.close();
+        }
+    } else {
+        emit_tabs_changed(&app, &label, remaining);
+    }
+    emit_registry_changed(&app);
 }
 
 /// Registers cleanup so a window's registry entry (and thus its owned tabs) is dropped once it's

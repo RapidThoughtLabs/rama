@@ -1,14 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTheme } from "@rama/ui";
-import type { Accent, ThemeMode, Wallpaper } from "@rama/ui";
-import type { ChatDTO, ProjectDTO } from "@rama/protocol";
+import type { ThemeId } from "@rama/ui";
+import type { BackendConfig, ChatDTO, ChatMode, ProjectDTO, UpdateProjectInput } from "@rama/protocol";
 import {
   createChat as createChatApi,
   createProject as createProjectApi,
+  deleteChat as deleteChatApi,
+  deleteProject as deleteProjectApi,
   fetchChats,
+  fetchGeneralSettings,
   fetchProjects,
   patchChat,
+  updateProject as updateProjectApi,
 } from "../../engine/client";
 import { WINDOW_LABEL } from "../../engine/window";
 
@@ -30,24 +34,37 @@ export interface ProjectsDataValue {
   activeProjectId: string | null;
   selectChat: (chatId: string) => void;
   addProject: (input: { name: string; path: string }) => Promise<ProjectDTO>;
-  addChat: (projectId: string) => Promise<ChatDTO>;
+  updateProject: (projectId: string, patch: UpdateProjectInput) => Promise<ProjectDTO>;
+  removeProject: (projectId: string) => Promise<void>;
+  addChat: (projectId: string, backend?: BackendConfig) => Promise<ChatDTO>;
+  removeChat: (chatId: string) => Promise<void>;
 }
 
 const ProjectsContext = createContext<ProjectsDataValue | null>(null);
 
 export function ProjectsProvider({ children }: { children: ReactNode }) {
-  const { theme, accent, wallpaper, applyTheme } = useTheme();
+  const { themeId, applyTheme } = useTheme();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [chatsByProject, setChatsByProject] = useState<Record<string, ChatDTO[]>>({});
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // docs/REDESIGN_PLAN.md Phase R4 — General pane's "default chat mode", applied to chats created
+  // via addChat below. Loaded once; the Settings modal writes straight through the engine, so a
+  // change only takes effect for chats created after this provider next mounts (a fresh window).
+  const [defaultMode, setDefaultMode] = useState<ChatMode>("agent");
+  useEffect(() => {
+    fetchGeneralSettings()
+      .then((s) => setDefaultMode(s.defaultMode))
+      .catch((err) => console.error("[rama] failed to load default chat mode", err));
+  }, []);
+
   // Tracks the theme values we last pushed onto the chrome (from selecting a chat or from
   // the app just loading it), so the persistence effect below can tell "the active chat
   // changed and brought its own theme with it" apart from "the user changed the theme while
   // this chat is active" — only the latter should PATCH the chat.
-  const lastAppliedTheme = useRef<{ theme: string; accent: string; wallpaper: string } | null>(null);
+  const lastAppliedTheme = useRef<{ themeId: string } | null>(null);
 
   // Mirrors `activeChatId` so the initial-load effect below (which only runs once and closes
   // over whatever `activeChatId` was at mount, i.e. always null) can check the *current* value
@@ -74,12 +91,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, chatId);
       const chat = allChats.find((c) => c.id === chatId);
       if (chat) {
-        lastAppliedTheme.current = { theme: chat.theme, accent: chat.accent, wallpaper: chat.wallpaper };
-        applyTheme({
-          theme: chat.theme as ThemeMode,
-          accent: chat.accent as Accent,
-          wallpaper: chat.wallpaper as Wallpaper,
-        });
+        lastAppliedTheme.current = { themeId: chat.themeId };
+        applyTheme({ themeId: chat.themeId as ThemeId });
       }
     },
     [allChats, applyTheme],
@@ -110,16 +123,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         // up yet.
         if (initialChat && activeChatIdRef.current == null) {
           setActiveChatId(initialChat.id);
-          lastAppliedTheme.current = {
-            theme: initialChat.theme,
-            accent: initialChat.accent,
-            wallpaper: initialChat.wallpaper,
-          };
-          applyTheme({
-            theme: initialChat.theme as ThemeMode,
-            accent: initialChat.accent as Accent,
-            wallpaper: initialChat.wallpaper as Wallpaper,
-          });
+          lastAppliedTheme.current = { themeId: initialChat.themeId };
+          applyTheme({ themeId: initialChat.themeId as ThemeId });
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -134,9 +139,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!activeChatId) return;
-    const current = { theme, accent, wallpaper };
+    const current = { themeId };
     const last = lastAppliedTheme.current;
-    if (last && last.theme === current.theme && last.accent === current.accent && last.wallpaper === current.wallpaper) {
+    if (last && last.themeId === current.themeId) {
       return;
     }
     lastAppliedTheme.current = current;
@@ -151,7 +156,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       .catch((err) => {
         console.error("[rama] failed to persist chat theme", err);
       });
-  }, [theme, accent, wallpaper, activeChatId]);
+  }, [themeId, activeChatId]);
 
   const addProject = useCallback(async (input: { name: string; path: string }) => {
     const project = await createProjectApi(input);
@@ -160,14 +165,54 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return project;
   }, []);
 
+  const updateProject = useCallback(async (projectId: string, patch: UpdateProjectInput) => {
+    const project = await updateProjectApi(projectId, patch);
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? project : p)));
+    return project;
+  }, []);
+
+  // Rejects with a message (see engine/src/db/projects.ts's deleteProject) rather than removing
+  // local state, if the project still has chats — nothing to reconcile client-side on failure.
+  const removeProject = useCallback(async (projectId: string) => {
+    await deleteProjectApi(projectId);
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setChatsByProject((prev) => {
+      const { [projectId]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
   const addChat = useCallback(
-    async (projectId: string) => {
-      const chat = await createChatApi(projectId, { title: "new chat", theme, accent, wallpaper });
+    async (projectId: string, backend?: BackendConfig) => {
+      const chat = await createChatApi(projectId, { title: "new chat", themeId, mode: defaultMode, backend });
       setChatsByProject((prev) => ({ ...prev, [projectId]: [chat, ...(prev[projectId] ?? [])] }));
       selectChat(chat.id);
       return chat;
     },
-    [theme, accent, wallpaper, selectChat],
+    [themeId, defaultMode, selectChat],
+  );
+
+  // Deletes the chat everywhere (engine DB + local state) and, if it was the active one, hands
+  // the selection to another chat in the same project, else any other chat, else nothing.
+  const removeChat = useCallback(
+    async (chatId: string) => {
+      const chat = allChats.find((c) => c.id === chatId);
+      await deleteChatApi(chatId);
+      setChatsByProject((prev) => {
+        const projectId = chat?.projectId;
+        if (!projectId || !prev[projectId]) return prev;
+        return { ...prev, [projectId]: prev[projectId].filter((c) => c.id !== chatId) };
+      });
+      if (activeChatId !== chatId) return;
+      const remaining = allChats.filter((c) => c.id !== chatId);
+      const next = remaining.find((c) => c.projectId === chat?.projectId) ?? remaining[0] ?? null;
+      if (next) selectChat(next.id);
+      else {
+        setActiveChatId(null);
+        window.localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY);
+      }
+    },
+    [allChats, activeChatId, selectChat],
   );
 
   const value = useMemo<ProjectsDataValue>(
@@ -181,9 +226,26 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       activeProjectId,
       selectChat,
       addProject,
+      updateProject,
+      removeProject,
       addChat,
+      removeChat,
     }),
-    [loading, error, projects, chatsByProject, allChats, activeChatId, activeProjectId, selectChat, addProject, addChat],
+    [
+      loading,
+      error,
+      projects,
+      chatsByProject,
+      allChats,
+      activeChatId,
+      activeProjectId,
+      selectChat,
+      addProject,
+      updateProject,
+      removeProject,
+      addChat,
+      removeChat,
+    ],
   );
 
   return <ProjectsContext.Provider value={value}>{children}</ProjectsContext.Provider>;

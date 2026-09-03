@@ -1,0 +1,11 @@
+{
+  "id": "sumi",
+  "label": "Sumi",
+  "family": "blue",
+  "mode": "dark",
+  "ground": "#16161d",
+  "ink": "#dcd7ba",
+  "inkLoud": "#f2ecd3",
+  "accent": "#7e9cd8",
+  "texture": { "grain": 0.30, "vignette": 0.60 }
+}

@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
    DotFieldBackground"): a 14px grid where fBm noise reveals clusters of 1px
    dots, and short dashes "hop" between neighbouring live cells. Reads its
    color from the `--dot-field-color` token (see tokens.css) and re-samples
-   it whenever data-theme/data-accent changes on <html>. */
+   it whenever data-rtheme changes on <html>. */
 
 const GRID = 14;
 const DOT = 1;
@@ -287,7 +287,7 @@ function makeDotField(canvas: HTMLCanvasElement) {
   draw(0);
 
   const mo = new MutationObserver(readTheme);
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-rtheme"] });
 
   const onResize = () => {
     resize();

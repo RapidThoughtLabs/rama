@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Button, SegmentedControl } from "@rama/ui";
-import type { ChatMode, ToolCallDTO } from "@rama/protocol";
-import { patchChat } from "../engine/client";
+import { Button, Fluke, SegmentedControl } from "@rama/ui";
+import type { ChatMode, SearchResultDTO, ToolCallDTO } from "@rama/protocol";
+import { patchChat, ramaSearch } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useSessionData } from "./data/SessionProvider";
 import { ModelPicker } from "./ModelPicker";
+import { TerminalView } from "./TerminalView";
 
 const MODES: { id: ChatMode; label: string }[] = [
   { id: "agent", label: "agent" },
   { id: "plan", label: "plan" },
   { id: "ask", label: "ask" },
 ];
+
+// A bare slash command being typed, no space yet — e.g. "/" or "/re". Loses the match as soon
+// as the user types a space (rama search only drives the composer's `/` picker, not the turn text).
+const SLASH_SEARCH_RE = /^\/(\S*)$/;
 
 function formatTokens(n: number): string {
   if (n >= 10000) return `${Math.round(n / 1000)}k`;
@@ -74,7 +79,6 @@ export function ChatColumn() {
     messages,
     status,
     usage,
-    costUsd,
     errorMessage,
     toolCalls,
     pendingPermission,
@@ -99,6 +103,103 @@ export function ChatColumn() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
+  const [searchIndex, setSearchIndex] = useState(0);
+
+  const slashMatch = typed.match(SLASH_SEARCH_RE);
+  const slashTerm = slashMatch ? slashMatch[1] : null;
+
+  // rama search (docs/IMPLEMENTATION_PLAN.md Phase 6) — a native harness search seam, not heku
+  // (heku is its own standalone MCP server scoped to config search, see Phase 7). Only the
+  // "tools" domain is registered today; more domains land as a pure addition on the engine side.
+  useEffect(() => {
+    if (slashTerm === null) {
+      setSearchOpen(false);
+      setSearchResults([]);
+      return;
+    }
+    setSearchOpen(true);
+    const timer = setTimeout(() => {
+      ramaSearch(slashTerm, activeProject?.id)
+        .then((results) => {
+          setSearchResults(results);
+          setSearchIndex(0);
+        })
+        .catch(() => setSearchResults([]));
+    }, 150);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slashTerm, activeProject?.id]);
+
+  const groupedSearchResults = useMemo(() => {
+    const groups = new Map<string, SearchResultDTO[]>();
+    for (const r of searchResults) {
+      const list = groups.get(r.domain) ?? [];
+      list.push(r);
+      groups.set(r.domain, list);
+    }
+    return [...groups.entries()];
+  }, [searchResults]);
+
+  // `commands` domain entries execute immediately instead of inserting a mention — everything
+  // else (tools/skills/mcp/docs) keeps the insert-a-mention behavior (docs/IMPLEMENTATION_PLAN.md
+  // Phase 7, Part 4). Also reachable from the ⌘K palette (CommandPalette.tsx) via a window event,
+  // since the palette lives outside this component's local composer state.
+  function runCommand(id: string) {
+    switch (id) {
+      case "cmd:mode:agent":
+        handleModeChange("agent");
+        break;
+      case "cmd:mode:plan":
+        handleModeChange("plan");
+        break;
+      case "cmd:mode:ask":
+        handleModeChange("ask");
+        break;
+      case "cmd:clear":
+        setTyped("");
+        break;
+    }
+  }
+
+  // Mirrored into a ref so the mount-only listener below always calls the latest closure — it
+  // captures activeChat (via handleModeChange) which changes on every chat switch.
+  const runCommandRef = useRef(runCommand);
+  runCommandRef.current = runCommand;
+
+  useEffect(() => {
+    function onInsert(e: Event) {
+      const text = (e as CustomEvent<string>).detail;
+      setTyped(text);
+      textareaRef.current?.focus();
+    }
+    function onRunCommand(e: Event) {
+      runCommandRef.current((e as CustomEvent<string>).detail);
+    }
+    window.addEventListener("rama:composer-insert", onInsert);
+    window.addEventListener("rama:run-command", onRunCommand);
+    return () => {
+      window.removeEventListener("rama:composer-insert", onInsert);
+      window.removeEventListener("rama:run-command", onRunCommand);
+    };
+  }, []);
+
+  function selectSearchResult(result: SearchResultDTO) {
+    if (result.domain === "commands") {
+      runCommand(result.id);
+      setSearchOpen(false);
+      setSearchResults([]);
+      textareaRef.current?.focus();
+      return;
+    }
+
+    setTyped(`/${result.title} `);
+    setSearchOpen(false);
+    setSearchResults([]);
+    textareaRef.current?.focus();
+  }
 
   // Resync only on chat switch, not on every activeChat field change — an optimistic mode
   // change (below) shouldn't get clobbered by a stale patchChat response for the same chat.
@@ -143,8 +244,30 @@ export function ChatColumn() {
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (searchOpen && searchResults.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSearchIndex((i) => (i + 1) % searchResults.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSearchIndex((i) => (i - 1 + searchResults.length) % searchResults.length);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        selectSearchResult(searchResults[searchIndex]);
+        return;
+      }
+    }
     if (e.key === "Escape") {
       e.preventDefault();
+      if (searchOpen) {
+        setSearchOpen(false);
+        setSearchResults([]);
+        return;
+      }
       if (isBusy) interrupt();
       return;
     }
@@ -157,15 +280,23 @@ export function ChatColumn() {
   const contextUsed = usage?.contextUsed ?? activeChat?.contextUsed ?? 0;
   const contextMax = usage?.contextMax ?? activeChat?.contextMax ?? 200000;
   const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
-  const cost = costUsd ?? activeChat?.costUsd ?? 0;
   const elapsedSeconds = status.runStartedAt ? Math.max(0, Math.round((now - status.runStartedAt) / 1000)) : 0;
+
+  // A cli-backed chat (docs/IMPLEMENTATION_PLAN.md Phase 8) has no own-loop turns, messages, or
+  // composer — its entire column is a live terminal. All the hooks above still ran (harmlessly)
+  // so hook order stays identical regardless of which chat is active; only the returned JSX
+  // differs. key={activeChat.id} forces a full unmount/remount when switching between two
+  // different cli chats, rather than TerminalView silently reusing its mounted instance.
+  if (activeChat?.backend.kind === "cli") {
+    return <TerminalView key={activeChat.id} chat={activeChat} project={activeProject} />;
+  }
 
   return (
     <div className="rama-chat-column">
       <div className="rama-chat-header">
         <span style={{ color: "rgba(var(--ink),0.65)" }}>⌂ {activeProject?.name ?? "—"}</span>
         <span style={{ opacity: 0.4 }}>›</span>
-        <span style={{ color: "var(--accent-bright, var(--accent))" }}>{activeChat?.title ?? "no chat selected"}</span>
+        <span style={{ color: "rgba(var(--ink),0.5)" }}>⑂ {activeProject?.defaultBranch ?? "no branch"}</span>
         <span style={{ flex: 1 }} />
         <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
           ctx
@@ -174,15 +305,17 @@ export function ChatColumn() {
           </span>
           {formatTokens(contextUsed)} / {formatTokens(contextMax)}
         </span>
-        <span style={{ opacity: 0.35 }}>·</span>
-        <span>${cost.toFixed(2)}</span>
       </div>
 
       <div className="rama-messages">
         <div className="rama-messages-inner">
-          {messages.length === 0 && (
-            <div className="rama-msg-meta">
-              {activeChat ? "no messages yet — say something." : "select or create a chat to get started."}
+          {messages.length === 0 && !activeChat && (
+            <div className="rama-msg-meta">select or create a chat to get started.</div>
+          )}
+
+          {messages.length === 0 && activeChat && (
+            <div className="rama-welcome">
+              <Fluke className="rama-welcome-fluke" />
             </div>
           )}
 
@@ -258,6 +391,37 @@ export function ChatColumn() {
       </div>
 
       <div className="rama-composer-wrap">
+        {searchOpen && (
+          <div className="rama-search-menu">
+            {searchResults.length === 0 ? (
+              <div className="rama-search-menu-empty">{slashTerm ? "no matches" : "type to search tools…"}</div>
+            ) : (
+              (() => {
+                let flatIndex = -1;
+                return groupedSearchResults.map(([domain, items]) => (
+                  <div key={domain}>
+                    <div className="rama-search-menu-group-label">{domain}</div>
+                    {items.map((r) => {
+                      flatIndex += 1;
+                      const i = flatIndex;
+                      return (
+                        <button
+                          key={r.id}
+                          className={`rama-search-menu-item${i === searchIndex ? " rama-search-menu-item-active" : ""}`}
+                          onMouseEnter={() => setSearchIndex(i)}
+                          onClick={() => selectSearchResult(r)}
+                        >
+                          <span className="rama-search-menu-item-title">{r.title}</span>
+                          <span className="rama-search-menu-item-subtitle">{r.subtitle}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ));
+              })()
+            )}
+          </div>
+        )}
         <div className="rama-composer">
           <div className="rama-composer-row">
             <span className="rama-composer-glyph">❯</span>

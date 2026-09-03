@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ChatDTO } from "@rama/protocol";
+import type { BackendConfig, ChatDTO } from "@rama/protocol";
 import { WINDOW_LABEL } from "../../engine/window";
 import { useProjectsData } from "./ProjectsProvider";
 
@@ -17,28 +17,23 @@ import { useProjectsData } from "./ProjectsProvider";
 // `@tauri-apps/api/event`. The bare form registers with target `{ kind: "Any" }` by default —
 // which, per Tauri's own event-matching code, accepts an event regardless of what label
 // `emit_to` targeted it at. Every window in the app would receive every *other* window's
-// tabs-changed/drag-hover events and stomp its own tab list with them. `getCurrentWindow().listen`
-// scopes the registration to `{ kind: "Window", label: <this window's own label> }`, so a window
-// only ever reacts to events actually addressed to it.
+// tabs-changed events and stomp its own tab list with them. `getCurrentWindow().listen` scopes
+// the registration to `{ kind: "Window", label: <this window's own label> }`, so a window only
+// ever reacts to events actually addressed to it.
 
 interface TabsChangedPayload {
   chatIds: string[];
-}
-
-interface DragHoverPayload {
-  hovering: boolean;
 }
 
 export interface WindowTabsDataValue {
   windowLabel: string;
   tabs: ChatDTO[];
   activeTabId: string | null;
-  isDropTarget: boolean;
   selectTab: (chatId: string) => void;
   openNewTab: (projectId: string) => Promise<ChatDTO>;
+  openNewTerminalTab: (projectId: string, command: string, args: string[]) => Promise<ChatDTO>;
   adoptChat: (chatId: string) => Promise<string | null>;
-  reorderTabs: (chatIds: string[]) => void;
-  beginTabDrag: (chatId: string, grabOffsetX: number, grabOffsetY: number) => void;
+  popOutTab: (chatId: string) => Promise<void>;
 }
 
 const WindowTabsContext = createContext<WindowTabsDataValue | null>(null);
@@ -46,22 +41,12 @@ const WindowTabsContext = createContext<WindowTabsDataValue | null>(null);
 export function WindowTabsProvider({ children }: { children: ReactNode }) {
   const { allChats, activeChatId, selectChat, addChat } = useProjectsData();
   const [chatIds, setChatIds] = useState<string[] | null>(null);
-  const [isDropTarget, setIsDropTarget] = useState(false);
   const seededRef = useRef(false);
 
   useEffect(() => {
     const unlisten = getCurrentWindow().listen<TabsChangedPayload>("tabs-changed", (event) => {
       seededRef.current = true;
       setChatIds(event.payload.chatIds);
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
-
-  useEffect(() => {
-    const unlisten = getCurrentWindow().listen<DragHoverPayload>("drag-hover", (event) => {
-      setIsDropTarget(event.payload.hovering);
     });
     return () => {
       unlisten.then((fn) => fn());
@@ -145,6 +130,18 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
     [addChat],
   );
 
+  // Phase 8 — same as openNewTab, but the chat is cli-backed (see TerminalView.tsx) instead of
+  // own-loop.
+  const openNewTerminalTab = useCallback(
+    async (projectId: string, command: string, args: string[]) => {
+      const backend: BackendConfig = { kind: "cli", command, args: args.length > 0 ? args : undefined };
+      const chat = await addChat(projectId, backend);
+      await invoke("add_chat_to_window", { windowLabel: WINDOW_LABEL, chatId: chat.id });
+      return chat;
+    },
+    [addChat],
+  );
+
   // Adopts an existing chat into this window's tabs, or — if it's already owned by another
   // window — returns that window's label so the caller can focus it instead (a chat is a tab in
   // at most one window; see Sidebar.tsx's click handler).
@@ -153,21 +150,13 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
     return otherOwner;
   }, []);
 
-  // Commits an in-window tab reorder (final order only — the live drag preview while reordering
-  // is purely local UI state owned by Titlebar, not this provider; see its pointer handlers).
-  const reorderTabs = useCallback((nextChatIds: string[]) => {
-    invoke("reorder_window_tabs", { windowLabel: WINDOW_LABEL, chatIds: nextChatIds }).catch((err) => {
-      console.error("[rama] failed to persist tab order", err);
-    });
-  }, []);
-
-  // Starts a real cross-window tab tear-off drag (Rust-driven poll loop; see
-  // src-tauri/src/drag.rs). `grabOffsetX/Y` are physical-pixel offsets from the tab element's
-  // top-left to where the pointer grabbed it, used so the spawned window's top-left tracks the
-  // cursor naturally rather than snapping the whole window under the pointer.
-  const beginTabDrag = useCallback((chatId: string, grabOffsetX: number, grabOffsetY: number) => {
-    invoke("begin_tab_drag", { chatId, fromLabel: WINDOW_LABEL, grabOffsetX, grabOffsetY }).catch((err) => {
-      console.error("[rama] failed to begin tab drag", err);
+  // docs/REDESIGN_PLAN.md Phase R3 — moves a chat out of this window into a brand new standalone
+  // one (src-tauri/src/drag.rs's pop_out_chat), replacing the old tear-off drag gesture with an
+  // explicit action. Rust removes the chat from this window's registry entry and emits
+  // `tabs-changed` itself, so there's nothing further to reconcile here beyond the invoke.
+  const popOutTab = useCallback(async (chatId: string) => {
+    await invoke("pop_out_chat", { chatId, fromLabel: WINDOW_LABEL }).catch((err) => {
+      console.error("[rama] failed to pop out chat", err);
     });
   }, []);
 
@@ -176,14 +165,13 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
       windowLabel: WINDOW_LABEL,
       tabs,
       activeTabId,
-      isDropTarget,
       selectTab,
       openNewTab,
+      openNewTerminalTab,
       adoptChat,
-      reorderTabs,
-      beginTabDrag,
+      popOutTab,
     }),
-    [tabs, activeTabId, isDropTarget, selectTab, openNewTab, adoptChat, reorderTabs, beginTabDrag],
+    [tabs, activeTabId, selectTab, openNewTab, openNewTerminalTab, adoptChat, popOutTab],
   );
 
   return <WindowTabsContext.Provider value={value}>{children}</WindowTabsContext.Provider>;

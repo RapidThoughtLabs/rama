@@ -15,7 +15,9 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@rama/ui": "workspace:*",
-    "@rama/protocol": "workspace:*"
+    "@rama/protocol": "workspace:*",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",

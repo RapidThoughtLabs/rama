@@ -21,3 +21,11 @@ export function setServer(server: Server<SocketData>): void {
 export function broadcast(chatId: string, event: SessionEvent): void {
   serverRef?.publish(chatId, JSON.stringify({ chatId, event }));
 }
+
+// Every connection auto-subscribes to this fixed topic (server.ts's websocket `open` handler) —
+// unlike chat events, "the theme folder changed" isn't scoped to whichever chats a client happens
+// to be subscribed to. SETTINGS_PLAN.md Phase S1's live-reload: fs.watch(THEMES_HOME) calls this,
+// the frontend refetches GET /themes on receipt rather than trying to diff the change itself.
+export function broadcastThemes(): void {
+  serverRef?.publish("themes", JSON.stringify({ type: "themes.changed" }));
+}

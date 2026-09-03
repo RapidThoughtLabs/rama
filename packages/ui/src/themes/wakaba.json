@@ -1,0 +1,15 @@
+{
+  "id": "wakaba",
+  "label": "Wakaba",
+  "family": "green",
+  "mode": "light",
+  "ground": "#ded6c3",
+  "ink": "#1f2a20",
+  "inkLoud": "#0e150d",
+  "accent": "#3a5241",
+  "semantic": { "good": "#3f7ea6" },
+  "wallpaper": {
+    "css": "linear-gradient(180deg, #f2ede0 0%, #ded6c3 45%, #c2bfac 100%)",
+    "veil": 0.50
+  }
+}

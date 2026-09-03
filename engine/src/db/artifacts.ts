@@ -7,6 +7,10 @@ import { newId } from "./ids";
 // content-addressed blob store (~/.rama/blobs/) instead.
 const INLINE_THRESHOLD = 4096;
 
+// Trailing cap for incrementally-appended bodies (PTY output) — terminal scrollback is
+// inherently boundable, so this keeps only the most recent output rather than growing forever.
+const MAX_TERMINAL_BODY_BYTES = 200_000;
+
 interface ArtifactRow {
   id: string;
   chat_id: string;
@@ -54,15 +58,18 @@ export interface CreateArtifactInput {
   status?: "streaming" | "done";
 }
 
+function storeBody(body: string): { bodyHash: string | null; bodyInline: string | null; size: number } {
+  const size = Buffer.byteLength(body);
+  const inline = size < INLINE_THRESHOLD;
+  return { bodyInline: inline ? body : null, bodyHash: inline ? null : writeBlob(body).hash, size };
+}
+
 // `id` can be pre-minted by a caller that already broadcast `artifact.created` with it before
 // the body was ready (bash streams live, then persists once at the end — see agent/loop.ts).
 export function createArtifact(input: CreateArtifactInput): ArtifactDTO {
   const id = input.id ?? newId();
   const now = Date.now();
-  const size = Buffer.byteLength(input.body);
-  const inline = size < INLINE_THRESHOLD;
-  const bodyInline = inline ? input.body : null;
-  const bodyHash = inline ? null : writeBlob(input.body).hash;
+  const { bodyHash, bodyInline, size } = storeBody(input.body);
 
   db.query(
     `INSERT INTO artifacts (id, chat_id, project_id, message_id, tool_call_id, kind, name, meta_json, body_hash, body_inline, size, status, created_at, updated_at)
@@ -109,4 +116,35 @@ export function getArtifactContent(id: string): string | null {
   if (row.body_inline !== null) return row.body_inline;
   if (row.body_hash) return readBlob(row.body_hash);
   return null;
+}
+
+// Re-stores the full (possibly trailing-truncated) body on every call — unlike bash.ts's
+// write-once artifact, a PTY session's output needs to survive a reload/reopen mid-stream, so
+// this is called periodically (see POST /chats/:id/pty/data) rather than only once at the end.
+export function appendArtifactBody(id: string, delta: string): void {
+  const current = getArtifactContent(id) ?? "";
+  let next = current + delta;
+  if (Buffer.byteLength(next) > MAX_TERMINAL_BODY_BYTES) {
+    next = `… truncated …\n${next.slice(-MAX_TERMINAL_BODY_BYTES)}`;
+  }
+  const { bodyHash, bodyInline, size } = storeBody(next);
+  db.query("UPDATE artifacts SET body_hash = ?, body_inline = ?, size = ?, updated_at = ? WHERE id = ?").run(
+    bodyHash,
+    bodyInline,
+    size,
+    Date.now(),
+    id,
+  );
+}
+
+export function finalizeArtifact(id: string, meta?: Record<string, unknown>): void {
+  if (meta) {
+    db.query("UPDATE artifacts SET status = 'done', meta_json = ?, updated_at = ? WHERE id = ?").run(
+      JSON.stringify(meta),
+      Date.now(),
+      id,
+    );
+  } else {
+    db.query("UPDATE artifacts SET status = 'done', updated_at = ? WHERE id = ?").run(Date.now(), id);
+  }
 }

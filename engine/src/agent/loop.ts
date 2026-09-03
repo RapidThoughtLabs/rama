@@ -8,7 +8,9 @@ import { appendMessage, finalizeMessage, listMessages } from "../db/messages";
 import { getProject } from "../db/projects";
 import { getProvider, type ProviderRow } from "../db/providers";
 import { createToolCall, finalizeToolCall } from "../db/toolCalls";
+import { getServerTools } from "../mcp/registry";
 import { getSecret } from "../secrets";
+import { createSkillTools } from "../skills/tools";
 import { createTools } from "../tools";
 import type { ToolResult } from "../tools/types";
 import { broadcast } from "../ws";
@@ -71,6 +73,14 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
     return;
   }
 
+  // A cli-backed chat's "turns" are driven by its PTY (see /chats/:id/pty/* routes), not this
+  // loop — the composer isn't even used for these chats client-side, but guard here too in case
+  // a stale client still sends one.
+  if (chat.backend.kind === "cli") {
+    broadcast(chatId, { type: "error", message: "this chat is backed by a CLI process — use its terminal, not chat turns" });
+    return;
+  }
+
   const project = getProject(chat.projectId);
   if (!project) {
     broadcast(chatId, { type: "error", message: `project ${chat.projectId} not found` });
@@ -107,13 +117,18 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
 
   const languageModel = resolveModel(providerRow, model, apiKey);
 
-  const tools = createTools({
+  const toolCtx = {
     chatId,
     projectId: project.id,
     projectPath: project.path,
     mode: chat.mode,
     abortSignal: controller.signal,
-  });
+  };
+  const tools = {
+    ...createTools(toolCtx),
+    ...createSkillTools(toolCtx),
+    ...(await getServerTools(toolCtx)),
+  };
 
   broadcast(chatId, { type: "run.started", runId, ts: Date.now() });
   broadcast(chatId, { type: "status", state: "thinking", verb: "thinking" });

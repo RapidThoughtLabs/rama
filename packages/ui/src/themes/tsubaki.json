@@ -1,0 +1,13 @@
+{
+  "id": "tsubaki",
+  "label": "Tsubaki",
+  "family": "red",
+  "mode": "dark",
+  "ground": "#1c0f14",
+  "ink": "#ecd9dd",
+  "inkLoud": "#f7ecee",
+  "accent": "#cf8fa0",
+  "semantic": { "bad": "#d9455c", "bad2": "#e86a80" },
+  "texture": { "grain": 0.30, "vignette": 0.60 },
+  "wallpaper": { "image": "/wallpapers/nebula-rose.jpg", "veil": 0.60 }
+}

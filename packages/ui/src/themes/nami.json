@@ -1,0 +1,14 @@
+{
+  "id": "nami",
+  "label": "Nami",
+  "family": "blue",
+  "mode": "light",
+  "ground": "#eee7d8",
+  "ink": "#1a2129",
+  "inkLoud": "#0e1b28",
+  "accent": "#1f5c8c",
+  "wallpaper": {
+    "css": "radial-gradient(140% 100% at 50% -10%, rgba(180,210,230,0.55), transparent 60%), radial-gradient(90% 70% at 85% 100%, rgba(150,190,215,0.35), transparent 65%)",
+    "veil": 0.55
+  }
+}

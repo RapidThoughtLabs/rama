@@ -1,0 +1,16 @@
+{
+  "id": "rokusho",
+  "label": "Rokushō",
+  "family": "green",
+  "mode": "dark",
+  "ground": "#0b1410",
+  "ink": "#cdd6c8",
+  "inkLoud": "#f2ede0",
+  "accent": "#4fbfa0",
+  "semantic": { "good": "#7fb8d9", "warn": "#d4af37" },
+  "texture": { "grain": 0.30, "vignette": 0.62 },
+  "wallpaper": {
+    "css": "radial-gradient(70% 60% at 25% 10%, rgba(79,191,160,0.35), transparent 60%), radial-gradient(60% 50% at 85% 90%, rgba(212,175,55,0.12), transparent 65%)",
+    "veil": 0.55
+  }
+}

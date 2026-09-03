@@ -1,0 +1,14 @@
+{
+  "id": "sakura",
+  "label": "Sakura",
+  "family": "red",
+  "mode": "light",
+  "ground": "#f6e8ea",
+  "ink": "#241417",
+  "inkLoud": "#120a0b",
+  "accent": "#b23a54",
+  "wallpaper": {
+    "css": "radial-gradient(130% 100% at 20% -10%, rgba(240,190,200,0.55), transparent 62%), radial-gradient(90% 70% at 90% 100%, rgba(225,160,175,0.35), transparent 65%)",
+    "veil": 0.55
+  }
+}

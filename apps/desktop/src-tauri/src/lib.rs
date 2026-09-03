@@ -1,16 +1,17 @@
 mod drag;
 mod engine;
-mod mouse_button;
+mod pty;
 mod secrets;
 mod window_registry;
 
-use drag::{begin_tab_drag, cancel_active_drag, DragState};
+use drag::pop_out_chat;
 use engine::{get_engine_connection, spawn_engine, EngineState};
+use pty::{pty_is_running, pty_kill, pty_resize, pty_spawn, pty_write, PtyState};
 use secrets::{get_provider_key, set_provider_key};
 use tauri::Manager;
 use window_registry::{
-    add_chat_to_window, attach_lifecycle_handlers, get_window_tabs, initialize_window_tabs, reorder_window_tabs,
-    WindowRegistry,
+    add_chat_to_window, attach_lifecycle_handlers, get_window_tabs, initialize_window_tabs, list_all_window_tabs,
+    remove_chat_from_windows, WindowRegistry,
 };
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -25,7 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(EngineState::default())
         .manage(WindowRegistry::default())
-        .manage(DragState::default())
+        .manage(PtyState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             get_engine_connection,
@@ -33,9 +34,15 @@ pub fn run() {
             get_provider_key,
             initialize_window_tabs,
             get_window_tabs,
+            list_all_window_tabs,
             add_chat_to_window,
-            reorder_window_tabs,
-            begin_tab_drag
+            remove_chat_from_windows,
+            pop_out_chat,
+            pty_spawn,
+            pty_write,
+            pty_resize,
+            pty_kill,
+            pty_is_running
         ])
         .setup(|app| {
             match spawn_engine() {
@@ -56,7 +63,7 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         if let tauri::RunEvent::Exit = event {
-            cancel_active_drag(app_handle);
+            pty::kill_all(app_handle);
             drop(app_handle.state::<EngineState>().0.lock().unwrap().take());
         }
     });

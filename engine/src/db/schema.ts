@@ -20,9 +20,10 @@ CREATE TABLE IF NOT EXISTS chats (
   provider_id TEXT NOT NULL DEFAULT 'together',
   model TEXT,
   mode TEXT NOT NULL DEFAULT 'agent',
-  wallpaper TEXT NOT NULL DEFAULT 'indigo',
-  accent TEXT NOT NULL DEFAULT 'plasma',
-  theme TEXT NOT NULL DEFAULT 'dark',
+  wallpaper TEXT NOT NULL DEFAULT 'indigo', -- dead: SETTINGS_PLAN.md Phase S0, wallpaper moved into the theme record
+  theme_id TEXT NOT NULL DEFAULT 'kanagawa',
+  accent TEXT NOT NULL DEFAULT 'plasma', -- dead: superseded by theme_id (docs/REDESIGN_PLAN.md Phase R0)
+  theme TEXT NOT NULL DEFAULT 'dark', -- dead: superseded by theme_id (docs/REDESIGN_PLAN.md Phase R0)
   status TEXT NOT NULL DEFAULT 'idle',
   cost_usd REAL NOT NULL DEFAULT 0,
   context_used INTEGER NOT NULL DEFAULT 0,
@@ -85,5 +86,22 @@ CREATE TABLE IF NOT EXISTS providers (
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS skills (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  source TEXT NOT NULL,
+  path TEXT NOT NULL,
+  description TEXT,
+  installed_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  transport_json TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
 );
 `;

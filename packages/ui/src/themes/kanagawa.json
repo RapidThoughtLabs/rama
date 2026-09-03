@@ -1,0 +1,12 @@
+{
+  "id": "kanagawa",
+  "label": "Kanagawa",
+  "family": "blue",
+  "mode": "dark",
+  "ground": "#081420",
+  "ink": "#dce7ee",
+  "inkLoud": "#f3ecdd",
+  "accent": "#6fb6e6",
+  "texture": { "grain": 0.28, "vignette": 0.58 },
+  "wallpaper": { "image": "/wallpapers/nebula-indigo.jpg", "veil": 0.62 }
+}

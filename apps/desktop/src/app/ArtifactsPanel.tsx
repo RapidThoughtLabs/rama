@@ -74,14 +74,14 @@ export function ArtifactsPanel() {
         <span className="t-label">artifacts</span>
         <span className="rama-badge rama-badge-accent">{artifacts.length}</span>
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 9.5, color: "var(--accent-bright, var(--accent))", cursor: "pointer" }}>all</span>
-        <span style={{ fontSize: 9.5, color: "rgba(var(--ink),0.35)", cursor: "pointer" }}>files</span>
-        <span style={{ fontSize: 9.5, color: "rgba(var(--ink),0.35)", cursor: "pointer" }}>tools</span>
+        <span style={{ fontSize: "var(--fs-micro)", color: "var(--accent-bright, var(--accent))", cursor: "pointer" }}>all</span>
+        <span style={{ fontSize: "var(--fs-micro)", color: "rgba(var(--ink),0.35)", cursor: "pointer" }}>files</span>
+        <span style={{ fontSize: "var(--fs-micro)", color: "rgba(var(--ink),0.35)", cursor: "pointer" }}>tools</span>
       </div>
 
       <div className="rama-artifacts-list">
         {artifacts.length === 0 && (
-          <div style={{ padding: "8px 12px", fontSize: 11, color: "rgba(var(--ink),0.4)" }}>no artifacts yet.</div>
+          <div style={{ padding: "8px 12px", fontSize: "var(--fs-sm)", color: "rgba(var(--ink),0.4)" }}>no artifacts yet.</div>
         )}
         {artifacts.map((a) => (
           <div
@@ -106,7 +106,7 @@ export function ArtifactsPanel() {
           <div className="rama-artifact-preview-toolbar">
             <span
               style={{
-                fontSize: 11,
+                fontSize: "var(--fs-sm)",
                 color: "rgb(var(--ink))",
                 fontWeight: 600,
                 overflow: "hidden",
@@ -118,7 +118,7 @@ export function ArtifactsPanel() {
             </span>
             <span
               style={{
-                fontSize: 8.5,
+                fontSize: "var(--fs-micro)",
                 color: "rgba(var(--ink),0.4)",
                 border: "1px solid rgba(var(--ink),0.1)",
                 borderRadius: 99,
@@ -128,10 +128,10 @@ export function ArtifactsPanel() {
               {active.kind}
             </span>
             <span style={{ flex: 1 }} />
-            <span title="Copy" style={{ fontSize: 11, color: "rgba(var(--ink),0.4)", cursor: "pointer" }}>
+            <span title="Copy" style={{ fontSize: "var(--fs-sm)", color: "rgba(var(--ink),0.4)", cursor: "pointer" }}>
               ⧉
             </span>
-            <span title="Open in editor" style={{ fontSize: 11, color: "rgba(var(--ink),0.4)", cursor: "pointer" }}>
+            <span title="Open in editor" style={{ fontSize: "var(--fs-sm)", color: "rgba(var(--ink),0.4)", cursor: "pointer" }}>
               ↗
             </span>
           </div>
@@ -154,7 +154,7 @@ export function ArtifactsPanel() {
                   padding: "0 16px",
                   whiteSpace: "pre-wrap",
                   fontFamily: "inherit",
-                  fontSize: 12,
+                  fontSize: "var(--fs-md)",
                   color: "rgba(var(--ink),0.75)",
                 }}
               >

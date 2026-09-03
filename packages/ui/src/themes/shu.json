@@ -1,0 +1,13 @@
+{
+  "id": "shu",
+  "label": "Shu",
+  "family": "red",
+  "mode": "dark",
+  "ground": "#140a09",
+  "ink": "#e8d6cc",
+  "inkLoud": "#fbeee6",
+  "accent": "#e34a33",
+  "semantic": { "bad": "#e34d7a", "bad2": "#ff6f9c" },
+  "texture": { "grain": 0.30, "vignette": 0.62 },
+  "wallpaper": { "image": "/wallpapers/nebula-inferno.jpg", "veil": 0.62 }
+}

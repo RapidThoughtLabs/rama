@@ -5,13 +5,15 @@ export interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Extra class on `.rama-modal` — e.g. `rama-modal-wide` for a multi-pane layout. */
+  className?: string;
 }
 
-export function Modal({ open, title, onClose, children }: ModalProps) {
+export function Modal({ open, title, onClose, children, className }: ModalProps) {
   if (!open) return null;
   return (
     <div className="rama-modal-overlay" onClick={onClose}>
-      <div className="rama-modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`rama-modal${className ? ` ${className}` : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="rama-modal-header">
           <span>{title}</span>
           <button className="rama-modal-close" onClick={onClose}>

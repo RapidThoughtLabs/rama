@@ -9,8 +9,9 @@
   position: absolute;
   inset: 0;
   background-image: var(--wp);
-  background-size: cover;
-  background-position: center;
+  background-size: var(--wp-fit, cover);
+  background-position: var(--wp-position, center);
+  mix-blend-mode: var(--wp-blend, normal);
 }
 
 .rama-wallpaper-veil {
