@@ -1,15 +1,20 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { WallpaperStack } from "@rama/ui";
 import { Titlebar } from "./Titlebar";
 import { Sidebar } from "./Sidebar";
 import { ChatColumn } from "./ChatColumn";
-import { ArtifactsPanel } from "./ArtifactsPanel";
 import { CommandPalette } from "./CommandPalette";
 import { DocsPage } from "./DocsPage";
 import { HomePane } from "./HomePane";
+import { AgentTerminalBridge } from "./mission-control/AgentTerminalBridge";
+import { AgentWebBridge } from "./mission-control/AgentWebBridge";
+import { MissionControl } from "./mission-control/MissionControl";
+import { useMissionControlGeometry } from "./mission-control/useMissionControlGeometry";
 import { SettingsModal } from "./SettingsModal";
 import { StatusBar } from "./StatusBar";
 import { ToolboxPage } from "./ToolboxPage";
+import { useSettingsLink } from "./data/SettingsLinkContext";
 import { WINDOW_LABEL } from "../engine/window";
 import "./app-shell.css";
 
@@ -25,15 +30,20 @@ const IS_MAIN_WINDOW = WINDOW_LABEL === "main";
 export type MainView = "home" | "code" | "toolbox" | "docs";
 
 export function AppShell() {
-  const [panelOpen, setPanelOpen] = useState(true);
+  // docs/MISSION_CONTROL_PLAN.md M1 — Mission Control's whole width/collapse/pane/rail state,
+  // persisted per window. Owned here (not inside <MissionControl>) because Titlebar's toggle
+  // button and the command palette's "toggle mission control" action both need to drive
+  // `panelCollapsed` without a context.
+  const geometry = useMissionControlGeometry();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [view, setView] = useState<MainView>("code");
   // docs/REDESIGN_PLAN.md Phase R4 — one settings modal, opened from the sidebar footer (main
-  // window) or ⌘, / the ⌘K command palette (every window — see CommandPalette.tsx), so the
-  // open/close state is lifted here rather than owned by either.
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // window), ⌘, / the ⌘K command palette (every window — see CommandPalette.tsx), or a P1 deep
+  // link (ModelPicker's banner, StatusBar's dot) — SettingsLinkContext owns open/close + target
+  // so none of those callers need to prop-drill through this component.
+  const { isOpen: settingsOpen, target: settingsTarget, open: openSettings, close: closeSettings } = useSettingsLink();
 
-  const bodyClass = ["rama-body", panelOpen ? "" : "rama-body-panel-collapsed"].filter(Boolean).join(" ");
+  const bodyClass = ["rama-body", geometry.panelCollapsed ? "rama-body-panel-collapsed" : ""].filter(Boolean).join(" ");
 
   // docs/REDESIGN_PLAN.md Phase R2 — native macOS traffic lights are an OS overlay fixed at the
   // window's top-left corner regardless of DOM (tauri.conf.json: titleBarStyle "Overlay"). The
@@ -44,13 +54,15 @@ export function AppShell() {
 
   return (
     <div className="rama-root" data-screen-label="rama app">
+      <AgentTerminalBridge />
+      <AgentWebBridge />
       <WallpaperStack />
       <div className="rama-frame">
         {IS_MAIN_WINDOW && (
           <Sidebar
             collapsed={!sidebarOpen}
             onToggleCollapse={() => setSidebarOpen((v) => !v)}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={() => openSettings()}
             view={view}
             onNavigate={setView}
           />
@@ -58,8 +70,8 @@ export function AppShell() {
         <div className="rama-main">
           <Titlebar
             reserveTrafficGap={reserveTrafficGapInTitlebar}
-            panelOpen={panelOpen}
-            onTogglePanel={() => setPanelOpen((v) => !v)}
+            panelOpen={!geometry.panelCollapsed}
+            onTogglePanel={geometry.togglePanelCollapsed}
             showViewTabs={IS_MAIN_WINDOW}
             showSidebarToggle={IS_MAIN_WINDOW && !sidebarOpen}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
@@ -70,17 +82,32 @@ export function AppShell() {
           {IS_MAIN_WINDOW && view === "toolbox" && <ToolboxPage />}
           {IS_MAIN_WINDOW && view === "docs" && <DocsPage />}
           {(!IS_MAIN_WINDOW || view === "code") && (
-            <div className={bodyClass}>
+            <div
+              ref={geometry.bodyRef}
+              className={bodyClass}
+              data-dragging={geometry.dragging || undefined}
+              style={{ "--mc-w": `${geometry.width}px` } as CSSProperties}
+            >
               <ChatColumn />
-              {panelOpen && <ArtifactsPanel />}
+              {!geometry.panelCollapsed && <MissionControl geometry={geometry} />}
             </div>
           )}
 
           <StatusBar />
         </div>
       </div>
-      <CommandPalette onTogglePanel={() => setPanelOpen((v) => !v)} onOpenSettings={() => setSettingsOpen(true)} />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CommandPalette
+        onTogglePanel={geometry.togglePanelCollapsed}
+        onOpenSettings={() => openSettings()}
+        onSelectPane={geometry.setActivePaneId}
+        onToggleRail={geometry.toggleRailCollapsed}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={closeSettings}
+        initialPane={settingsTarget?.pane}
+        focusProviderId={settingsTarget?.providerId}
+      />
     </div>
   );
 }

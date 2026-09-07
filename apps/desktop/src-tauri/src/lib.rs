@@ -2,13 +2,15 @@ mod drag;
 mod engine;
 mod pty;
 mod secrets;
+mod webview;
 mod window_registry;
 
 use drag::pop_out_chat;
 use engine::{get_engine_connection, spawn_engine, EngineState};
-use pty::{pty_is_running, pty_kill, pty_resize, pty_spawn, pty_write, PtyState};
-use secrets::{get_provider_key, set_provider_key};
+use pty::{pty_is_running, pty_kill, pty_list_running, pty_resize, pty_spawn, pty_write, PtyState};
+use secrets::{delete_provider_key, get_provider_key, set_provider_key};
 use tauri::Manager;
+use webview::{webview_create, webview_destroy, webview_eval, webview_navigate, webview_set_bounds, webview_set_visible, EvalState};
 use window_registry::{
     add_chat_to_window, attach_lifecycle_handlers, get_window_tabs, initialize_window_tabs, list_all_window_tabs,
     remove_chat_from_windows, WindowRegistry,
@@ -27,11 +29,13 @@ pub fn run() {
         .manage(EngineState::default())
         .manage(WindowRegistry::default())
         .manage(PtyState::default())
+        .manage(EvalState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             get_engine_connection,
             set_provider_key,
             get_provider_key,
+            delete_provider_key,
             initialize_window_tabs,
             get_window_tabs,
             list_all_window_tabs,
@@ -42,7 +46,14 @@ pub fn run() {
             pty_write,
             pty_resize,
             pty_kill,
-            pty_is_running
+            pty_is_running,
+            pty_list_running,
+            webview_create,
+            webview_navigate,
+            webview_set_bounds,
+            webview_set_visible,
+            webview_destroy,
+            webview_eval
         ])
         .setup(|app| {
             match spawn_engine() {

@@ -131,3 +131,23 @@ export function IconSun(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+// docs/MISSION_CONTROL_PLAN.md M1 — Mission Control's three pane tabs.
+export function IconArtifacts(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M8 2.2 13.6 5.4 8 8.6 2.4 5.4 8 2.2Z" />
+      <path d="M2.4 8.2 8 11.4l5.6-3.2" />
+      <path d="M2.4 11 8 14.2 13.6 11" />
+    </svg>
+  );
+}
+
+export function IconWeb(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M2 8h12M8 2c1.8 1.8 2.8 4 2.8 6s-1 4.2-2.8 6c-1.8-1.8-2.8-4-2.8-6S6.2 3.8 8 2Z" />
+    </svg>
+  );
+}

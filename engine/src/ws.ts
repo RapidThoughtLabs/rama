@@ -22,6 +22,13 @@ export function broadcast(chatId: string, event: SessionEvent): void {
   serverRef?.publish(chatId, JSON.stringify({ chatId, event }));
 }
 
+// docs/MISSION_CONTROL_PLAN.md §5.3 — terminals are project-scoped, not chat-scoped, so their
+// SessionEvents (`terminal.*`) ride a `project:{id}` topic instead of a chat topic. Same thin
+// envelope shape as broadcast() above, just keyed by projectId instead of chatId.
+export function broadcastProject(projectId: string, event: SessionEvent): void {
+  serverRef?.publish(`project:${projectId}`, JSON.stringify({ projectId, event }));
+}
+
 // Every connection auto-subscribes to this fixed topic (server.ts's websocket `open` handler) —
 // unlike chat events, "the theme folder changed" isn't scoped to whichever chats a client happens
 // to be subscribed to. SETTINGS_PLAN.md Phase S1's live-reload: fs.watch(THEMES_HOME) calls this,

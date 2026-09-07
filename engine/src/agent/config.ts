@@ -1,159 +1,84 @@
-// Default provider/model for new chats, plus the model registry: capability flags (tools?
-// thinking?) and $/million-token pricing, keyed by provider then model id. Phase 4
-// (docs/IMPLEMENTATION_PLAN.md) generalized this from a single Together-only table so
-// loop.ts and the /providers endpoint can both read model metadata from one place.
+// Default provider/model for new chats, plus model listing + cost estimation, which now read
+// through engine/src/db/providerModels.ts (the provider_models table) instead of the static
+// MODEL_REGISTRY this file used to own — see docs/PROVIDERS_PLAN.md Phase P0.
 
 import type { ModelInfo } from "@rama/protocol";
+import { getModelRole } from "../db/modelRoles";
+import { computeCostUsd, listProviderModels } from "../db/providerModels";
 
-export const DEFAULT_PROVIDER_ID = "together";
-export const DEFAULT_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
+// docs/PROVIDERS_PLAN.md Phase P2 — replaces the old exported DEFAULT_PROVIDER_ID/DEFAULT_MODEL
+// consts. Not exported: this is purely the last-resort fallback for a fresh install with no
+// `chat` role set yet (no wizard has run to set one — see Phase P5). Once a human or a future
+// wizard sets the `chat` role, this value is never read again.
+const FALLBACK_CHAT_PROVIDER_ID = "together";
+const FALLBACK_CHAT_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
+
+export function getChatRoleModel(): { providerId: string; model: string } {
+  const role = getModelRole("chat");
+  if (role) return { providerId: role.provider_id, model: role.model_id };
+  return { providerId: FALLBACK_CHAT_PROVIDER_ID, model: FALLBACK_CHAT_MODEL };
+}
 
 export const SYSTEM_PROMPT =
   "You are Rama, a coding assistant running in a desktop terminal-chat app, working in a real " +
-  "project directory on disk. You have six tools, all scoped to that project directory: " +
-  "read, write, edit (exact string replace), grep, ls, and bash. Use them whenever a task needs " +
-  "real file or shell access instead of guessing. Depending on the chat's mode, a write/edit/bash " +
-  "call may come back blocked (read-only mode) or denied (the user was asked and said no) — " +
-  "treat that as real information and adapt, don't just retry the same call.";
-
-interface ModelSpec extends ModelInfo {
-  inputPerMillion: number;
-  outputPerMillion: number;
-}
-
-// Approximate pricing — several of these providers don't report a dollar cost directly, so
-// cost.update is estimated from this table. Adjust as needed; it's a display nicety, not
-// billing. Context windows and tool/thinking support are likewise best-effort, used to drive
-// the model picker UI rather than to gate requests.
-export const MODEL_REGISTRY: Record<string, ModelSpec[]> = {
-  together: [
-    {
-      id: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-      label: "Llama 3.3 70B Turbo",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 128_000,
-      inputPerMillion: 0.88,
-      outputPerMillion: 0.88,
-    },
-    {
-      id: "deepseek-ai/DeepSeek-V3",
-      label: "DeepSeek V3",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 128_000,
-      inputPerMillion: 1.25,
-      outputPerMillion: 1.25,
-    },
-    {
-      id: "Qwen/Qwen2.5-72B-Instruct-Turbo",
-      label: "Qwen 2.5 72B Turbo",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 32_000,
-      inputPerMillion: 1.2,
-      outputPerMillion: 1.2,
-    },
-  ],
-  openai: [
-    {
-      id: "gpt-4.1",
-      label: "GPT-4.1",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 1_000_000,
-      inputPerMillion: 2,
-      outputPerMillion: 8,
-    },
-    {
-      id: "gpt-4.1-mini",
-      label: "GPT-4.1 mini",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 1_000_000,
-      inputPerMillion: 0.4,
-      outputPerMillion: 1.6,
-    },
-    {
-      id: "o4-mini",
-      label: "o4-mini",
-      supportsTools: true,
-      supportsThinking: true,
-      contextWindow: 200_000,
-      inputPerMillion: 1.1,
-      outputPerMillion: 4.4,
-    },
-  ],
-  anthropic: [
-    {
-      id: "claude-sonnet-5",
-      label: "Claude Sonnet 5",
-      supportsTools: true,
-      supportsThinking: true,
-      contextWindow: 200_000,
-      inputPerMillion: 3,
-      outputPerMillion: 15,
-    },
-    {
-      id: "claude-opus-4-8",
-      label: "Claude Opus 4.8",
-      supportsTools: true,
-      supportsThinking: true,
-      contextWindow: 200_000,
-      inputPerMillion: 15,
-      outputPerMillion: 75,
-    },
-    {
-      id: "claude-haiku-4-5-20251001",
-      label: "Claude Haiku 4.5",
-      supportsTools: true,
-      supportsThinking: true,
-      contextWindow: 200_000,
-      inputPerMillion: 0.8,
-      outputPerMillion: 4,
-    },
-  ],
-  groq: [
-    {
-      id: "llama-3.3-70b-versatile",
-      label: "Llama 3.3 70B (Groq)",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 128_000,
-      inputPerMillion: 0.59,
-      outputPerMillion: 0.79,
-    },
-  ],
-  openrouter: [
-    {
-      id: "meta-llama/llama-3.3-70b-instruct",
-      label: "Llama 3.3 70B (OpenRouter)",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 128_000,
-      inputPerMillion: 0.6,
-      outputPerMillion: 0.6,
-    },
-  ],
-  ollama: [
-    {
-      id: "llama3.3",
-      label: "Llama 3.3 (local)",
-      supportsTools: true,
-      supportsThinking: false,
-      contextWindow: 128_000,
-      inputPerMillion: 0,
-      outputPerMillion: 0,
-    },
-  ],
-};
+  "project directory on disk. You have sixteen tools, all scoped to that project directory: " +
+  "read, write, edit (atomic, exact-string replace, takes an array of edits), file_op (move/copy/" +
+  "remove/mkdir), glob, grep, tree, outline, bash, git, git_write, check, todo, explore, " +
+  "heku_find, and heku_call. Use " +
+  "them whenever a task needs real file, shell, or git access instead of guessing. read prefixes " +
+  "each line with a line-number gutter for display only — never copy that gutter into edit's " +
+  "oldString, it will not match the file's real bytes. Prefer outline over read for a file over " +
+  "~500 lines when you just need to find where something is defined — it's a heuristic top-level " +
+  "symbol list, not a full parse, so double-check anything that looks off. edit and write on an " +
+  "existing file both require you to have read that file first in this chat, and refuse if it " +
+  "changed on disk since — re-read it rather than retrying blindly. write refuses to replace a " +
+  "file with much less content unless you pass overwrite: true — use edit for a targeted change " +
+  "instead of rewriting a whole file. A successful edit or write runs a fast typecheck on the " +
+  "file(s) you just touched automatically and reports any new diagnostics right there — react to " +
+  "those before moving on, don't wait to be asked. bash is one persistent shell for the whole run " +
+  "— cd and exported vars carry over to your next bash call, they don't reset each time. Use git " +
+  "for status/diff/log/show/blame and git_write for stage/commit/branch/checkout/restore/stash " +
+  "instead of shelling out to git with bash — git's diff defaults to a compact file+stats summary " +
+  "(hunks: true costs far more, ask for it only on the files you need). git_write has no push/" +
+  "pull/fetch/merge/rebase and no --force — those are out of scope; it refuses a commit with " +
+  "nothing staged, on a detached HEAD, or mid-rebase/merge, and refuses restore/checkout that " +
+  "would discard uncommitted changes, naming them so you can stash first. Run check before " +
+  "declaring work complete — it runs the project's real typecheck/lint/test/build commands and " +
+  "returns structured, capped diagnostics, not raw output; it defaults to typecheck + lint, pass " +
+  "kinds: [\"test\"] explicitly since it's slow, and a kind can come back \"not available\" if " +
+  "this project has no resolvable command for it. Use todo to track a multi-part task: call it " +
+  "with op: \"set\" once at the start with the whole plan, then op: \"update\" to move exactly one " +
+  "item to \"active\" as you start it and \"done\" as you finish it — while any item is open, the " +
+  "list is automatically re-shown to you before every step, so you don't need to re-read it or " +
+  "re-explain the plan yourself. Use explore to answer a specific codebase question — \"where is " +
+  "X\", \"how does Y work\" — by delegating it to a nested read-only sub-agent instead of spending " +
+  "your own reads on it: it costs one step and returns a cited prose answer, which is far cheaper " +
+  "than reading the same files yourself when you only need the answer, not the file bodies. If " +
+  "any external (MCP-connected) capabilities are listed below, use heku_find to search them by " +
+  "what you want to do, then heku_call with the exact id it returns and args matching its schema " +
+  "— never guess an external tool's id or args without calling heku_find first. A " +
+  "command a native tool already covers (cat/head/tail on one file, mv/cp/rm/mkdir, sed -i, " +
+  "find -name, grep -r/rg, any git subcommand) comes back redirecting you to that tool instead of " +
+  "running — pass override: true to bash only for a genuine exception; a command that's simply " +
+  "dangerous (rm -rf /, a force-push, piping a download into a shell) is refused outright and " +
+  "override will not change that. Depending on the chat's mode, a write/edit/bash/git_write call " +
+  "may come back blocked (read-only mode) or denied (the user was asked and said no) — treat that " +
+  "as real information and adapt, don't just retry the same call. Read-only commands (ls, cat, " +
+  "git status/diff/log, etc.) and the git/check/outline/todo/explore/heku_find tools run without " +
+  "asking even in ask mode; anything else, including heku_call, still does.";
 
 export function getModelsForProvider(providerId: string): ModelInfo[] {
-  return (MODEL_REGISTRY[providerId] ?? []).map(({ inputPerMillion, outputPerMillion, ...m }) => m);
+  return listProviderModels(providerId);
 }
 
-export function estimateCostUsd(providerId: string, model: string, inputTokens: number, outputTokens: number): number {
-  const spec =
-    MODEL_REGISTRY[providerId]?.find((m) => m.id === model) ?? MODEL_REGISTRY[DEFAULT_PROVIDER_ID][0];
-  return (inputTokens / 1_000_000) * spec.inputPerMillion + (outputTokens / 1_000_000) * spec.outputPerMillion;
+// Returns pricingKnown: false (and usd: 0) rather than silently borrowing another model's price —
+// the old MODEL_REGISTRY-backed version fell back to Together's Llama pricing for any unknown
+// provider/model pair, which reported a real dollar figure that was simply wrong.
+export function estimateCostUsd(
+  providerId: string,
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): { usd: number; pricingKnown: boolean } {
+  return computeCostUsd(providerId, model, inputTokens, outputTokens);
 }

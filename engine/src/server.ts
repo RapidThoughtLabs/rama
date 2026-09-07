@@ -2,10 +2,22 @@ import type { ClientCommand, GeneralSettingsDTO, PermissionSettings } from "@ram
 import { interrupt, isRunning, runTurn } from "./agent/loop";
 import { resolvePermission } from "./agent/permissions";
 import { checkAuth } from "./auth";
-import { appendArtifactBody, createArtifact, finalizeArtifact, getArtifactContent, listArtifacts } from "./db/artifacts";
-import { createChat, deleteChat, getChat, listAllChats, listChatsByProject, updateChat } from "./db/chats";
+import { resolveBrowserResponse } from "./browserBridge";
+import { undoLastRun } from "./checkpoints";
+import { getArtifactContent, listArtifacts } from "./db/artifacts";
+import { createChat, deleteChat, getChat, listAllChats, listChatsByProject, migrateLegacyCliChats, updateChat } from "./db/chats";
 import { deleteDoc, listDocs, readDoc, writeDoc } from "./docs/store";
 import { listMessages } from "./db/messages";
+import {
+  appendScrollback,
+  createTerminal,
+  deleteTerminal,
+  getScrollback,
+  getTerminal,
+  listTerminalsByProject,
+  markTerminalExited,
+  renameTerminal,
+} from "./db/terminals";
 import {
   createProject,
   deleteProject,
@@ -15,20 +27,43 @@ import {
   updateProject,
   updateProjectPermissions,
 } from "./db/projects";
-import { listProviders } from "./db/providers";
+import type { ModelRole } from "@rama/protocol";
+import { getCatalog } from "./agent/catalog";
+import { getModelRole, setModelRole } from "./db/modelRoles";
+import {
+  configureCustomProvider,
+  configureProvider,
+  deleteProviderRow,
+  getProviderDTO,
+  listProviders,
+  migrateLegacyProviderSeeds,
+  updateProviderConfig,
+} from "./db/providers";
+import {
+  addManualModel,
+  deleteProviderModel,
+  enableDefaultModels,
+  refreshModelCatalog,
+  setModelEnabled,
+  switchSupersededModel,
+} from "./db/providerModels";
 import { getSetting, setSetting } from "./db/settings";
+import { maybeDefaultChatRole, maybeDefaultUtilityRole } from "./agent/utility";
 import { listToolCalls } from "./db/toolCalls";
+import { indexServer } from "./heku/indexer";
+import { deleteToolsForServer } from "./heku/store";
 import { checkMcpServerHealth } from "./mcp/health";
 import { parseTransport } from "./mcp/client";
 import { connectAndRegister, disconnectServer } from "./mcp/registry";
 import { deleteMcpServer, insertMcpServer, listMcpServers, setMcpServerEnabled } from "./mcp/store";
 import { checkProviderHealth } from "./providerHealth";
+import { enrichFromOpenRouter } from "./openrouterOracle";
 import { ensureThemesHome, listUserThemes, resolveThemeAsset, watchThemes } from "./themes/store";
 import { ramaSearch, searchDomainStats } from "./search/registry";
 import { setSecret } from "./secrets";
 import { installSkill, uninstallSkill } from "./skills/installer";
 import { listInstalledSkills } from "./skills/store";
-import { broadcast, broadcastThemes, setServer, type SocketData } from "./ws";
+import { broadcast, broadcastProject, broadcastThemes, setServer, type SocketData } from "./ws";
 
 function skillDTO(row: ReturnType<typeof listInstalledSkills>[number]) {
   return {
@@ -52,7 +87,12 @@ const CORS_HEADERS = {
 
 // docs/REDESIGN_PLAN.md Phase R4 — Settings modal defaults, returned whenever a key hasn't been
 // saved yet rather than leaving the UI to invent its own fallback shape.
-const DEFAULT_GENERAL_SETTINGS: GeneralSettingsDTO = { defaultProjectDir: "", defaultMode: "agent" };
+const DEFAULT_GENERAL_SETTINGS: GeneralSettingsDTO = { defaultProjectDir: "", defaultMode: "agent", autoNameChats: true, enrichFromOpenRouter: false };
+const MODEL_ROLES: ModelRole[] = ["chat", "utility", "summarize"];
+
+function modelRoleDTO(row: ReturnType<typeof getModelRole>) {
+  return row ? { role: row.role, providerId: row.provider_id, modelId: row.model_id, updatedAt: row.updated_at } : null;
+}
 const DEFAULT_PERMISSIONS: PermissionSettings = { bash: "ask", write: "ask", edit: "allow", web: "allow" };
 
 function json(body: unknown, init: ResponseInit = {}): Response {
@@ -66,8 +106,26 @@ const notFound = () => json({ error: "not found" }, { status: 404 });
 const unauthorized = () => json({ error: "unauthorized" }, { status: 401 });
 
 export function createServer() {
+  // docs/MISSION_CONTROL_PLAN.md §5.4 — one-time fixup, run once ever: pre-M0 rows with
+  // backend_json `{"kind":"cli"}` no longer parse against BackendConfig's shrunk union and would
+  // render as a chat with no messages and no way to type.
+  migrateLegacyCliChats();
   ensureThemesHome();
   watchThemes(broadcastThemes);
+  // docs/PROVIDERS_PLAN.md Phase P0 — rehydrate provider_models from catalog.json on every boot.
+  // Lives here, not db/index.ts, so this module (which imports ../agent/catalog, which imports
+  // db/index for RAMA_HOME) can't form an import cycle back through db/index.ts.
+  refreshModelCatalog();
+  // Phase P3 — the destructive seed-row migration, run once ever (see providers.ts's own comment
+  // for why only half its rule can be decided here). Before maybeDefaultUtilityRole so that call
+  // sees the post-migration provider set, not stale seed rows about to be deleted.
+  migrateLegacyProviderSeeds();
+  // Phase P2 — idempotent; only ever assigns `utility` the first time it's genuinely unset, e.g.
+  // an existing install upgrading into this phase with a provider already configured.
+  maybeDefaultUtilityRole();
+  // Phase P5 — same idempotency, for `chat`. Covers an install that configured a provider via
+  // fast-add or the wizard but never visited General settings to name a default explicitly.
+  maybeDefaultChatRole();
 
   const server = Bun.serve<SocketData>({
     port: 0,
@@ -184,60 +242,246 @@ export function createServer() {
           return json({ content });
         }
 
-        // Phase 8 — cli-backed chats: Rust owns the actual PTY process, the engine only mirrors
-        // its output into a "terminal" artifact for persistence/history, the same broadcast
-        // shape bash.ts already streams (see engine/src/tools/bash.ts).
-        const chatPtyStartMatch = pathname.match(/^\/chats\/([^/]+)\/pty\/start$/);
-        if (chatPtyStartMatch && req.method === "POST") {
-          const chatId = chatPtyStartMatch[1];
+        // docs/TOOL_LAYER_PLAN.md §5.2 — restores the project's files to the state before the
+        // most recently started run, via the shadow checkpoint git repo. One level of undo.
+        const chatUndoMatch = pathname.match(/^\/chats\/([^/]+)\/undo$/);
+        if (chatUndoMatch && req.method === "POST") {
+          const chatId = chatUndoMatch[1];
           const chat = getChat(chatId);
           if (!chat) return json({ error: "chat not found" }, { status: 404 });
-
-          const name = chat.backend.kind === "cli" ? chat.backend.command : chat.title;
-          const artifact = createArtifact({
-            chatId,
-            projectId: chat.projectId,
-            kind: "terminal",
-            name,
-            status: "streaming",
-            body: "",
-          });
-          broadcast(chatId, { type: "artifact.created", artifactId: artifact.id, kind: "terminal", name, meta: {} });
-          updateChat(chatId, { status: "streaming" });
-          return json({ artifactId: artifact.id }, { status: 201 });
+          const project = getProject(chat.projectId);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          return json(await undoLastRun(project.path));
         }
 
-        const chatPtyDataMatch = pathname.match(/^\/chats\/([^/]+)\/pty\/data$/);
-        if (chatPtyDataMatch && req.method === "POST") {
-          const chatId = chatPtyDataMatch[1];
-          if (!getChat(chatId)) return json({ error: "chat not found" }, { status: 404 });
+        // docs/MISSION_CONTROL_PLAN.md §8 Phase M2 — the terminal runtime's HTTP surface. PTY
+        // spawn/write/resize/kill themselves are Tauri commands (Section 6, apps/desktop/src-
+        // tauri/src/pty.rs) — this side only owns the `terminals` row: identity, scrollback
+        // persistence, and the project-scoped `terminal.*` broadcast.
+        const projectTerminalsMatch = pathname.match(/^\/projects\/([^/]+)\/terminals$/);
+        if (projectTerminalsMatch && req.method === "GET") {
+          const projectId = projectTerminalsMatch[1];
+          if (!getProject(projectId)) return json({ error: "project not found" }, { status: 404 });
+          return json(listTerminalsByProject(projectId));
+        }
 
-          const body = await req.json().catch(() => ({}));
-          const { artifactId, delta } = (body ?? {}) as { artifactId?: unknown; delta?: unknown };
-          if (typeof artifactId !== "string" || typeof delta !== "string") {
-            return json({ error: "artifactId and delta are required" }, { status: 400 });
+        if (pathname === "/terminals" && req.method === "POST") {
+          const body = await req.json().catch(() => null);
+          if (typeof body?.projectId !== "string" || !body.projectId) {
+            return json({ error: "projectId is required" }, { status: 400 });
           }
-          appendArtifactBody(artifactId, delta);
-          broadcast(chatId, { type: "artifact.updated", artifactId, delta, status: "streaming" });
+          const project = getProject(body.projectId);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+
+          const shell = typeof body.shell === "string" && body.shell ? body.shell : (Bun.env.SHELL ?? "/bin/zsh");
+          const argv = Array.isArray(body.argv) ? body.argv.filter((a: unknown) => typeof a === "string") : [];
+          const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : (argv[0] ?? shell.split("/").pop() ?? "shell");
+          const owner = body.owner === "agent" ? "agent" : "user";
+          const terminal = createTerminal({
+            projectId: project.id,
+            title,
+            cwd: typeof body.cwd === "string" && body.cwd ? body.cwd : project.path,
+            shell,
+            argv,
+            owner,
+            originChatId: owner === "agent" && typeof body.originChatId === "string" ? body.originChatId : null,
+          });
+          broadcastProject(project.id, { type: "terminal.created", terminal });
+          return json(terminal, { status: 201 });
+        }
+
+        const terminalMatch = pathname.match(/^\/terminals\/([^/]+)$/);
+        if (terminalMatch && req.method === "PATCH") {
+          const body = await req.json().catch(() => ({}));
+          if (typeof body?.title !== "string" || !body.title.trim()) {
+            return json({ error: "title is required" }, { status: 400 });
+          }
+          const terminal = renameTerminal(terminalMatch[1], body.title.trim());
+          if (!terminal) return json({ error: "terminal not found" }, { status: 404 });
+          broadcastProject(terminal.projectId, { type: "terminal.renamed", terminalId: terminal.id, title: terminal.title });
+          return json(terminal);
+        }
+        if (terminalMatch && req.method === "DELETE") {
+          const terminal = getTerminal(terminalMatch[1]);
+          if (!terminal) return json({ error: "terminal not found" }, { status: 404 });
+          deleteTerminal(terminal.id);
           return json({ ok: true });
         }
 
-        const chatPtyExitMatch = pathname.match(/^\/chats\/([^/]+)\/pty\/exit$/);
-        if (chatPtyExitMatch && req.method === "POST") {
-          const chatId = chatPtyExitMatch[1];
-          if (!getChat(chatId)) return json({ error: "chat not found" }, { status: 404 });
-
+        const terminalDataMatch = pathname.match(/^\/terminals\/([^/]+)\/data$/);
+        if (terminalDataMatch && req.method === "POST") {
           const body = await req.json().catch(() => ({}));
-          const { artifactId, exitCode } = (body ?? {}) as { artifactId?: unknown; exitCode?: unknown };
-          if (typeof artifactId !== "string") return json({ error: "artifactId is required" }, { status: 400 });
-          finalizeArtifact(artifactId, typeof exitCode === "number" ? { exitCode } : undefined);
-          broadcast(chatId, { type: "artifact.updated", artifactId, status: "done" });
-          updateChat(chatId, { status: "idle" });
+          if (typeof body?.delta !== "string") return json({ error: "delta is required" }, { status: 400 });
+          if (!getTerminal(terminalDataMatch[1])) return json({ error: "terminal not found" }, { status: 404 });
+          appendScrollback(terminalDataMatch[1], body.delta);
+          return json({ ok: true });
+        }
+
+        const terminalExitMatch = pathname.match(/^\/terminals\/([^/]+)\/exit$/);
+        if (terminalExitMatch && req.method === "POST") {
+          const body = await req.json().catch(() => ({}));
+          const exitCode = typeof body?.exitCode === "number" ? body.exitCode : 1;
+          const terminal = markTerminalExited(terminalExitMatch[1], exitCode);
+          if (!terminal) return json({ error: "terminal not found" }, { status: 404 });
+          broadcastProject(terminal.projectId, { type: "terminal.exited", terminalId: terminal.id, exitCode });
+          return json(terminal);
+        }
+
+        const terminalScrollbackMatch = pathname.match(/^\/terminals\/([^/]+)\/scrollback$/);
+        if (terminalScrollbackMatch && req.method === "GET") {
+          const content = getScrollback(terminalScrollbackMatch[1]);
+          if (content === null) return json({ error: "terminal not found" }, { status: 404 });
+          return json({ content });
+        }
+
+        // docs/MISSION_CONTROL_PLAN.md §8 Phase M6 — the `browser` tool's response leg
+        // (engine/src/browserBridge.ts). Always 200s: whether this resolves the tool's pending
+        // promise or is a late/duplicate from a second window, the poster doesn't need to know.
+        const browserResponseMatch = pathname.match(/^\/browser\/([^/]+)\/response$/);
+        if (browserResponseMatch && req.method === "POST") {
+          const body = await req.json().catch(() => ({}));
+          resolveBrowserResponse(browserResponseMatch[1], body);
           return json({ ok: true });
         }
 
         if (pathname === "/providers" && req.method === "GET") {
           return json(listProviders());
+        }
+
+        // docs/PROVIDERS_PLAN.md Phase P4 fast-add — "catalog tiles" for what's addable. A row in
+        // `providers` means configured (Phase P3), so the catalog itself is the only source left
+        // for "what does Rama know how to add".
+        if (pathname === "/catalog/providers" && req.method === "GET") {
+          return json(
+            getCatalog().providers.map((p) => ({
+              id: p.id,
+              label: p.label,
+              kind: p.kind,
+              baseUrl: p.baseUrl,
+              requiresKey: p.requiresKey,
+              docsUrl: p.docsUrl,
+            })),
+          );
+        }
+
+        // docs/PROVIDERS_PLAN.md Phase P6 — "one settings toggle, because it is an outbound
+        // request." The toggle is checked here, not inside enrichFromOpenRouter itself, so that
+        // function stays a pure "given permission, run safely" — this is the one place permission
+        // is actually granted or withheld. Cheap to call on every app launch: the weekly cache
+        // check inside enrichFromOpenRouter makes a no-op call fast and network-free.
+        if (pathname === "/catalog/enrich" && req.method === "POST") {
+          const general = { ...DEFAULT_GENERAL_SETTINGS, ...(getSetting<GeneralSettingsDTO>("general") ?? {}) };
+          if (!general.enrichFromOpenRouter) return json({ ran: false, matched: 0 });
+          const result = await enrichFromOpenRouter().catch((err) => {
+            console.error(`[catalog/enrich] ${err instanceof Error ? err.message : String(err)}`);
+            return { ran: false, matched: 0 };
+          });
+          return json(result);
+        }
+
+        // Creates the `providers` row from the catalog (Phase P3's configureProvider) — the first
+        // step of fast-add for a keyless provider, or ahead of a key POST for one that needs it.
+        if (pathname === "/providers" && req.method === "POST") {
+          const body = await req.json().catch(() => null);
+          if (typeof body?.providerId !== "string" || !body.providerId) {
+            return json({ error: "providerId is required" }, { status: 400 });
+          }
+          const result = configureProvider(body.providerId);
+          if (!result) return json({ error: `unknown provider "${body.providerId}"` }, { status: 400 });
+          // Fast-add's "defaultEnabled models silently ticked" — only on first configure, so
+          // re-POSTing an already-configured provider can't resurrect models the user turned off.
+          if (result.created) enableDefaultModels(body.providerId);
+          maybeDefaultChatRole();
+          maybeDefaultUtilityRole();
+          return json(getProviderDTO(body.providerId), { status: result.created ? 201 : 200 });
+        }
+
+        // docs/PROVIDERS_PLAN.md Phase P5 — "custom (OpenAI-compatible)": the wizard's own creation
+        // path for a provider Rama has never heard of, parallel to the catalog-backed POST /providers
+        // above. Always succeeds (configureCustomProvider disambiguates the generated id itself),
+        // so the only failures here are validation.
+        if (pathname === "/providers/custom" && req.method === "POST") {
+          const body = await req.json().catch(() => null);
+          if (typeof body?.label !== "string" || !body.label.trim()) {
+            return json({ error: "label is required" }, { status: 400 });
+          }
+          if (typeof body?.baseUrl !== "string" || !/^https?:\/\//.test(body.baseUrl.trim())) {
+            return json({ error: "a base URL starting with http:// or https:// is required" }, { status: 400 });
+          }
+          const authStyle = body?.authStyle === "header" ? "header" : "bearer";
+          const authHeader = typeof body?.authHeader === "string" && body.authHeader.trim() ? body.authHeader.trim() : null;
+          if (authStyle === "header" && !authHeader) {
+            return json({ error: "authHeader is required when authStyle is \"header\"" }, { status: 400 });
+          }
+          const row = configureCustomProvider({
+            label: body.label.trim(),
+            baseUrl: body.baseUrl.trim(),
+            requiresKey: body?.requiresKey !== false,
+            authStyle,
+            authHeader,
+          });
+          maybeDefaultChatRole();
+          maybeDefaultUtilityRole();
+          return json(getProviderDTO(row.id), { status: 201 });
+        }
+
+        const providerMatch = pathname.match(/^\/providers\/([^/]+)$/);
+        if (providerMatch && req.method === "PATCH") {
+          const providerId = providerMatch[1];
+          const body = await req.json().catch(() => ({}));
+          const updated = updateProviderConfig(providerId, { baseUrl: body?.baseUrl, label: body?.label });
+          if (!updated) return json({ error: "provider not found" }, { status: 404 });
+          return json(updated);
+        }
+        // docs/PROVIDERS_PLAN.md Phase P3 — "chats pointing at a removed provider are not
+        // migrated and not deleted"; deleteProviderRow only touches provider_models/model_roles.
+        if (providerMatch && req.method === "DELETE") {
+          const deleted = deleteProviderRow(providerMatch[1]);
+          if (!deleted) return json({ error: "provider not found" }, { status: 404 });
+          return json({ ok: true });
+        }
+
+        // docs/PROVIDERS_PLAN.md Phase P4 — "+ add model manually", for fine-tunes and private
+        // deployments neither the catalog nor a fetch has ever seen.
+        const providerModelsMatch = pathname.match(/^\/providers\/([^/]+)\/models$/);
+        if (providerModelsMatch && req.method === "POST") {
+          const providerId = providerModelsMatch[1];
+          if (!getProviderDTO(providerId)) return json({ error: "provider not found" }, { status: 404 });
+          const body = await req.json().catch(() => null);
+          if (typeof body?.modelId !== "string" || !body.modelId.trim()) {
+            return json({ error: "modelId is required" }, { status: 400 });
+          }
+          addManualModel(providerId, body.modelId.trim(), typeof body?.label === "string" ? body.label : undefined, Date.now());
+          return json(getProviderDTO(providerId), { status: 201 });
+        }
+
+        // Tick state (composer picker, role pickers) and "no longer offered — remove?" for a
+        // model that's `missing`; distinct from PATCH, which only ever flips `enabled`.
+        const providerModelMatch = pathname.match(/^\/providers\/([^/]+)\/models\/([^/]+)$/);
+        if (providerModelMatch && req.method === "PATCH") {
+          const [, providerId, modelId] = providerModelMatch;
+          const body = await req.json().catch(() => ({}));
+          if (typeof body?.enabled !== "boolean") return json({ error: "enabled is required" }, { status: 400 });
+          setModelEnabled(providerId, decodeURIComponent(modelId), body.enabled);
+          return json(getProviderDTO(providerId));
+        }
+        if (providerModelMatch && req.method === "DELETE") {
+          const [, providerId, modelId] = providerModelMatch;
+          const deleted = deleteProviderModel(providerId, decodeURIComponent(modelId));
+          if (!deleted) return json({ error: "model not found" }, { status: 404 });
+          return json({ ok: true });
+        }
+
+        // "where `superseded_by` is set, `→ {newer model} available` with a one-click switch."
+        const providerModelSwitchMatch = pathname.match(/^\/providers\/([^/]+)\/models\/([^/]+)\/switch$/);
+        if (providerModelSwitchMatch && req.method === "POST") {
+          const [, providerId, modelId] = providerModelSwitchMatch;
+          const body = await req.json().catch(() => null);
+          if (typeof body?.toModelId !== "string" || !body.toModelId) {
+            return json({ error: "toModelId is required" }, { status: 400 });
+          }
+          switchSupersededModel(providerId, decodeURIComponent(modelId), body.toModelId);
+          return json(getProviderDTO(providerId));
         }
 
         if (pathname === "/settings/general" && req.method === "GET") {
@@ -311,12 +555,18 @@ export function createServer() {
             deleteMcpServer(row.id);
             return json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
           }
+          // docs/TOOL_LAYER_PLAN.md §7.4 (TL7) — index right after the validating connect above so
+          // the new server's tools are in heku_find/the "mcp" search domain immediately, not only
+          // after the next engine restart's indexAll(). Best-effort: an index failure here doesn't
+          // undo the just-created server, it just leaves indexing to the next call/restart.
+          await indexServer(row).catch(() => {});
           return json(mcpServerDTO(row), { status: 201 });
         }
 
         const mcpServerMatch = pathname.match(/^\/mcp\/servers\/([^/]+)$/);
         if (mcpServerMatch && req.method === "DELETE") {
           await disconnectServer(mcpServerMatch[1]);
+          deleteToolsForServer(mcpServerMatch[1]);
           const deleted = deleteMcpServer(mcpServerMatch[1]);
           if (!deleted) return json({ error: "server not found" }, { status: 404 });
           return json({ ok: true });
@@ -327,6 +577,7 @@ export function createServer() {
           if (!row) return json({ error: "server not found" }, { status: 404 });
           if (body?.enabled) {
             await connectAndRegister(row).catch(() => {});
+            await indexServer(row).catch(() => {});
           } else {
             await disconnectServer(row.id);
           }
@@ -411,12 +662,37 @@ export function createServer() {
 
         const providerSecretMatch = pathname.match(/^\/providers\/([^/]+)\/secret$/);
         if (providerSecretMatch && req.method === "POST") {
+          const providerId = providerSecretMatch[1];
           const body = await req.json().catch(() => null);
           if (typeof body?.apiKey !== "string" || !body.apiKey) {
             return json({ error: "apiKey is required" }, { status: 400 });
           }
-          setSecret(providerSecretMatch[1], body.apiKey);
+          // docs/PROVIDERS_PLAN.md Phase P3 — pasting a key IS the configure action for a catalog
+          // provider with no row yet (fast-add's one field); a no-op if the row already exists.
+          const configured = configureProvider(providerId);
+          if (!configured) return json({ error: `unknown provider "${providerId}"` }, { status: 400 });
+          setSecret(providerId, body.apiKey);
+          if (configured.created) enableDefaultModels(providerId);
+          // Phase P2 — "on configuring a provider, if utility is unset, assign..."; a no-op once
+          // a role already exists, so this is safe to call on every key save.
+          maybeDefaultUtilityRole();
+          maybeDefaultChatRole();
           return json({ ok: true });
+        }
+
+        if (pathname === "/model-roles" && req.method === "GET") {
+          return json(Object.fromEntries(MODEL_ROLES.map((role) => [role, modelRoleDTO(getModelRole(role))])));
+        }
+
+        const modelRoleMatch = pathname.match(/^\/model-roles\/([^/]+)$/);
+        if (modelRoleMatch && req.method === "PUT") {
+          const role = modelRoleMatch[1] as ModelRole;
+          if (!MODEL_ROLES.includes(role)) return json({ error: "unknown role" }, { status: 400 });
+          const body = await req.json().catch(() => null);
+          if (typeof body?.providerId !== "string" || typeof body?.modelId !== "string") {
+            return json({ error: "providerId and modelId are required" }, { status: 400 });
+          }
+          return json(modelRoleDTO(setModelRole(role, body.providerId, body.modelId)));
         }
 
         if (pathname === "/themes" && req.method === "GET") {
@@ -475,6 +751,16 @@ export function createServer() {
             break;
           case "approvePermission":
             resolvePermission(command.reqId, command.approve);
+            break;
+          // docs/MISSION_CONTROL_PLAN.md §5.3 — the project-scoped counterpart to
+          // subscribeChat/unsubscribeChat above, for `terminal.*` events.
+          case "subscribeProject":
+            ws.subscribe(`project:${command.projectId}`);
+            ws.data.subscriptions.add(`project:${command.projectId}`);
+            break;
+          case "unsubscribeProject":
+            ws.unsubscribe(`project:${command.projectId}`);
+            ws.data.subscriptions.delete(`project:${command.projectId}`);
             break;
           default:
             ws.send(JSON.stringify({ type: "error", message: "unknown command" }));

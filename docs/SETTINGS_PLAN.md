@@ -647,6 +647,9 @@ Two groups. **New-chat defaults**, and **Folders**.
   whether or not that provider is configured. This is the single most
   user-visible missing setting in the app. It reads from the providers the user
   has actually configured (S5), so it lands with S5 or after it.
+  **Absorbed (2026-09-06) by `docs/PROVIDERS_PLAN.md` Phase P2** — it is not a
+  standalone setting, it is the `chat` row of a three-role `model_roles` table
+  (`chat` / `utility` / `summarize`). Build it there, not here.
 - The telemetry paragraph **moves to the About pane**. It is a claim about the
   product, not a preference.
 
@@ -734,6 +737,16 @@ already what happens, that is a `ProjectsProvider` change, not a settings one.
 ---
 
 ## Phase S5 — Provider setup wizard
+
+> **SUPERSEDED (2026-09-06) by `docs/PROVIDERS_PLAN.md`, phases P0–P6.**
+> Everything below is still true; it is just too big to land as one phase and it
+> leaves three sibling problems untouched — the composer picker offers models
+> nobody can reach, the model list has no way to stay current, and there is no
+> cheap model available for background work like naming chats. PROVIDERS_PLAN
+> keeps this section's inversion (P3), schema sketch (P0), migration rule (P3)
+> and "never finish on a failed verify" rule (P5), and sequences the wizard
+> *last* because it is unbuildable until user-defined models exist. Read that
+> doc instead; this section is kept for its reasoning, not as the work order.
 
 **Ask:** replace the list of every provider sitting around waiting for a key
 with a wizard — pick from a preset list, and be able to add a custom provider.
@@ -839,7 +852,7 @@ absent.** Per-provider extra headers (OpenRouter wants `HTTP-Referer` /
 |---|---|
 | **general** | Rewritten (S4). New-chat defaults + a Folders group with native pickers. Telemetry text moves to About. |
 | **appearance** | Rewritten (S0/S1/S2/S3). Themes (nine, grouped by family) + font size. Wallpaper and dim controls deleted — the wallpaper itself moves inside the theme. |
-| **providers & models** | Rewritten (S5). Configured-providers list + setup wizard + custom providers + user-defined models. |
+| **providers & models** | Rewritten — but **not here**. See `docs/PROVIDERS_PLAN.md` P0–P6: catalog/roster/shortlist split, filtered composer picker, model roles + auto-titling, configured-providers list, setup wizard, custom providers, user-defined models. |
 | **mcp servers** | Unchanged this pass. It is already the right shape — a list of things you added, with an add button. It is, in fact, the model S5's providers pane should copy. |
 | **permissions** | Unchanged this pass. The real work there is enforcement in `engine/src/agent/permissions.ts`, which the pane's own hint already admits is missing — that is an engine task, not a settings task. |
 | **keyboard** | Unchanged. Read-only is fine until there is a rebinding system. |

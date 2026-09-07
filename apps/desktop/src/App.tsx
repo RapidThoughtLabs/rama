@@ -3,6 +3,7 @@ import { AppShell } from "./app/AppShell";
 import { ProjectsProvider } from "./app/data/ProjectsProvider";
 import { ProvidersProvider } from "./app/data/ProvidersProvider";
 import { SessionProvider } from "./app/data/SessionProvider";
+import { SettingsLinkProvider } from "./app/data/SettingsLinkContext";
 import { ThemesProvider, useThemesData } from "./app/data/ThemesProvider";
 import { WindowTabsProvider } from "./app/data/WindowTabsProvider";
 
@@ -18,7 +19,9 @@ function ThemedApp() {
           <ProjectsProvider>
             <WindowTabsProvider>
               <SessionProvider>
-                <AppShell />
+                <SettingsLinkProvider>
+                  <AppShell />
+                </SettingsLinkProvider>
               </SessionProvider>
             </WindowTabsProvider>
           </ProjectsProvider>

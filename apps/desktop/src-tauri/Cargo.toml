@@ -18,12 +18,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# docs/MISSION_CONTROL_PLAN.md §9 Risk 1 — the multiwebview API this pins is explicitly
+# `unstable`; pinned to an exact patch so a routine `cargo update` can't silently break it.
+tauri = { version = "=2.11.5", features = ["unstable"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 keyring = "3"
 portable-pty = "0.9"
+tokio = { version = "1", features = ["sync", "time"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"] }

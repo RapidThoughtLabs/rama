@@ -1,26 +1,22 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { Button, FONT_SCALES, Fluke, Input, Modal, SegmentedControl, useTheme, useToast, type RamaTheme, type ThemeFamily } from "@rama/ui";
-import type {
-  ChatMode,
-  GeneralSettingsDTO,
-  PermissionRule,
-  PermissionSettings,
-  PermissionTool,
-  ProviderHealthStatus,
-} from "@rama/protocol";
+import { FONT_SCALES, Fluke, Input, Modal, SegmentedControl, Toggle, useTheme, useToast, type RamaTheme, type ThemeFamily } from "@rama/ui";
+import type { ChatMode, GeneralSettingsDTO, ModelRole, ModelRoleDTO, PermissionRule, PermissionSettings, PermissionTool } from "@rama/protocol";
 import {
   fetchGeneralSettings,
   fetchGlobalPermissions,
+  fetchModelRoles,
   fetchProjectPermissions,
   saveGeneralSettings,
   saveGlobalPermissions,
+  saveModelRole,
   saveProjectPermissions,
 } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useProvidersData } from "./data/ProvidersProvider";
 import { useThemesData } from "./data/ThemesProvider";
 import { McpServersModal } from "./McpServersModal";
+import { ProvidersSettingsPane } from "./ProvidersSettingsPane";
 
 // docs/REDESIGN_PLAN.md Phase R4 — one settings modal, replacing/absorbing ProviderSettingsModal,
 // Sidebar.tsx's old inline settings <Modal>, and McpServersModal's standalone mount. Docs and
@@ -40,9 +36,38 @@ const PANES: { id: Pane; label: string }[] = [
   { id: "about", label: "about" },
 ];
 
-export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function SettingsModal({
+  open,
+  onClose,
+  initialPane,
+  focusProviderId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialPane?: Pane;
+  focusProviderId?: string;
+}) {
   const [pane, setPane] = useState<Pane>("general");
+  const { providers, health } = useProvidersData();
+
+  // docs/PROVIDERS_PLAN.md Phase P1 — a deep link (ModelPicker's banner, StatusBar's dot) lands
+  // on a specific pane every time it's used, not just the first time the modal ever opened.
+  useEffect(() => {
+    if (open && initialPane) setPane(initialPane);
+  }, [open, initialPane]);
+
   if (!open) return null;
+
+  // "a count badge on the settings nav row, which also carries Phase P4's '3 new models'" —
+  // unhealthy configured providers (Phase P1) plus models discovered since the pane was last
+  // opened (Phase P4, bookmarked per-provider in localStorage by ProvidersSettingsPane).
+  const badProviderCount = Object.values(health).filter((h) => h.status === "bad").length;
+  const newModelCount = providers.reduce((sum, p) => {
+    const lastViewedAt = Number(window.localStorage.getItem(`rama.providerLastViewedAt.${p.id}`) ?? 0) || 0;
+    return sum + p.models.filter((m) => m.firstSeenAt > lastViewedAt && !m.enabled).length;
+  }, 0);
+  const navBadgeCount = badProviderCount + newModelCount;
+
   return (
     <Modal open={open} title="settings" onClose={onClose} className="rama-modal-wide">
       <div className="rama-settings">
@@ -54,13 +79,14 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               onClick={() => setPane(p.id)}
             >
               {p.label}
+              {p.id === "providers" && navBadgeCount > 0 && <span className="rama-settings-nav-badge">{navBadgeCount}</span>}
             </button>
           ))}
         </div>
         <div className="rama-settings-content">
           {pane === "general" && <GeneralPane />}
           {pane === "appearance" && <AppearancePane />}
-          {pane === "providers" && <ProvidersPane />}
+          {pane === "providers" && <ProvidersSettingsPane focusProviderId={open ? focusProviderId : undefined} />}
           {pane === "mcp" && <McpServersModal />}
           {pane === "permissions" && <PermissionsPane />}
           {pane === "keyboard" && <KeyboardPane />}
@@ -116,6 +142,29 @@ function GeneralPane() {
         <SegmentedControl options={MODES} value={settings.defaultMode} onChange={(mode) => save({ defaultMode: mode })} />
         <div className="rama-settings-hint">the mode a brand new chat starts in.</div>
       </div>
+      <ModelRolesField />
+      <div className="rama-settings-field">
+        <label className="rama-settings-label">auto-name chats</label>
+        <Toggle checked={settings.autoNameChats} onChange={(v) => save({ autoNameChats: v })} label={settings.autoNameChats ? "on" : "off"} />
+        <div className="rama-settings-hint">
+          asks the utility model above for a short title once your first message gets a reply. off means no chat
+          content is ever sent anywhere for this — the chat just keeps its first-line title.
+        </div>
+      </div>
+      <div className="rama-settings-field">
+        <label className="rama-settings-label">enrich pricing from OpenRouter</label>
+        <Toggle
+          checked={settings.enrichFromOpenRouter}
+          onChange={(v) => save({ enrichFromOpenRouter: v })}
+          label={settings.enrichFromOpenRouter ? "on" : "off"}
+        />
+        <div className="rama-settings-hint">
+          fills in pricing and capability flags for models the bundled catalog doesn't know about yet, using
+          OpenRouter's public model list (no key needed). checked at most once a week, and only ever fills gaps on
+          models a configured provider already offers — never adds a model your key can't reach. off by default
+          since it's an outbound request.
+        </div>
+      </div>
       <div className="rama-settings-field">
         <label className="rama-settings-label">telemetry</label>
         <div className="rama-settings-hint">
@@ -124,6 +173,81 @@ function GeneralPane() {
         </div>
       </div>
     </div>
+  );
+}
+
+// docs/PROVIDERS_PLAN.md Phase P2 — 'chat' replaces the old DEFAULT_PROVIDER_ID/DEFAULT_MODEL
+// consts; 'utility' backs auto-titling and future background calls. 'summarize' has no row here
+// (rule 3 — no settings UI for a subsystem that doesn't exist yet).
+const ROLE_LABEL: Record<"chat" | "utility", string> = { chat: "chat model", utility: "utility model" };
+
+function ModelRolesField() {
+  const { providers } = useProvidersData();
+  const [roles, setRoles] = useState<Record<ModelRole, ModelRoleDTO | null> | null>(null);
+  const { push } = useToast();
+
+  useEffect(() => {
+    fetchModelRoles()
+      .then(setRoles)
+      .catch((err) => console.error("[rama] failed to load model roles", err));
+  }, []);
+
+  async function assign(role: ModelRole, providerId: string, modelId: string) {
+    setRoles((prev) => (prev ? { ...prev, [role]: { role, providerId, modelId, updatedAt: Date.now() } } : prev));
+    try {
+      const updated = await saveModelRole(role, providerId, modelId);
+      setRoles((prev) => (prev ? { ...prev, [role]: updated } : prev));
+    } catch (err) {
+      push(err instanceof Error ? err.message : String(err), "bad");
+    }
+  }
+
+  if (!roles || providers.length === 0) return null;
+
+  return (
+    <>
+      {(["chat", "utility"] as const).map((role) => {
+        const current = roles[role];
+        const providerId = current?.providerId ?? providers[0].id;
+        const provider = providers.find((p) => p.id === providerId) ?? providers[0];
+        const modelId = current?.modelId ?? provider.models[0]?.id ?? "";
+        return (
+          <div key={role} className="rama-settings-field">
+            <label className="rama-settings-label">{ROLE_LABEL[role]}</label>
+            <div className="rama-role-row">
+              <select
+                className="rama-input rama-select"
+                value={provider.id}
+                onChange={(e) => {
+                  const next = providers.find((p) => p.id === e.target.value);
+                  const nextModel = next?.models[0]?.id;
+                  if (next && nextModel) assign(role, next.id, nextModel);
+                }}
+              >
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+              <select className="rama-input rama-select" value={modelId} onChange={(e) => assign(role, provider.id, e.target.value)}>
+                {provider.models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="rama-settings-hint">
+              {role === "chat"
+                ? "the provider + model every new chat starts on."
+                : `background calls (auto-naming chats today; tagging and compaction later) go to ${provider.label} — that's a data-egress choice, not just a cost one.`}
+              {role === "utility" && provider.id === "ollama" && " ollama unloads after ~5m idle, so a cold title call can take ~10s."}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -208,73 +332,6 @@ function AppearancePane() {
           applies to every window and the terminal — this is a reading preference, not part of a chat's theme.
         </div>
       </div>
-    </div>
-  );
-}
-
-const PROVIDER_STATUS_LABEL: Record<ProviderHealthStatus, string> = {
-  ok: "connected",
-  bad: "error",
-  "no-key": "no key",
-  checking: "checking…",
-};
-const PROVIDER_STATUS_COLOR: Record<ProviderHealthStatus, string> = {
-  ok: "var(--good)",
-  bad: "var(--bad)",
-  "no-key": "var(--warn)",
-  checking: "var(--warn)",
-};
-
-function ProvidersPane() {
-  const { providers, health, saveProviderKey } = useProvidersData();
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const { push } = useToast();
-
-  async function handleSave(providerId: string, label: string) {
-    const key = drafts[providerId]?.trim();
-    if (!key) return;
-    setSavingId(providerId);
-    try {
-      await saveProviderKey(providerId, key);
-      setDrafts((prev) => ({ ...prev, [providerId]: "" }));
-      push(`saved ${label} key`, "good");
-    } catch (err) {
-      push(err instanceof Error ? err.message : String(err), "bad");
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  return (
-    <div className="rama-provider-settings">
-      {providers.map((p) => {
-        const status = health[p.id]?.status ?? "checking";
-        return (
-          <div key={p.id} className="rama-provider-settings-row">
-            <div className="rama-provider-settings-head">
-              <span className="rama-statusbar-dot" style={{ background: PROVIDER_STATUS_COLOR[status] }} />
-              <span className="rama-provider-settings-label">{p.label}</span>
-              <span className="rama-provider-settings-status">{PROVIDER_STATUS_LABEL[status]}</span>
-            </div>
-            {p.requiresKey ? (
-              <div className="rama-provider-settings-input-row">
-                <Input
-                  type="password"
-                  placeholder={status === "ok" ? "•••••••• (key saved)" : "paste API key…"}
-                  value={drafts[p.id] ?? ""}
-                  onChange={(e) => setDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                />
-                <Button size="sm" onClick={() => handleSave(p.id, p.label)} disabled={!drafts[p.id]?.trim() || savingId === p.id}>
-                  {savingId === p.id ? "saving…" : "save"}
-                </Button>
-              </div>
-            ) : (
-              <div className="rama-provider-settings-hint">local endpoint, no key needed — {p.baseUrl}</div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }

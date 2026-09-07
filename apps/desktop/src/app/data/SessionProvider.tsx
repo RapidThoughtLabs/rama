@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { ArtifactDTO, MessageDTO, SessionStatusState, ToolCallDTO } from "@rama/protocol";
-import { fetchArtifacts, fetchMessages, fetchToolCalls } from "../../engine/client";
+import { fetchArtifacts, fetchMessages, fetchToolCalls, undoLastRun } from "../../engine/client";
 import { onEvent, send } from "../../engine/ws";
 import { useProjectsData } from "./ProjectsProvider";
 
@@ -43,6 +43,9 @@ interface SessionDataValue {
   sendUserTurn: (text: string) => void;
   interrupt: () => void;
   approvePermission: (reqId: string, approve: boolean) => void;
+  /** docs/TOOL_LAYER_PLAN.md §5.2 — `/undo`: restores the project's files to the state before
+   *  the last run and drops a local system-style note into the transcript with the result. */
+  restoreLastRun: () => void;
 }
 
 const DEFAULT_STATUS: ChatStatus = { state: "idle", runStartedAt: null };
@@ -321,6 +324,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void send({ type: "approvePermission", reqId, approve });
   }, []);
 
+  const restoreLastRun = useCallback(() => {
+    const chatId = activeChatId;
+    if (!chatId) return;
+    undoLastRun(chatId)
+      .then((result) => {
+        appendLocalMessage(chatId, (seq) => ({
+          id: `undo-${Date.now()}`,
+          chatId,
+          seq,
+          role: "system",
+          content: result.message,
+          thinking: null,
+          createdAt: Date.now(),
+        }));
+      })
+      .catch((err) => {
+        appendLocalMessage(chatId, (seq) => ({
+          id: `undo-${Date.now()}`,
+          chatId,
+          seq,
+          role: "system",
+          content: `undo failed: ${err instanceof Error ? err.message : String(err)}`,
+          thinking: null,
+          createdAt: Date.now(),
+        }));
+      });
+  }, [activeChatId, appendLocalMessage]);
+
   const messages = useMemo(() => {
     const base = activeChatId ? (messagesByChat[activeChatId] ?? []) : [];
     const pending = activeChatId ? pendingByChat[activeChatId] : undefined;
@@ -352,6 +383,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sendUserTurn,
       interrupt,
       approvePermission,
+      restoreLastRun,
     }),
     [
       messages,
@@ -367,6 +399,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sendUserTurn,
       interrupt,
       approvePermission,
+      restoreLastRun,
     ],
   );
 

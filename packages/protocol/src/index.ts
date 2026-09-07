@@ -23,7 +23,47 @@ export type SessionEvent =
   | { type: "permission.request"; reqId: string; tool: string; input: unknown; risk: "low" | "high" }
   | { type: "status"; state: SessionStatusState; verb?: string }
   | { type: "run.finished"; runId: string; ts: number; summary?: string }
-  | { type: "error"; message: string; detail?: string };
+  | { type: "error"; message: string; detail?: string }
+  // docs/PROVIDERS_PLAN.md Phase P2 — auto-titling's only way to tell the sidebar a chat got a
+  // real name; there was no chat-update event before this.
+  | { type: "chat.renamed"; chatId: string; title: string }
+  // docs/TOOL_LAYER_PLAN.md §6.14 (TL6) — fired on every `todo` call so a live Todos view (or the
+  // sidebar) can reflect the list without polling; the model itself sees the list via the tool's
+  // own `content`, not this event.
+  | { type: "todo.updated"; chatId: string; items: TodoItem[] }
+  // docs/MISSION_CONTROL_PLAN.md §5.2 — broadcast on the project topic (`project:{id}`), not a
+  // chat topic: terminals are project-scoped, not chat-scoped. PTY *output* deliberately does
+  // NOT ride this stream — it arrives over Tauri's own event bus straight from Rust (§6); routing
+  // tens of kilobytes a second of terminal bytes through the engine and back would add a hop for
+  // nothing.
+  | { type: "terminal.created"; terminal: TerminalDTO }
+  | { type: "terminal.exited"; terminalId: string; exitCode: number }
+  | { type: "terminal.renamed"; terminalId: string; title: string }
+  // docs/MISSION_CONTROL_PLAN.md §7.3 — the `process kill` tool's counterpart to §7.1's
+  // `terminal.created`: the engine (headless Bun) can't call the Tauri `pty_kill` command itself,
+  // so it broadcasts the request and a frontend bridge (AgentTerminalBridge.tsx) does the actual
+  // kill, then marks the row exited the same way a user-initiated kill does.
+  | { type: "terminal.kill_requested"; terminalId: string }
+  // docs/MISSION_CONTROL_PLAN.md §8 Phase M6 — the `browser` tool's own version of the same
+  // engine-can't-call-Tauri bridge: broadcast on the project topic, picked up by
+  // AgentWebBridge.tsx, which performs the actual webview create/eval and POSTs the result back
+  // to `POST /browser/:requestId/response` (engine/src/browserBridge.ts resolves the tool's
+  // pending promise from there — there is no `browser.response` SessionEvent, since that leg
+  // doesn't need to reach every window, only the engine).
+  | { type: "browser.request"; request: BrowserRequest };
+
+export type BrowserOp = "open" | "read" | "snapshot" | "console";
+
+export interface BrowserRequest {
+  requestId: string;
+  op: BrowserOp;
+  /** `open` only. */
+  url?: string;
+  /** `read` / `snapshot` / `console` — omit for "whichever page is active in this window". */
+  pageId?: string;
+  /** `open` only — tags a newly created page's `originChatId`, the same as `TerminalDTO`'s. */
+  chatId?: string;
+}
 
 // Client → engine commands sent over the chat WS (docs/IMPLEMENTATION_PLAN.md §3).
 // `approvePermission` is typed now but unused until Phase 3.
@@ -34,7 +74,11 @@ export type ClientCommand =
   | { type: "interrupt"; chatId: string }
   | { type: "setModel"; chatId: string; model: string }
   | { type: "setMode"; chatId: string; mode: ChatMode }
-  | { type: "approvePermission"; reqId: string; approve: boolean };
+  | { type: "approvePermission"; reqId: string; approve: boolean }
+  // docs/MISSION_CONTROL_PLAN.md §5.3 — the project-scoped counterpart to subscribeChat/
+  // unsubscribeChat, for the `terminal.*` events above.
+  | { type: "subscribeProject"; projectId: string }
+  | { type: "unsubscribeProject"; projectId: string };
 
 // Phase 1 — data layer wire types (docs/IMPLEMENTATION_PLAN.md §4, §Phase 1). Shared between
 // the engine's DAO/HTTP layer and the desktop frontend's engine client.
@@ -46,11 +90,11 @@ export type ChatMode = "agent" | "plan" | "ask";
 // at runtime (packages/ui/src/themes.ts's getTheme) rather than failing to compile.
 export type ThemeIdDTO = string;
 
-// Phase 8 — a chat's backend: this app's own agent loop, or an external interactive CLI driven
-// through an embedded PTY (see docs/IMPLEMENTATION_PLAN.md Phase 8). Every chat has exactly one.
-export type BackendConfig =
-  | { kind: "own-loop" }
-  | { kind: "cli"; command: string; args?: string[]; env?: Record<string, string> };
+// A chat's backend. Kept as a union of one (rather than a bare object type) so a future backend
+// adapter is an addition, not a protocol rewrite — see docs/MISSION_CONTROL_PLAN.md §5.4, which
+// deleted the `{ kind: "cli" }` variant that used to live here (driving an external CLI from a
+// chat tab): that's now just a program run in Mission Control's Terminal pane, not a backend.
+export type BackendConfig = { kind: "own-loop" };
 
 export interface ProjectDTO {
   id: string;
@@ -72,6 +116,7 @@ export interface ChatDTO {
   themeId: ThemeIdDTO;
   status: string;
   costUsd: number;
+  utilityCostUsd: number;
   contextUsed: number;
   contextMax: number;
   createdAt: number;
@@ -149,17 +194,93 @@ export interface ToolCallDTO {
   artifactId: string | null;
 }
 
+// docs/MISSION_CONTROL_PLAN.md §5.2 — terminal runtime wire types (Phase M2). A terminal is
+// project-scoped (§0.2), not chat-scoped — `originChatId` records who *started* an agent-owned
+// one, it does not make the terminal belong to that chat.
+export type TerminalOwner = "user" | "agent";
+export type TerminalStatus = "running" | "exited";
+
+// docs/TOOL_LAYER_PLAN.md §6.14 (TL6) — the `todo` tool's list, one per chat. `set` always
+// produces fresh "pending" items (no status field on input); only `update` moves an item to
+// "active"/"done", and exactly one item may be "active" at a time (enforced in db/todos.ts, not
+// the prompt). Shared with the desktop app for the future Mission Control "Todos" pane
+// (apps/desktop/src/app/mission-control/panes.ts's own note anticipates this).
+export type TodoStatus = "pending" | "active" | "done";
+export interface TodoItem {
+  text: string;
+  status: TodoStatus;
+}
+
+export interface TerminalDTO {
+  id: string;
+  projectId: string;
+  title: string;
+  cwd: string;
+  shell: string;
+  argv: string[];
+  owner: TerminalOwner;
+  originChatId: string | null;
+  status: TerminalStatus;
+  exitCode: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateTerminalInput {
+  projectId: string;
+  cwd?: string; // defaults to project.path
+  shell?: string; // defaults to $SHELL
+  argv?: string[];
+  title?: string;
+  owner?: TerminalOwner;
+  originChatId?: string;
+}
+
 // Phase 4 — multi-provider & model management wire types.
 
 export type ProviderKind = "openai-compatible" | "anthropic";
+
+// docs/PROVIDERS_PLAN.md Phase P0 — derived at read time from engine/src/db/providerModels.ts,
+// never stored: "available" means the model was in the provider's most recent successful
+// /models fetch; "unverified" means it's catalog-known but no fetch has confirmed it yet (no key,
+// no working /models, or the provider account can't reach a tier-gated model); "missing" means a
+// prior fetch listed it but the latest one didn't; "erroring" means Phase P1's per-model error
+// tracking recorded a durable failure (auth/not-found), which for now can never actually occur
+// since nothing writes last_error_kind until that phase.
+export type ModelStatus = "available" | "unverified" | "missing" | "erroring";
+export type ModelTier = "frontier" | "workhorse" | "small";
+
+export interface ModelPricing {
+  inputPerMillion: number;
+  outputPerMillion: number;
+  source: "catalog" | "user" | "openrouter";
+}
 
 export interface ModelInfo {
   id: string;
   label: string;
   supportsTools: boolean;
   supportsThinking: boolean;
+  supportsVision: boolean;
   contextWindow: number;
+  status: ModelStatus;
+  tier: ModelTier | null;
+  pricing: ModelPricing | null;
+  deprecated: boolean;
+  supersededBy: string | null;
+  // docs/PROVIDERS_PLAN.md Phase P4 — the providers pane's tick state ("enabled" is the only field
+  // the composer picker and the role pickers actually filter on), "new since you last looked"
+  // (derived client-side from firstSeenAt against a per-provider bookmark), the catalog-known-only
+  // default view (inCatalog), manually-added rows, and the erroring chip's recorded error text.
+  enabled: boolean;
+  pinned: boolean;
+  inCatalog: boolean;
+  addedManually: boolean;
+  firstSeenAt: number;
+  lastError: string | null;
 }
+
+export type ProviderHealthStatus = "ok" | "bad" | "no-key" | "checking";
 
 export interface ProviderDTO {
   id: string;
@@ -168,9 +289,16 @@ export interface ProviderDTO {
   baseUrl: string | null;
   requiresKey: boolean;
   models: ModelInfo[];
+  // docs/PROVIDERS_PLAN.md Phase P1 — the health probe's last persisted result, so a fresh
+  // ProvidersProvider mount can seed `health` from "was fine yesterday" instead of `checking`.
+  lastHealthStatus: ProviderHealthStatus | null;
+  lastHealthAt: number | null;
+  // docs/PROVIDERS_PLAN.md Phase P3 — a row now means "the user configured this"; `isCustom` is
+  // always false until Phase P5's wizard can create a catalog-less provider, but the field ships
+  // now so that phase is a UI-only change, not another protocol edit (see the plan's Risk #6).
+  isCustom: boolean;
+  enabled: boolean;
 }
-
-export type ProviderHealthStatus = "ok" | "bad" | "no-key" | "checking";
 
 export interface ProviderHealthDTO {
   providerId: string;
@@ -180,9 +308,35 @@ export interface ProviderHealthDTO {
   checkedAt: number;
 }
 
-// Phase 6 — rama search. A native harness-level search seam (not heku, which is its own
-// standalone MCP server scoped to config search — see Phase 7). Meant to eventually span tools,
-// skills, memories, chats, docs, and files; only the "tools" domain is registered today.
+// docs/PROVIDERS_PLAN.md Phase P4 fast-add — "catalog tiles" for providers Rama knows about but
+// the user hasn't configured yet (no `providers` row exists for them post-P3, so GET /providers
+// can't answer "what's addable"). Deliberately thin: just enough to render a tile and drive the
+// one-field fast-add flow, not the full CatalogProvider shape engine-internal code uses.
+export interface CatalogProviderSummaryDTO {
+  id: string;
+  label: string;
+  kind: ProviderKind;
+  baseUrl: string | null;
+  requiresKey: boolean;
+  docsUrl: string | null;
+}
+
+// docs/PROVIDERS_PLAN.md Phase P5 — "custom (OpenAI-compatible)": the wizard's credentials step
+// for a provider Rama has never heard of. Always openai-compatible (see db/providers.ts's
+// configureCustomProvider for why Anthropic-shaped custom providers aren't a real case).
+export interface CustomProviderInput {
+  label: string;
+  baseUrl: string;
+  requiresKey: boolean;
+  authStyle: "bearer" | "header";
+  authHeader?: string | null;
+}
+
+// Phase 6 — rama search. A native harness-level search seam. heku (docs/TOOL_LAYER_PLAN.md §7,
+// TL7) is one of its providers, not a separate thing — the in-process external-tool broker
+// registers as the "mcp" domain here, so the palette and the model share one index. Meant to
+// eventually span tools, skills, memories, chats, docs, and files; only "tools", "skills", "mcp",
+// "docs", and "commands" are registered today.
 
 export interface SearchResultDTO {
   id: string;
@@ -259,6 +413,23 @@ export type ProjectPermissionPatch = Partial<Record<PermissionTool, PermissionRu
 export interface GeneralSettingsDTO {
   defaultProjectDir: string;
   defaultMode: ChatMode;
+  // docs/PROVIDERS_PLAN.md Phase P2 — gates auto-titling entirely: off means no chat content
+  // leaves the machine for this purpose at all, not just "don't show the result".
+  autoNameChats: boolean;
+  // docs/PROVIDERS_PLAN.md Phase P6 — gates the OpenRouter enrichment GET entirely: off means the
+  // engine never makes that outbound request, not just "don't show the result". Off by default.
+  enrichFromOpenRouter: boolean;
+}
+
+// docs/PROVIDERS_PLAN.md Phase P2 — a role names *why* a call happens ('chat', 'utility'), not a
+// "cheap model" setting. 'summarize' is reserved for compaction; no UI row until that exists.
+export type ModelRole = "chat" | "utility" | "summarize";
+
+export interface ModelRoleDTO {
+  role: ModelRole;
+  providerId: string;
+  modelId: string;
+  updatedAt: number;
 }
 
 // SETTINGS_PLAN.md Phase S1 — GET /themes. `themes` is raw, unvalidated theme JSON (the engine

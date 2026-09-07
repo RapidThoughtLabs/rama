@@ -5,6 +5,8 @@ import type { SearchResultDTO } from "@rama/protocol";
 import { ramaSearch } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useWindowTabsData } from "./data/WindowTabsProvider";
+import { MISSION_CONTROL_PANES, type MissionControlPaneId } from "./mission-control/panes";
+import { createProjectTerminal } from "./mission-control/panes/TerminalPaneContext";
 
 interface PaletteAction {
   id: string;
@@ -28,15 +30,30 @@ type PaletteEntry = { kind: "action"; action: PaletteAction } | { kind: "result"
 export function CommandPalette({
   onTogglePanel,
   onOpenSettings,
+  onSelectPane,
+  onToggleRail,
 }: {
   onTogglePanel: () => void;
   onOpenSettings: () => void;
+  /** docs/MISSION_CONTROL_PLAN.md §4.9 — ⌥1/⌥2/⌥3 switch Mission Control's active pane. */
+  onSelectPane: (id: MissionControlPaneId) => void;
+  /** ⌥` collapses/expands Mission Control's rail. */
+  onToggleRail: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultDTO[]>([]);
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // docs/MISSION_CONTROL_PLAN.md §8 Phase M5 — useWebviewVisibility (WebStage.tsx) needs to know
+  // when this overlay is open so it can hide the Web pane's native child webview underneath it (a
+  // webview always paints over the DOM). This component owns `open` locally with no shared
+  // context, so it's broadcast the same window-CustomEvent way `rama:toggle-palette` reaches this
+  // component from the other direction.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("rama:palette-visibility", { detail: open }));
+  }, [open]);
 
   const { cycleTheme } = useTheme();
   const { allChats, activeProjectId } = useProjectsData();
@@ -47,6 +64,31 @@ export function CommandPalette({
       const meta = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
 
+      // docs/MISSION_CONTROL_PLAN.md §4.9 — `e.code` (physical key), not `e.key`: macOS remaps
+      // Option+digit to punctuation on most layouts (⌥1 → "¡" on US), so matching `e.key` against
+      // /^[1-9]$/ the way the ⌘1-9 chord below does would silently never fire.
+      if (e.altKey && e.code.startsWith("Digit")) {
+        const pane = MISSION_CONTROL_PANES[Number(e.code.slice(5)) - 1];
+        if (pane) {
+          e.preventDefault();
+          onSelectPane(pane.id);
+        }
+        return;
+      }
+      if (e.altKey && e.code === "Backquote") {
+        e.preventDefault();
+        onToggleRail();
+        return;
+      }
+      if (meta && e.shiftKey && e.code === "Backquote") {
+        e.preventDefault();
+        onSelectPane("terminal");
+        // docs/MISSION_CONTROL_PLAN.md §4.9 — "new terminal (switches to the Terminal pane)", not
+        // just a pane switch. Goes through the standalone helper, not context, since
+        // TerminalPaneProvider only mounts while the Terminal pane is already active (§8 M3).
+        if (activeProjectId) void createProjectTerminal(activeProjectId);
+        return;
+      }
       if (meta && key === "k") {
         e.preventDefault();
         setOpen((v) => !v);
@@ -95,7 +137,7 @@ export function CommandPalette({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("rama:toggle-palette", onToggle);
     };
-  }, [activeProjectId, activeTabId, tabs, openNewTab, popOutTab, selectTab, onOpenSettings]);
+  }, [activeProjectId, activeTabId, tabs, openNewTab, popOutTab, selectTab, onOpenSettings, onSelectPane, onToggleRail]);
 
   useEffect(() => {
     if (!open) return;
@@ -150,8 +192,15 @@ export function CommandPalette({
         },
       },
       { id: "act:theme", title: "cycle theme", run: cycleTheme },
-      { id: "act:panel", title: "toggle artifacts panel", run: onTogglePanel },
+      { id: "act:panel", title: "toggle mission control", run: onTogglePanel },
       { id: "act:settings", title: "settings", subtitle: "⌘,", run: onOpenSettings },
+      { id: "act:rail:toggle", title: "toggle mission control rail", subtitle: "⌥`", run: onToggleRail },
+      ...MISSION_CONTROL_PANES.map((pane, i) => ({
+        id: `act:pane:${pane.id}`,
+        title: `show ${pane.label} pane`,
+        subtitle: `⌥${i + 1}`,
+        run: () => onSelectPane(pane.id),
+      })),
     ];
     if (tabs.length > 1 && activeTabId) {
       list.push({
@@ -173,6 +222,8 @@ export function CommandPalette({
     cycleTheme,
     onTogglePanel,
     onOpenSettings,
+    onSelectPane,
+    onToggleRail,
     tabs,
     activeTabId,
     popOutTab,

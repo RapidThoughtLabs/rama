@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { BackendConfig, ChatDTO } from "@rama/protocol";
+import type { ChatDTO } from "@rama/protocol";
 import { WINDOW_LABEL } from "../../engine/window";
 import { useProjectsData } from "./ProjectsProvider";
 
@@ -31,7 +31,6 @@ export interface WindowTabsDataValue {
   activeTabId: string | null;
   selectTab: (chatId: string) => void;
   openNewTab: (projectId: string) => Promise<ChatDTO>;
-  openNewTerminalTab: (projectId: string, command: string, args: string[]) => Promise<ChatDTO>;
   adoptChat: (chatId: string) => Promise<string | null>;
   popOutTab: (chatId: string) => Promise<void>;
 }
@@ -130,18 +129,6 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
     [addChat],
   );
 
-  // Phase 8 — same as openNewTab, but the chat is cli-backed (see TerminalView.tsx) instead of
-  // own-loop.
-  const openNewTerminalTab = useCallback(
-    async (projectId: string, command: string, args: string[]) => {
-      const backend: BackendConfig = { kind: "cli", command, args: args.length > 0 ? args : undefined };
-      const chat = await addChat(projectId, backend);
-      await invoke("add_chat_to_window", { windowLabel: WINDOW_LABEL, chatId: chat.id });
-      return chat;
-    },
-    [addChat],
-  );
-
   // Adopts an existing chat into this window's tabs, or — if it's already owned by another
   // window — returns that window's label so the caller can focus it instead (a chat is a tab in
   // at most one window; see Sidebar.tsx's click handler).
@@ -167,11 +154,10 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
       activeTabId,
       selectTab,
       openNewTab,
-      openNewTerminalTab,
       adoptChat,
       popOutTab,
     }),
-    [tabs, activeTabId, selectTab, openNewTab, openNewTerminalTab, adoptChat, popOutTab],
+    [tabs, activeTabId, selectTab, openNewTab, adoptChat, popOutTab],
   );
 
   return <WindowTabsContext.Provider value={value}>{children}</WindowTabsContext.Provider>;

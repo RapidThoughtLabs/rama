@@ -3,7 +3,6 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_SQL } from "./schema";
-import { seedProviders } from "./providers";
 
 export const RAMA_HOME = join(homedir(), ".rama");
 export const BLOBS_DIR = join(RAMA_HOME, "blobs");
@@ -43,4 +42,29 @@ if (addColumnIfMissing("chats", "theme_id", "theme_id TEXT NOT NULL DEFAULT 'kan
   `);
 }
 
-seedProviders();
+// docs/PROVIDERS_PLAN.md Phase P0 — roster state piggybacked onto the existing 30s health probe
+// (engine/src/providerHealth.ts) and read back through engine/src/db/providerModels.ts.
+addColumnIfMissing("providers", "models_hash", "models_hash TEXT");
+addColumnIfMissing("providers", "models_fetched_at", "models_fetched_at INTEGER");
+addColumnIfMissing("providers", "last_health_status", "last_health_status TEXT");
+addColumnIfMissing("providers", "last_health_at", "last_health_at INTEGER");
+
+// docs/PROVIDERS_PLAN.md Phase P3 — "a provider row means the user configured this." seedProviders()
+// is gone; these columns are what a deliberately-configured (or, for is_custom, hand-entered)
+// provider actually needs. requires_key/auth_style/auth_header/extra_headers_json are copied from
+// the catalog at configure time (see db/providers.ts's configureProvider) rather than re-derived
+// from a hardcoded id map, which is what let REQUIRES_KEY silently lie for any custom provider.
+addColumnIfMissing("providers", "is_custom", "is_custom INTEGER NOT NULL DEFAULT 0");
+addColumnIfMissing("providers", "enabled", "enabled INTEGER NOT NULL DEFAULT 1");
+addColumnIfMissing("providers", "requires_key", "requires_key INTEGER NOT NULL DEFAULT 1");
+addColumnIfMissing("providers", "auth_style", "auth_style TEXT NOT NULL DEFAULT 'bearer'");
+addColumnIfMissing("providers", "auth_header", "auth_header TEXT");
+addColumnIfMissing("providers", "extra_headers_json", "extra_headers_json TEXT NOT NULL DEFAULT '{}'");
+
+// docs/PROVIDERS_PLAN.md Phase P2 — utility-role spend, tracked separately from cost_usd.
+addColumnIfMissing("chats", "utility_cost_usd", "utility_cost_usd REAL NOT NULL DEFAULT 0");
+
+// docs/TOOL_LAYER_PLAN.md Phase TL0 — carries what the model actually saw (not just the UI
+// summary) so a later turn can rebuild real tool-call/tool-result history instead of losing it.
+addColumnIfMissing("tool_calls", "result_content", "result_content TEXT");
+addColumnIfMissing("tool_calls", "result_meta_json", "result_meta_json TEXT");

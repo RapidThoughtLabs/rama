@@ -23,7 +23,7 @@ Design source of truth: `docs/Rama/` (`Rama.dc.html` prototype, `design-system.h
 | First provider | **Together AI** via **OpenAI-compatible adapter** (also serves OpenAI + any OpenAI-spec / local endpoint) |
 | Storage | **Single SQLite** (`~/.rama/rama.db`), linked tables; large artifact bodies **content-addressed on disk** (`~/.rama/blobs/`) |
 | Primary product | **Our own agent loop** (bespoke UI) for custom / on-device providers |
-| Secondary (later) | Driving external agent CLIs (Claude Code, Copilot) via embedded themed PTY — a backend *adapter*, not the core |
+| Secondary (later) | Driving external agent CLIs (Claude Code, Copilot) via embedded themed PTY — run as a program inside Mission Control's Terminal pane (`docs/MISSION_CONTROL_PLAN.md`), not a chat backend |
 
 ---
 
@@ -63,7 +63,7 @@ Design source of truth: `docs/Rama/` (`Rama.dc.html` prototype, `design-system.h
 │   │  • OS keychain (API keys)    │◀─┤  • provider adapters (AI SDK) │  │
 │   │  • native menus / traffic    │  │  • tool exec (fs, bash, grep) │  │
 │   │  • sidecar supervision       │  │  • context / token accounting │  │
-│   │  • PTY (Phase 8, CLI embed)  │  │  • SQLite + blob store         │  │
+│   │  • PTY (Mission Control)     │  │  • SQLite + blob store         │  │
 │   └─────────────────────────────┘  │  • normalized event bus (WS)  │  │
 │                                     └──────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────┘
@@ -73,8 +73,8 @@ Design source of truth: `docs/Rama/` (`Rama.dc.html` prototype, `design-system.h
 
 **Responsibilities**
 - **Rust core**: OS-privileged surface — windows/tabs, OS keychain for secrets, native menu/traffic
-  lights, supervising the Bun sidecar, and (Phase 8) PTY for CLI embedding. Hands each webview the
-  loopback engine URL + auth token.
+  lights, supervising the Bun sidecar, and PTY for Mission Control's Terminal pane
+  (`docs/MISSION_CONTROL_PLAN.md`). Hands each webview the loopback engine URL + auth token.
 - **Bun engine (daemon)**: the brain. Runs the agent loop, provider adapters, tool execution,
   context management, and owns the SQLite DB + blob store. Exposes a **loopback WebSocket** (random
   port, per-launch token) so one or many windows can subscribe to a chat's event stream.
@@ -128,7 +128,7 @@ projects(
 
 chats(                         -- a "terminal chat" / session
   id, project_id, title,
-  backend_json,                -- { kind: 'openai-compat', base_url, provider_id } | { kind:'cli', ... }
+  backend_json,                -- { kind: 'own-loop' } — a union of one; see MISSION_CONTROL_PLAN.md §5.4
   model, mode,                 -- mode: agent | plan | ask
   wallpaper, accent, theme,    -- per-chat UI, persisted with the chat
   status, cost_usd, context_used, context_max,
@@ -250,12 +250,19 @@ Each phase has a concrete **exit criterion** you can demo. Phases 0–3 = the bo
   index); local gitignored docs; ⌘K command palette; `/commands`.
 - **Exit:** extensibility — skills & MCP servers add tools; palette + commands work.
 
-### Phase 8 — CLI shell embedding (SECONDARY)
-- PTY (`portable-pty`) in Rust core + **xterm.js** in the webview; theme the terminal (transparent bg
-  over wallpaper, accent ANSI palette). Composer → PTY stdin; app-chord interception.
-- Optional augmentation: tail Claude Code's session transcript JSONL + hooks to feed the artifacts panel.
-- Modeled as just another **backend kind** alongside own-loop providers.
-- **Exit:** a terminal chat can be backed by Claude Code / Copilot inside the themed frame.
+### Phase 8 — CLI shell embedding (SECONDARY, superseded)
+**Rewritten by `docs/MISSION_CONTROL_PLAN.md`.** The original plan was a `{ kind: "cli" }` chat
+backend — a chat tab with no composer, no messages, and no model, its whole column a live
+terminal. That was confusing: those CLIs are just programs, not a second kind of chat. There is no
+cli-backed chat anymore; `BackendConfig` is a union of one (`{ kind: "own-loop" }`).
+
+PTY (`portable-pty`) in Rust core + **xterm.js** in the webview still land, themed the same way
+(transparent bg over wallpaper, accent ANSI palette) — just as **Mission Control's Terminal pane**
+(`MISSION_CONTROL_PLAN.md` phases M2/M3), a project-scoped live-shell multiplexer independent of
+any chat. Running `claude` or `copilot` there is no different from running `bun dev`: open a
+terminal, type the command. The agent surface (`MISSION_CONTROL_PLAN.md` §7) is what makes shells
+agent-driven instead — `bash background:true` spawns one, `process` reads/lists/kills them.
+- **Exit:** see `MISSION_CONTROL_PLAN.md` phases M2–M4 for the real exit criteria.
 
 ---
 

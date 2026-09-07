@@ -25,7 +25,7 @@ export function createSkillTools(ctx: ToolCtx): ToolSet {
       execute: async (): Promise<ToolResult> =>
         gate(ctx, { name: toolName, input: {}, risk: "low" }, async () => {
           const body = readFileSync(join(skill.path, "SKILL.md"), "utf8");
-          return { ok: true, summary: `loaded skill: ${skill.name}`, detail: body };
+          return { ok: true, summary: `loaded skill: ${skill.name}`, content: body };
         }),
     });
   }

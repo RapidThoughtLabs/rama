@@ -4,9 +4,10 @@ import { Button, Fluke, SegmentedControl } from "@rama/ui";
 import type { ChatMode, SearchResultDTO, ToolCallDTO } from "@rama/protocol";
 import { patchChat, ramaSearch } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
+import { useProvidersData } from "./data/ProvidersProvider";
 import { useSessionData } from "./data/SessionProvider";
 import { ModelPicker } from "./ModelPicker";
-import { TerminalView } from "./TerminalView";
+import { ProviderSetupWizard } from "./ProviderSetupWizard";
 
 const MODES: { id: ChatMode; label: string }[] = [
   { id: "agent", label: "agent" },
@@ -30,7 +31,10 @@ function formatToolTarget(name: string, input: unknown): string {
     case "read":
     case "write":
     case "edit":
-    case "ls":
+    case "tree":
+      return typeof obj.path === "string" ? obj.path : "";
+    case "file_op":
+      if (typeof obj.from === "string" && typeof obj.to === "string") return `${obj.from} → ${obj.to}`;
       return typeof obj.path === "string" ? obj.path : "";
     case "grep": {
       const pattern = typeof obj.pattern === "string" ? obj.pattern : "";
@@ -39,9 +43,22 @@ function formatToolTarget(name: string, input: unknown): string {
     }
     case "bash":
       return typeof obj.command === "string" ? obj.command : "";
+    case "browser":
+      return typeof obj.url === "string" ? obj.url : "";
     default:
       return "";
   }
+}
+
+function isBackgroundBash(input: unknown): boolean {
+  return !!(input as Record<string, unknown> | null)?.background;
+}
+
+// docs/MISSION_CONTROL_PLAN.md §8 Phase M6 — the `browser` tool's own version of §7.1's
+// "the gate's prompt copy must say what this actually does" note: `open` can load any URL the
+// agent gives it, and (like a background shell) the page it opens stays up after approval.
+function isBrowserOpen(input: unknown): boolean {
+  return (input as Record<string, unknown> | null)?.op === "open";
 }
 
 function renderResultSummary(summary: string): ReactNode {
@@ -75,6 +92,7 @@ function ToolCallCard({ toolCall }: { toolCall: ToolCallDTO }) {
 
 export function ChatColumn() {
   const { projects, allChats, activeChatId } = useProjectsData();
+  const { providers, loading: providersLoading } = useProvidersData();
   const {
     messages,
     status,
@@ -85,6 +103,7 @@ export function ChatColumn() {
     sendUserTurn,
     interrupt,
     approvePermission,
+    restoreLastRun,
   } = useSessionData();
 
   const activeChat = allChats.find((c) => c.id === activeChatId);
@@ -239,6 +258,13 @@ export function ChatColumn() {
     if (!activeChat || isBusy) return;
     const text = typed;
     if (!text.trim()) return;
+    // docs/TOOL_LAYER_PLAN.md §5.2 — a client-side command, not a model turn: restores the
+    // project's files rather than asking the model to do anything.
+    if (text.trim() === "/undo") {
+      restoreLastRun();
+      setTyped("");
+      return;
+    }
     sendUserTurn(text);
     setTyped("");
   }
@@ -282,15 +308,6 @@ export function ChatColumn() {
   const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
   const elapsedSeconds = status.runStartedAt ? Math.max(0, Math.round((now - status.runStartedAt) / 1000)) : 0;
 
-  // A cli-backed chat (docs/IMPLEMENTATION_PLAN.md Phase 8) has no own-loop turns, messages, or
-  // composer — its entire column is a live terminal. All the hooks above still ran (harmlessly)
-  // so hook order stays identical regardless of which chat is active; only the returned JSX
-  // differs. key={activeChat.id} forces a full unmount/remount when switching between two
-  // different cli chats, rather than TerminalView silently reusing its mounted instance.
-  if (activeChat?.backend.kind === "cli") {
-    return <TerminalView key={activeChat.id} chat={activeChat} project={activeProject} />;
-  }
-
   return (
     <div className="rama-chat-column">
       <div className="rama-chat-header">
@@ -313,7 +330,19 @@ export function ChatColumn() {
             <div className="rama-msg-meta">select or create a chat to get started.</div>
           )}
 
-          {messages.length === 0 && activeChat && (
+          {/* docs/PROVIDERS_PLAN.md Phase P5 — "first run, which is currently broken: the app
+              boots with no keys and a default provider that is not configured, into a chat that
+              cannot send. First run routes to this flow instead." providersLoading guards against
+              flashing the wizard for one frame before the initial GET /providers resolves. */}
+          {messages.length === 0 && activeChat && !providersLoading && providers.length === 0 && (
+            <div className="rama-welcome rama-welcome-wizard">
+              <Fluke className="rama-welcome-fluke rama-welcome-fluke-sm" />
+              <div className="rama-welcome-wizard-title">connect a provider to start chatting</div>
+              <ProviderSetupWizard onDone={() => {}} />
+            </div>
+          )}
+
+          {messages.length === 0 && activeChat && (providersLoading || providers.length > 0) && (
             <div className="rama-welcome">
               <Fluke className="rama-welcome-fluke" />
             </div>
@@ -367,6 +396,19 @@ export function ChatColumn() {
                   {pendingPermission.tool} {formatToolTarget(pendingPermission.tool, pendingPermission.input)}
                 </span>
               </div>
+              {/* docs/MISSION_CONTROL_PLAN.md §8 Phase M4 — "the gate's prompt copy must say the
+                  process outlives the turn" (§7.1): approving a background bash call is a
+                  materially different ask than a normal one. */}
+              {pendingPermission.tool === "bash" && isBackgroundBash(pendingPermission.input) && (
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--warn)", padding: "2px 0 0 20px" }}>
+                  this starts a process that keeps running after you approve — it won't stop when this turn ends.
+                </div>
+              )}
+              {pendingPermission.tool === "browser" && isBrowserOpen(pendingPermission.input) && (
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--warn)", padding: "2px 0 0 20px" }}>
+                  this opens a page in the Web pane that stays open after you approve — it can load any URL the agent gives it.
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, padding: "4px 0 2px 3px" }}>
                 <Button size="sm" onClick={() => approvePermission(pendingPermission.reqId, true)}>
                   approve

@@ -14,6 +14,7 @@ import {
   patchChat,
   updateProject as updateProjectApi,
 } from "../../engine/client";
+import { onEvent } from "../../engine/ws";
 import { WINDOW_LABEL } from "../../engine/window";
 
 // Real projects/chats + per-chat theme persistence (docs/IMPLEMENTATION_PLAN.md Phase 1),
@@ -157,6 +158,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         console.error("[rama] failed to persist chat theme", err);
       });
   }, [themeId, activeChatId]);
+
+  // docs/PROVIDERS_PLAN.md Phase P2 — auto-titling's only way to reach the sidebar; a chat's
+  // title lives in this provider's chatsByProject, not SessionProvider's per-run state, so the
+  // rename has to be applied here rather than where the rest of the WS event stream is handled.
+  useEffect(() => {
+    return onEvent((_chatId, event) => {
+      if (event.type !== "chat.renamed") return;
+      setChatsByProject((prev) => {
+        for (const [projectId, list] of Object.entries(prev)) {
+          const idx = list.findIndex((c) => c.id === event.chatId);
+          if (idx === -1) continue;
+          const nextList = [...list];
+          nextList[idx] = { ...nextList[idx], title: event.title };
+          return { ...prev, [projectId]: nextList };
+        }
+        return prev;
+      });
+    });
+  }, []);
 
   const addProject = useCallback(async (input: { name: string; path: string }) => {
     const project = await createProjectApi(input);
