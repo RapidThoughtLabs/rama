@@ -4,20 +4,17 @@ import { WINDOW_LABEL } from "../../engine/window";
 import type { MissionControlPaneId } from "./panes";
 
 // docs/MISSION_CONTROL_PLAN.md §4.7 — all of Mission Control's view state (width, rail sizes,
-// collapse, active pane, axis override) in one place, persisted per window. This is view state,
+// collapse, active pane) in one place, persisted per window. This is view state,
 // not user data — it belongs in localStorage, not SQLite (§8, M1's own note).
 
 const STORAGE_KEY = `rama:mission-control:${WINDOW_LABEL}`;
 const DEFAULT_WIDTH = 384;
 const MIN_WIDTH = 320;
 const RIGHT_MARGIN = 480; // the chat column can never be crushed below this
-const AXIS_BREAKPOINT = 600;
+const WIDE_BREAKPOINT = 600; // double-click the edge splitter to toggle across this width
 const SNAP_POINTS = [384, 600];
 const SNAP_PULL = 16;
-const DEFAULT_RAIL_SIZE = 260; // wide-mode rail width, px
-const DEFAULT_NARROW_RAIL_SIZE = 160; // narrow-mode rail height, px
-
-export type MissionControlAxis = "stacked" | "side";
+const DEFAULT_RAIL_SIZE = 260; // rail width, px
 
 interface PersistedGeometry {
   width: number;
@@ -27,8 +24,6 @@ interface PersistedGeometry {
    *  collapsed when you switch to Terminal, same as any other view-chrome preference. */
   railCollapsed: boolean;
   railSize: number;
-  narrowRailSize: number;
-  axisOverride: MissionControlAxis | null;
   lastWideWidth: number;
   lastNarrowWidth: number;
 }
@@ -36,11 +31,9 @@ interface PersistedGeometry {
 const DEFAULTS: PersistedGeometry = {
   width: DEFAULT_WIDTH,
   panelCollapsed: false,
-  activePaneId: "artifacts",
+  activePaneId: "changes",
   railCollapsed: false,
   railSize: DEFAULT_RAIL_SIZE,
-  narrowRailSize: DEFAULT_NARROW_RAIL_SIZE,
-  axisOverride: null,
   lastWideWidth: 720,
   lastNarrowWidth: DEFAULT_WIDTH,
 };
@@ -49,7 +42,14 @@ function load(): PersistedGeometry {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    // docs/WORKSPACE_PANES_PLAN.md Phase W2 migration: an existing window's persisted
+    // "artifacts" must map to "changes", otherwise clicking the Changes tile collapses
+    // the panel instead of selecting the pane.
+    if ((parsed as { activePaneId?: string }).activePaneId === "artifacts") {
+      parsed.activePaneId = "changes";
+    }
+    return { ...DEFAULTS, ...parsed };
   } catch {
     return DEFAULTS;
   }
@@ -72,18 +72,14 @@ export interface MissionControlGeometry {
   bodyRef: RefObject<HTMLDivElement | null>;
   width: number;
   dragging: boolean;
-  axis: MissionControlAxis;
-  setAxisOverride: (a: MissionControlAxis | null) => void;
   activePaneId: MissionControlPaneId;
   setActivePaneId: (id: MissionControlPaneId) => void;
-  /** Rail-within-Mission-Control collapse — one flag shared across every pane (§4.5's icon strip
-   *  / §4.3's breadcrumb), so collapsing it on one tab keeps it collapsed on the others. */
+  /** Rail-within-Mission-Control collapse — one flag shared across every pane (§4.5's icon
+   *  strip), so collapsing it on one tab keeps it collapsed on the others. */
   railCollapsed: boolean;
   toggleRailCollapsed: () => void;
   railSize: number;
   setRailSize: (n: number) => void;
-  narrowRailSize: number;
-  setNarrowRailSize: (n: number) => void;
   beginDrag: () => void;
   updateDragWidth: (px: number) => void;
   endDrag: () => void;
@@ -99,8 +95,6 @@ export function useMissionControlGeometry(): MissionControlGeometry {
   const [activePaneId, setActivePaneIdState] = useState<MissionControlPaneId>(initial.activePaneId);
   const [railCollapsed, setRailCollapsedState] = useState(initial.railCollapsed);
   const [railSize, setRailSizeState] = useState(initial.railSize);
-  const [narrowRailSize, setNarrowRailSizeState] = useState(initial.narrowRailSize);
-  const [axisOverride, setAxisOverrideState] = useState<MissionControlAxis | null>(initial.axisOverride);
   const [dragging, setDragging] = useState(false);
 
   const widthRef = useRef(width);
@@ -113,7 +107,7 @@ export function useMissionControlGeometry(): MissionControlGeometry {
 
   // Resizing the OS window itself used to do nothing to `width` — it's only ever written by a
   // drag or a snap, so shrinking the window could leave the panel wider than `clamp()` would
-  // allow, or straddling the axis breakpoint in a way that never got a chance to settle. That's
+  // allow, or straddling the double-click breakpoint in a way that never got a chance to settle. That's
   // what "doesn't shift the sidebar fluently" was actually describing: the layout wasn't reacting
   // to the resize at all until the next manual drag. Debounced (not rAF-throttled like a drag —
   // this fires far less often and doesn't need to track the cursor) via a plain timeout.
@@ -137,8 +131,6 @@ export function useMissionControlGeometry(): MissionControlGeometry {
       window.removeEventListener("resize", onResize);
     };
   }, []);
-
-  const axis: MissionControlAxis = axisOverride ?? (width >= AXIS_BREAKPOINT ? "side" : "stacked");
 
   const togglePanelCollapsed = useCallback(() => {
     setPanelCollapsed((v) => {
@@ -164,16 +156,6 @@ export function useMissionControlGeometry(): MissionControlGeometry {
   const setRailSize = useCallback((n: number) => {
     setRailSizeState(n);
     save({ railSize: n });
-  }, []);
-
-  const setNarrowRailSize = useCallback((n: number) => {
-    setNarrowRailSizeState(n);
-    save({ narrowRailSize: n });
-  }, []);
-
-  const setAxisOverride = useCallback((a: MissionControlAxis | null) => {
-    setAxisOverrideState(a);
-    save({ axisOverride: a });
   }, []);
 
   function clamp(px: number): number {
@@ -203,13 +185,13 @@ export function useMissionControlGeometry(): MissionControlGeometry {
     setDragging(false);
     const final = widthRef.current;
     setWidthState(final);
-    if (final >= AXIS_BREAKPOINT) lastWideRef.current = final;
+    if (final >= WIDE_BREAKPOINT) lastWideRef.current = final;
     else lastNarrowRef.current = final;
     save({ width: final, lastWideWidth: lastWideRef.current, lastNarrowWidth: lastNarrowRef.current });
   }, []);
 
   const handleDoubleClick = useCallback(() => {
-    const isWide = widthRef.current >= AXIS_BREAKPOINT;
+    const isWide = widthRef.current >= WIDE_BREAKPOINT;
     const next = isWide ? lastNarrowRef.current : lastWideRef.current;
     widthRef.current = next;
     setWidthState(next);
@@ -222,16 +204,12 @@ export function useMissionControlGeometry(): MissionControlGeometry {
     bodyRef,
     width,
     dragging,
-    axis,
-    setAxisOverride,
     activePaneId,
     setActivePaneId,
     railCollapsed,
     toggleRailCollapsed,
     railSize,
     setRailSize,
-    narrowRailSize,
-    setNarrowRailSize,
     beginDrag,
     updateDragWidth,
     endDrag,

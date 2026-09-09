@@ -1,8 +1,8 @@
 // docs/PROMPT_STACK_PLAN.md §8.3, Phase PS6 — the display half (formatUnverifiedWrites) and the
-// enforcement-message half (buildCompletionGateNudge) of the completion gate, tested independent
-// of loop.ts's actual retry wiring.
+// enforcement-text half (buildCompletionGateNudgeText) of the completion gate, tested independent
+// of hooks.ts's actual retry wiring.
 import { describe, expect, test } from "bun:test";
-import { buildCompletionGateNudge, formatUnverifiedWrites, MAX_COMPLETION_NUDGES } from "./completionGate";
+import { buildCompletionGateNudgeText, formatUnverifiedWrites } from "./completionGate";
 
 describe("formatUnverifiedWrites", () => {
   test("empty set renders nothing", () => {
@@ -24,20 +24,11 @@ describe("formatUnverifiedWrites", () => {
   });
 });
 
-describe("buildCompletionGateNudge", () => {
-  test("system-role when the model supports mid-conversation system messages", () => {
-    const msg = buildCompletionGateNudge(new Set(["a.ts"]), true);
-    expect(msg.role).toBe("system");
-    expect(msg.content).toContain("a.ts");
-    expect(msg.content).toContain("Run check now");
-  });
-
-  test("falls back to a user-role message otherwise", () => {
-    const msg = buildCompletionGateNudge(new Set(["a.ts"]), false);
-    expect(msg.role).toBe("user");
+describe("buildCompletionGateNudgeText", () => {
+  test("renders the nudge with the file list and the check instruction", () => {
+    const text = buildCompletionGateNudgeText(new Set(["a.ts"]));
+    expect(text).toContain("a.ts");
+    expect(text).toContain("Run check now");
   });
 });
 
-test("exactly one enforced nudge, not unbounded retries (§8.3 scope decision)", () => {
-  expect(MAX_COMPLETION_NUDGES).toBe(1);
-});

@@ -1,12 +1,14 @@
-import { stepCountIs, streamText, type LanguageModel, type ToolSet } from "ai";
+// engine/src/tools/subagentRunner.ts
+//
+// In-house subagent runner driven by LlmClient instead of AI SDK's streamText.
+// docs/LOOP_MIGRATION_PLAN.md LM3
+
 import { createArtifact } from "../db/artifacts";
+import type { WireMessage, WireTool } from "../llm/types";
+import type { RamaToolSet } from "./define";
 import { headTailTruncate } from "./truncate";
 import type { ToolCtx, ToolResult } from "./types";
 
-// docs/PROMPT_STACK_PLAN.md §6.3, Phase PS5 — the base sub-agent prompt, shared verbatim by
-// explore/review/test (§6.4: "all three are instances of §5.3's format with §6.3's contract").
-// Each row in the plan's table is one sentence here; the last row (confidence + what was NOT
-// checked) is the one the plan calls out as "the one people skip and the most valuable".
 export const SUBAGENT_RETURN_CONTRACT =
   "Before answering, restate the question or task in one line, so it's clear you answered the one " +
   "actually asked. Cite a real file path (and line number where it matters, e.g. `src/foo.ts:42`) for " +
@@ -20,10 +22,10 @@ export const SUBAGENT_RETURN_CONTRACT =
 export interface SubagentRunOptions {
   ctx: ToolCtx;
   toolCallId: string;
-  model: LanguageModel;
+  model?: string;
   system: string;
   userContent: string;
-  tools: ToolSet;
+  tools: RamaToolSet;
   stepBudget: number;
   answerMaxChars: number;
   /** Tags console error logs and the artifact name prefix, e.g. "explore", "review", "test". */
@@ -33,52 +35,94 @@ export interface SubagentRunOptions {
   noAnswerMessage: string;
 }
 
-// docs/TOOL_LAYER_PLAN.md §6.15 / docs/PROMPT_STACK_PLAN.md §6, Phase PS5 — the nested-streamText
-// engine shared by explore/review/test (factored out of what was explore.ts's own inline loop).
-// Sub-agent output enters the parent's context as data (§6.3's closing line) — only `content`
-// below is ever routed into the parent's message stream; the full transcript goes to the
-// artifacts panel for audit and never reaches the model.
 export async function runSubagent(opts: SubagentRunOptions): Promise<ToolResult> {
-  const { ctx, toolCallId, model, system, userContent, tools, stepBudget, answerMaxChars, logTag, artifactName, summaryLabel, noAnswerMessage } =
-    opts;
+  const {
+    ctx,
+    toolCallId,
+    system,
+    userContent,
+    tools,
+    stepBudget,
+    answerMaxChars,
+    logTag,
+    artifactName,
+    summaryLabel,
+    noAnswerMessage,
+  } = opts;
   const transcript: string[] = [userContent];
   let finalText = "";
 
-  try {
-    const result = streamText({
-      model,
-      system,
-      messages: [{ role: "user", content: userContent }],
-      tools,
-      stopWhen: stepCountIs(stepBudget),
-      abortSignal: ctx.abortSignal,
-      onError: ({ error }) => {
-        console.error(`[${logTag}] nested stream error (chat ${ctx.chatId}):`, error instanceof Error ? error.message : error);
-      },
-    });
+  const wireTools: WireTool[] = Object.entries(tools).map(([name, def]) => ({
+    name,
+    description: def.description,
+    inputSchema: def.inputSchema,
+  }));
 
-    for await (const part of result.fullStream) {
-      switch (part.type) {
-        case "text-delta":
-          finalText += part.text;
-          break;
-        case "tool-call":
-          transcript.push(`\n> ${part.toolName}(${JSON.stringify(part.input)})`);
-          break;
-        case "tool-result": {
-          const output = part.output as ToolResult;
-          transcript.push(output.content ?? output.summary);
-          break;
+  const messages: WireMessage[] = [
+    { role: "system", content: system },
+    { role: "user", content: userContent },
+  ];
+
+  try {
+    let steps = 0;
+    while (steps < stepBudget) {
+      steps++;
+      let stepText = "";
+      const queuedCalls: { id: string; name: string; input: unknown }[] = [];
+
+      for await (const event of ctx.subagentClient.stream({
+        model: opts.model ?? ctx.subagentModel,
+        messages,
+        tools: wireTools.length > 0 ? wireTools : undefined,
+        signal: ctx.abortSignal,
+      })) {
+        if (event.type === "text.delta") {
+          stepText += event.text;
+        } else if (event.type === "tool_call") {
+          queuedCalls.push(event);
+          transcript.push(`\n> ${event.name}(${JSON.stringify(event.input)})`);
         }
-        case "tool-error": {
-          const message = part.error instanceof Error ? part.error.message : String(part.error);
-          transcript.push(`error: ${message}`);
-          break;
+      }
+
+      if (stepText) {
+        finalText += stepText;
+      }
+
+      if (queuedCalls.length === 0) {
+        break; // model is finished
+      }
+
+      messages.push({
+        role: "assistant",
+        content: stepText,
+        toolCalls: queuedCalls,
+      });
+
+      for (const call of queuedCalls) {
+        const tool = tools[call.name];
+        let output: ToolResult;
+        if (!tool) {
+          output = { ok: false, summary: "unknown tool", content: `No tool named "${call.name}".` };
+        } else {
+          try {
+            const raw = await tool.execute(call.input, { toolCallId: call.id });
+            if (raw && typeof raw === "object" && "ok" in raw && "summary" in raw) {
+              output = raw as ToolResult;
+            } else {
+              output = { ok: true, summary: "ok", content: String(raw) };
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            output = { ok: false, summary: "tool failed", content: `error: ${message}` };
+          }
         }
-        case "error":
-          throw part.error instanceof Error ? part.error : new Error(String(part.error));
-        default:
-          break;
+
+        transcript.push(output.content ?? output.summary);
+        messages.push({
+          role: "tool",
+          toolCallId: call.id,
+          content: output.content ?? output.summary,
+        });
       }
     }
   } catch (err) {

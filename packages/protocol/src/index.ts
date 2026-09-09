@@ -7,6 +7,20 @@ export type ArtifactKind = "diff" | "code" | "terminal" | "doc" | "file";
 
 export type SessionStatusState = "idle" | "thinking" | "streaming" | "tool" | "waiting_permission" | "error";
 
+// docs/LOOP_MIGRATION_PLAN.md §6.5, HARNESS_MAP.md §3.8 — closed set of terminal states
+export type TerminalState =
+  | "completed"
+  | "stopped-by-budget"
+  | "interrupted-by-user"
+  | "blocked-on-permission"
+  | "failed-permanent"
+  | "failed-transient-exhausted"
+  | "stopped-loop-detected"
+  | "compacted-and-resumed"
+  // docs/LOOP_MENDING_PLAN.md D8/MD1 — a `length` finish (output truncated at the token cap)
+  // is not "completed": the model didn't choose to stop.
+  | "stopped-output-truncated";
+
 export type SessionEvent =
   | { type: "run.started"; runId: string; ts: number }
   | { type: "message.user"; id: string; text: string; ts: number }
@@ -34,8 +48,10 @@ export type SessionEvent =
   | { type: "cost.update"; usd: number }
   | { type: "permission.request"; reqId: string; tool: string; input: unknown; risk: "low" | "high" }
   | { type: "status"; state: SessionStatusState; verb?: string }
-  | { type: "run.finished"; runId: string; ts: number; summary?: string }
+  | { type: "run.finished"; runId: string; ts: number; state?: TerminalState; summary?: string }
   | { type: "error"; message: string; detail?: string }
+  // docs/LOOP_MIGRATION_PLAN.md LM5 — fired when compaction or decay is applied to the working transcript
+  | { type: "compaction.applied"; summary: string; tokensSaved?: number }
   // docs/PROVIDERS_PLAN.md Phase P2 — auto-titling's only way to tell the sidebar a chat got a
   // real name; there was no chat-update event before this.
   | { type: "chat.renamed"; chatId: string; title: string }
@@ -62,7 +78,9 @@ export type SessionEvent =
   // to `POST /browser/:requestId/response` (engine/src/browserBridge.ts resolves the tool's
   // pending promise from there — there is no `browser.response` SessionEvent, since that leg
   // doesn't need to reach every window, only the engine).
-  | { type: "browser.request"; request: BrowserRequest };
+  | { type: "browser.request"; request: BrowserRequest }
+  // WORKSPACE_PANES_PLAN.md §5.3 — project-scoped invalidation event for git status / working tree changes
+  | { type: "changes.invalidated"; projectId: string };
 
 export type BrowserOp = "open" | "read" | "snapshot" | "console";
 
@@ -201,6 +219,10 @@ export interface MessageDTO {
   content: string | null;
   thinking: string | null;
   createdAt: number;
+  // docs/LOOP_MENDING_PLAN.md D9/MD6 — set only by SessionProvider on the current run's local
+  // message from the `thinking.done` SessionEvent; never persisted, so a DB-sourced (post-reload)
+  // message never carries it.
+  thinkingDurationMs?: number;
 }
 
 // Phase 3 — tools + artifacts wire types.
@@ -504,3 +526,64 @@ export interface ThemesResponseDTO {
   themes: unknown[];
   errors: ThemeFileErrorDTO[];
 }
+
+// WORKSPACE_PANES_PLAN.md §5.1 — the Changes pane's wire shape (Phase W3).
+export type ChangeStatus = "added" | "modified" | "deleted" | "renamed" | "untracked" | "conflicted";
+
+export interface ChangeEntryDTO {
+  /** Repo-relative, forward-slashed, never absolute. */
+  path: string;
+  /** Set only when `status === "renamed"` — the pre-rename path. */
+  origPath: string | null;
+  status: ChangeStatus;
+  /** A path can be both: edited, staged, then edited again. */
+  staged: boolean;
+  unstaged: boolean;
+  /** null for binary files, and for every entry when `countsOmitted` is set. */
+  added: number | null;
+  removed: number | null;
+  binary: boolean;
+}
+
+export interface ChangesDTO {
+  isRepo: boolean;
+  branch: string | null;
+  detached: boolean;
+  head: string | null;          // short sha, for the detached-HEAD label
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  midMerge: boolean;
+  midRebase: boolean;
+  entries: ChangeEntryDTO[];
+  /** True when the repo was too dirty to price (§6.2) — the UI hides all counts. */
+  countsOmitted: boolean;
+}
+
+export interface ChangeDiffDTO {
+  path: string;
+  /** Unified diff text, already stripped of the `diff --git`/`index` preamble. */
+  diff: string;
+  binary: boolean;
+  truncated: boolean;
+}
+
+// WORKSPACE_PANES_PLAN.md §5.2 — the Files pane's wire shape (Phase W5).
+export interface FileEntryDTO {
+  name: string;
+  /** Repo-relative path of this entry, forward-slashed. */
+  path: string;
+  kind: "dir" | "file" | "symlink";
+  size: number | null;   // null for dirs
+  ignored: boolean;      // gitignored or in EXCLUDE_DIRS — hidden unless asked for
+}
+
+export interface FileContentDTO {
+  path: string;
+  content: string;       // "" when binary or oversize
+  size: number;
+  lines: number;
+  binary: boolean;
+  truncated: boolean;
+}
+

@@ -1,4 +1,4 @@
-import { tool, type Tool } from "ai";
+import { defineTool, type RamaTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createCheckTool } from "./check";
@@ -31,18 +31,18 @@ function isTestPath(path: string): boolean {
 // post-write typecheck) still applies; this only adds "must look like a test file". The pass-
 // through is untyped on purpose: `real`'s own zod inputSchema (reused verbatim below) is the
 // actual input contract, enforced by the AI SDK before `execute` ever runs.
-function scopeToTestPaths(toolName: string, real: Tool): Tool {
-  return tool({
+function scopeToTestPaths(toolName: string, real: RamaTool): RamaTool {
+  return defineTool({
     description: real.description,
-    inputSchema: real.inputSchema,
+    inputSchema: z.object({ path: z.string() }),
     execute: async (input: { path: string }, options) => {
       if (!isTestPath(input.path)) {
         const msg = `refused: "${input.path}" doesn't look like a test file — this tool can only ${toolName} test files (*.test.*, *.spec.*, __tests__/, tests?/).`;
         return { ok: false, summary: "refused: not a test file", content: msg };
       }
-      return real.execute!(input, options);
+      return real.execute(input, options);
     },
-  }) as Tool;
+  });
 }
 
 const TEST_ROLE_PROMPT =
@@ -56,7 +56,7 @@ const TEST_ROLE_PROMPT =
 const TEST_SYSTEM_PROMPT = `${TEST_ROLE_PROMPT}\n\n${SUBAGENT_RETURN_CONTRACT}`;
 
 export function createTestTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Delegate writing (and running) tests for the current diff to a fresh sub-agent scoped to " +
       "test files only — it cannot touch non-test source, so it cannot silently 'fix' the change " +

@@ -6,13 +6,12 @@
 // project, or a network call.
 
 import { describe, expect, test } from "bun:test";
-import { tool, type ModelMessage, type ToolSet } from "ai";
+import { defineTool, type RamaToolSet } from "../../tools/define";
 import { z } from "zod";
 import type { AgentDef } from "../agents/types";
 import type { CachePolicy } from "../catalog";
 import { buildAgentBlock } from "./agent";
 import { buildPrompt, type PromptInputs } from "./build";
-import { markCacheBoundary } from "./cache";
 import { formatEffectiveToolsNote } from "./effectiveToolsNote";
 import { buildEphemeralMessage, buildEphemeralText, formatVolatileEnv } from "./ephemeral";
 import { buildModeBlock } from "./mode";
@@ -21,10 +20,10 @@ import { getStaticEnv } from "./sources";
 import { generateToolInventory, sortTools } from "./toolInventory";
 
 function fakeTool(description: string) {
-  return tool({ description, inputSchema: z.object({}), execute: async () => "ok" });
+  return defineTool({ description, inputSchema: z.object({}), execute: async () => "ok" });
 }
 
-function fakeTools(): ToolSet {
+function fakeTools(): RamaToolSet {
   return {
     write: fakeTool("Create or overwrite a file."),
     bash: fakeTool("Run a shell command."),
@@ -104,7 +103,7 @@ describe("buildPrompt", () => {
 
   test("no cache_control on an automatic-caching provider", () => {
     const { system, blocks } = buildPrompt(inputs({ cache: AUTOMATIC }));
-    for (const message of system) expect(message.providerOptions).toBeUndefined();
+    for (const message of system) expect(message.annotations?.cacheBreakpoint).toBeUndefined();
     expect(blocks.every((b) => !b.cached)).toBe(true);
   });
 
@@ -112,7 +111,7 @@ describe("buildPrompt", () => {
     const { system, blocks } = buildPrompt(inputs({ cache: EXPLICIT }));
     expect(system).toHaveLength(3);
     for (const message of system) {
-      expect(message.providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral" } } });
+      expect(message.annotations?.cacheBreakpoint).toBe(true);
     }
     expect(blocks.every((b) => b.cached)).toBe(true);
   });
@@ -179,33 +178,6 @@ describe("buildPrompt", () => {
     const { blocks } = buildPrompt(inputs());
     expect(blocks[2].content.length).toBeGreaterThan(0);
     expect(blocks[2].content).not.toContain("instructions");
-  });
-});
-
-describe("markCacheBoundary", () => {
-  const messages: ModelMessage[] = [
-    { role: "user", content: "hello" },
-    { role: "assistant", content: "hi" },
-    { role: "user", content: "second turn" },
-  ];
-
-  test("no-ops for a non-explicit cache policy", () => {
-    const out = markCacheBoundary(messages, AUTOMATIC);
-    expect(out).toBe(messages);
-  });
-
-  test("marks only the last message for an explicit-caching provider", () => {
-    const out = markCacheBoundary(messages, EXPLICIT);
-    expect(out[0].providerOptions).toBeUndefined();
-    expect(out[1].providerOptions).toBeUndefined();
-    expect(out[2].providerOptions).toEqual({ anthropic: { cacheControl: { type: "ephemeral" } } });
-    // Original array/messages untouched — buildPrompt/prepareStep callers rely on this being a
-    // fresh array, not a mutation of the one they passed in.
-    expect(messages[2].providerOptions).toBeUndefined();
-  });
-
-  test("empty conversation is a no-op", () => {
-    expect(markCacheBoundary([], EXPLICIT)).toEqual([]);
   });
 });
 

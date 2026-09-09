@@ -7,12 +7,15 @@
     "dev": "bun run src/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^4.0.12",
     "@ai-sdk/mcp": "^2.0.31",
-    "@ai-sdk/openai-compatible": "^3.0.7",
     "@rama/protocol": "workspace:*",
-    "ai": "^7.0.22",
     "diff": "^9.0.0",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-rust": "^0.24.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.27.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

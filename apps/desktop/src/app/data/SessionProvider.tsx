@@ -60,6 +60,9 @@ const SessionContext = createContext<SessionDataValue | null>(null);
 interface PendingAssistantMessage {
   runId: string;
   text: string;
+  thinking?: string;
+  /** Set once `thinking.done` arrives — docs/LOOP_MENDING_PLAN.md D9/MD6. */
+  thinkingDurationMs?: number;
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -136,11 +139,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             setPendingPermissionByChat((prev) => (prev[chatId] ? { ...prev, [chatId]: undefined } : prev));
           }
           break;
+        case "thinking.delta":
+          setPendingByChat((prev) => {
+            const existing = prev[chatId];
+            const thinking =
+              existing && existing.runId === event.runId
+                ? (existing.thinking ?? "") + event.text
+                : event.text;
+            return {
+              ...prev,
+              [chatId]: { runId: event.runId, text: existing?.text ?? "", thinking },
+            };
+          });
+          break;
         case "message.delta":
           setPendingByChat((prev) => {
             const existing = prev[chatId];
             const text = existing && existing.runId === event.runId ? existing.text + event.text : event.text;
-            return { ...prev, [chatId]: { runId: event.runId, text } };
+            return {
+              ...prev,
+              [chatId]: { runId: event.runId, text, thinking: existing?.thinking, thinkingDurationMs: existing?.thinkingDurationMs },
+            };
+          });
+          break;
+        // docs/LOOP_MENDING_PLAN.md D9/MD6 — was previously falling into `default: break`, so the
+        // reasoning phase never had a visible end: the collapsible block stayed labeled "thinking"
+        // forever, live or after reload alike, with no sign the model had actually finished.
+        case "thinking.done":
+          setPendingByChat((prev) => {
+            const existing = prev[chatId];
+            if (!existing || existing.runId !== event.runId) return prev;
+            return { ...prev, [chatId]: { ...existing, thinkingDurationMs: event.durationMs } };
           });
           break;
         case "message.done": {
@@ -151,14 +180,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             // A turn that ended on a tool call with no closing text still needs its message row
             // materialized — otherwise the re-tag below points tool-call cards at a message id
             // that was never created, and they vanish the instant the run finishes.
-            if (pending && (pending.text || hadToolCalls)) {
+            if (pending && (pending.text || hadToolCalls || pending.thinking)) {
               appendLocalMessage(chatId, (seq) => ({
                 id: `local-${event.runId}`,
                 chatId,
                 seq,
                 role: "assistant",
                 content: pending.text,
-                thinking: null,
+                thinking: pending.thinking ?? null,
+                thinkingDurationMs: pending.thinkingDurationMs,
                 createdAt: Date.now(),
               }));
             }
@@ -198,6 +228,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           break;
         case "error":
           setErrorByChat((prev) => ({ ...prev, [chatId]: event.message }));
+          break;
+        // docs/LOOP_MENDING_PLAN.md D9/MD6 — LM5 promised the user is told when compaction runs;
+        // this was firing into `default: break` and never reaching the transcript at all. A
+        // local system-role note, same mechanism as /undo's result note below.
+        case "compaction.applied":
+          appendLocalMessage(chatId, (seq) => ({
+            id: `compaction-${Date.now()}`,
+            chatId,
+            seq,
+            role: "system",
+            content:
+              `Conversation compacted — older turns summarized.` +
+              (event.summary ? ` ${event.summary}` : "") +
+              (event.tokensSaved ? ` (~${event.tokensSaved.toLocaleString()} tokens saved)` : ""),
+            thinking: null,
+            createdAt: Date.now(),
+          }));
           break;
         case "tool.call": {
           const runId = activeRunIdByChatRef.current[chatId];
@@ -384,7 +431,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       seq,
       role: "assistant",
       content: pending.text,
-      thinking: null,
+      thinking: pending.thinking ?? null,
+      thinkingDurationMs: pending.thinkingDurationMs,
       createdAt: Date.now(),
     };
     return [...base, pendingMessage];

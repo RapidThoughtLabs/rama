@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import type { CheckKind, CheckSummary } from "../diagnostics";
@@ -61,7 +61,7 @@ function formatGrouped(diagnostics: Diagnostic[]): string {
 }
 
 export function createCheckTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Run the project's real typecheck/lint/test/build commands and return structured, capped " +
       "diagnostics — not raw command output. Defaults to typecheck + lint; pass kinds: [\"test\"] " +

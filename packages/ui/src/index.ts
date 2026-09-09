@@ -15,5 +15,7 @@ export * from "./components/Toggle";
 export * from "./components/Card";
 export * from "./components/Fluke";
 export * from "./components/Icons";
+export * from "./components/FileIcon";
 export * from "./components/Modal";
 export * from "./components/Toast";
+

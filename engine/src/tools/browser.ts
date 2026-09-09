@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { waitForBrowserResponse } from "../browserBridge";
 import { gate } from "../agent/permissions";
@@ -16,7 +16,7 @@ const READ_TIMEOUT_MS = 8_000;
 const MODEL_OUTPUT_CHARS = 8_000;
 
 export function createBrowserTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Open and read web pages in the Web pane, visible to the user the same way `bash background:true` " +
       "shells show up in the Terminal pane. `open` navigates to a URL (creating a new page if none is " +

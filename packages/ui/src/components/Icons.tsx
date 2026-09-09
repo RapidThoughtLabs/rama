@@ -151,3 +151,91 @@ export function IconWeb(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+// docs/WORKSPACE_PANES_PLAN.md §3 — Mission Control's Changes and Files pane icons.
+export function IconChanges(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M8 2.5v6M5 5.5h6" />
+      <path d="M4.5 12.5h7" />
+    </svg>
+  );
+}
+
+export function IconFiles(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.6 1.6h4.8A1.5 1.5 0 0 1 14 6.1v5.4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5v-7Z" />
+    </svg>
+  );
+}
+
+export function IconChevronRight(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M6.2 4 10 8l-3.8 4" />
+    </svg>
+  );
+}
+
+export function IconFolder(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.6 1.6h4.8A1.5 1.5 0 0 1 14 6.1v5.4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5v-7Z" />
+    </svg>
+  );
+}
+
+export function IconFolderOpen(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h2.6l1.6 1.5h4.8A1.5 1.5 0 0 1 14 7v.5M2 7.5h12l-1.5 5.5a1.5 1.5 0 0 1-1.4 1H3.9a1.5 1.5 0 0 1-1.4-1L2 7.5Z" />
+    </svg>
+  );
+}
+
+export function IconFile(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M3.5 2h5.5l3.5 3.5v8a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-10.5a1 1 0 0 1 1-1Z" />
+      <path d="M9 2v3.5h3.5" />
+    </svg>
+  );
+}
+
+export function IconClose(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="m4 4 8 8M12 4 4 12" />
+    </svg>
+  );
+}
+
+export function IconRefresh(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9L14 6.2M14 2v4.2H9.8" />
+      <path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9L2 9.8M2 14V9.8h4.2" />
+    </svg>
+  );
+}
+
+export function IconMore(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <circle cx="3.5" cy="8" r="1" fill="currentColor" />
+      <circle cx="8" cy="8" r="1" fill="currentColor" />
+      <circle cx="12.5" cy="8" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function IconCopy(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...BASE} {...props}>
+      <rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1" />
+      <path d="M3.5 10.5H3a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v.5" />
+    </svg>
+  );
+}
+

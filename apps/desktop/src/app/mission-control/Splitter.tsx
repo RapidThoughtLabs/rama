@@ -1,10 +1,9 @@
 import { useCallback, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-// docs/MISSION_CONTROL_PLAN.md §4.7 — one splitter component for all three drag handles: the
-// panel-vs-chat edge (variant="edge", orientation="vertical"), the wide-mode rail-vs-stage
-// divider (variant="inline", orientation="vertical"), and the narrow-mode rail-vs-stage divider
-// (variant="inline", orientation="horizontal"). Pointer capture, not mousemove-on-window — the
+// docs/MISSION_CONTROL_PLAN.md §4.7 — one splitter component for both drag handles: the
+// panel-vs-chat edge (variant="edge", orientation="vertical") and the rail-vs-stage divider
+// (variant="inline", orientation="vertical"). Pointer capture, not mousemove-on-window — the
 // drag can't lose events if the cursor leaves the handle mid-gesture.
 export function Splitter({
   orientation,

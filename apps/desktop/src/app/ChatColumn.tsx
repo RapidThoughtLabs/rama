@@ -1,20 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Button, Fluke, SegmentedControl } from "@rama/ui";
-import type { ChatMode, SearchResultDTO, ToolCallDTO } from "@rama/protocol";
-import { patchChat, ramaSearch } from "../engine/client";
+import { Button, Fluke } from "@rama/ui";
+import type { ArtifactDTO, ChatMode, SearchResultDTO, ToolCallDTO } from "@rama/protocol";
+import { fetchArtifactContent, patchChat, ramaSearch } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useProvidersData } from "./data/ProvidersProvider";
 import { useSessionData } from "./data/SessionProvider";
 import { AgentPicker } from "./AgentPicker";
 import { ModelPicker } from "./ModelPicker";
 import { ProviderSetupWizard } from "./ProviderSetupWizard";
+import { DiffView } from "./diff/DiffView";
 
 const MODES: { id: ChatMode; label: string }[] = [
   { id: "agent", label: "agent" },
   { id: "plan", label: "plan" },
   { id: "ask", label: "ask" },
 ];
+
+// Mode is one tile showing one value, not a three-way segmented control showing every option at
+// once (vim's status line shows "-- INSERT --", not every mode it has) — clicking cycles through
+// them in order; ⌃M and the cmd:mode:* palette commands still jump straight to one.
+function nextMode(current: ChatMode): ChatMode {
+  const i = MODES.findIndex((m) => m.id === current);
+  return MODES[(i + 1) % MODES.length].id;
+}
 
 // A bare slash command being typed, no space yet — e.g. "/" or "/re". Loses the match as soon
 // as the user types a space (rama search only drives the composer's `/` picker, not the turn text).
@@ -24,6 +33,13 @@ function formatTokens(n: number): string {
   if (n >= 10000) return `${Math.round(n / 1000)}k`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
+}
+
+// docs/LOOP_MENDING_PLAN.md D9/MD6 — the thinking block's summary label once `thinking.done`
+// has landed; sub-second durations still count as thinking, not nothing.
+function formatThinkingDuration(durationMs: number): string {
+  const seconds = durationMs / 1000;
+  return seconds < 1 ? "Thought for <1s" : `Thought for ${Math.round(seconds)}s`;
 }
 
 function formatToolTarget(name: string, input: unknown): string {
@@ -52,6 +68,20 @@ function formatToolTarget(name: string, input: unknown): string {
     }
     default:
       return "";
+  }
+}
+
+function getToolTargetPath(name: string, input: unknown): string | null {
+  const obj = (input ?? {}) as Record<string, unknown>;
+  switch (name) {
+    case "read":
+    case "write":
+    case "edit":
+      return typeof obj.path === "string" ? obj.path : null;
+    case "file_op":
+      return typeof obj.to === "string" ? obj.to : typeof obj.path === "string" ? obj.path : null;
+    default:
+      return null;
   }
 }
 
@@ -111,21 +141,98 @@ function renderResultSummary(summary: string): ReactNode {
   );
 }
 
-function ToolCallCard({ toolCall }: { toolCall: ToolCallDTO }) {
+function ToolCallCard({
+  toolCall,
+  isExpanded,
+  onToggle,
+  artifact,
+  streamingBuffer,
+}: {
+  toolCall: ToolCallDTO;
+  isExpanded: boolean;
+  onToggle: () => void;
+  artifact?: ArtifactDTO;
+  streamingBuffer?: string;
+}) {
+  const [fetchedContent, setFetchedContent] = useState<string | null>(null);
   const dotColor = toolCall.ok === null ? "var(--accent)" : toolCall.ok ? "var(--good)" : "var(--bad)";
+  const hasArtifact = !!toolCall.artifactId;
+
+  useEffect(() => {
+    if (!isExpanded || !toolCall.artifactId || artifact?.status === "streaming" || fetchedContent !== null) {
+      return;
+    }
+    let cancelled = false;
+    fetchArtifactContent(toolCall.artifactId)
+      .then((res) => {
+        if (!cancelled) setFetchedContent(res.content);
+      })
+      .catch((err) => {
+        console.error("[rama] failed to fetch artifact content", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isExpanded, toolCall.artifactId, artifact?.status, fetchedContent]);
+
+  const content =
+    artifact?.status === "streaming"
+      ? (streamingBuffer ?? "")
+      : (fetchedContent ?? streamingBuffer ?? "");
+
+  const kind = artifact?.kind ?? (toolCall.name === "patch" || toolCall.name === "git" ? "diff" : "doc");
+
   return (
-    <div className="rama-tool-call">
-      <div className="rama-tool-call-head">
+    <div className={`rama-tool-call${hasArtifact ? " rama-tool-call-expandable" : ""}${isExpanded ? " rama-tool-call-open" : ""}`}>
+      <div
+        className="rama-tool-call-head"
+        onClick={hasArtifact ? onToggle : undefined}
+        style={hasArtifact ? { cursor: "pointer" } : undefined}
+      >
         <span className="rama-tool-call-status" style={{ color: dotColor }}>
           ●
         </span>
         <span className="rama-tool-call-name">{toolCall.name}</span>
-        <span className="rama-tool-call-target">{formatToolTarget(toolCall.name, toolCall.input)}</span>
+        {(() => {
+          const targetPath = getToolTargetPath(toolCall.name, toolCall.input);
+          const targetLabel = formatToolTarget(toolCall.name, toolCall.input);
+          return (
+            <span
+              className="rama-tool-call-target"
+              style={targetPath ? { cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" } : undefined}
+              title={targetPath ? `Open ${targetPath} in Files pane` : undefined}
+              onClick={
+                targetPath
+                  ? (e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(new CustomEvent("rama:open-file", { detail: { path: targetPath } }));
+                    }
+                  : undefined
+              }
+            >
+              {targetLabel}
+            </span>
+          );
+        })()}
+        {hasArtifact && (
+          <span className={`rama-tool-call-chevron${isExpanded ? " rama-tool-call-chevron-open" : ""}`}>
+            ▸
+          </span>
+        )}
       </div>
       <div className="rama-tool-call-result">
         <span>⎿</span>
         {toolCall.resultSummary ? renderResultSummary(toolCall.resultSummary) : <span>running…</span>}
       </div>
+      {isExpanded && hasArtifact && (
+        <div className="rama-tool-call-body">
+          {kind === "diff" ? (
+            <DiffView diff={content} />
+          ) : (
+            <pre className="rama-tool-call-content">{content}</pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -139,6 +246,8 @@ export function ChatColumn() {
     usage,
     errorMessage,
     toolCalls,
+    artifacts,
+    artifactBuffers,
     pendingPermission,
     sendUserTurn,
     interrupt,
@@ -148,6 +257,29 @@ export function ChatColumn() {
 
   const activeChat = allChats.find((c) => c.id === activeChatId);
   const activeProject = activeChat ? projects.find((p) => p.id === activeChat.projectId) : undefined;
+
+  const [toolCallOverrides, setToolCallOverrides] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setToolCallOverrides({});
+  }, [activeChatId]);
+
+  const lastToolCallId = toolCalls.length > 0 ? toolCalls[toolCalls.length - 1]!.id : null;
+
+  const toggleToolCall = useCallback((id: string) => {
+    setToolCallOverrides((prev) => ({
+      ...prev,
+      [id]: !(prev[id] !== undefined ? prev[id] : id === lastToolCallId),
+    }));
+  }, [lastToolCallId]);
+
+  const artifactsById = useMemo(() => {
+    const map: Record<string, ArtifactDTO> = {};
+    for (const a of artifacts) {
+      map[a.id] = a;
+    }
+    return map;
+  }, [artifacts]);
 
   const toolCallsByMessage = useMemo(() => {
     const map: Record<string, ToolCallDTO[]> = {};
@@ -159,9 +291,14 @@ export function ChatColumn() {
 
   const [typed, setTyped] = useState("");
   const [mode, setMode] = useState<ChatMode>(activeChat?.mode ?? "agent");
+  const [composerFocused, setComposerFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
+  // docs/LOOP_MENDING_PLAN.md D9/MD6 — local-only, so a dismissed marker reappears on reload;
+  // that's fine, these are transient run notices (compaction, /undo), not durable history.
+  const [dismissedMetaIds, setDismissedMetaIds] = useState<Set<string>>(new Set());
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
@@ -343,6 +480,28 @@ export function ChatColumn() {
     }
   }
 
+  // Roving focus across the rail's tiles — arrow keys walk between them (tab order already
+  // follows DOM order, right after the textarea, so no explicit tabIndex juggling is needed).
+  // Escape here only fires once a tile's own menu (if any) is already closed — an open menu
+  // eats its own Escape first (see ModelPicker/AgentPicker's onTriggerKeyDown) — so by the time
+  // it reaches us it means "leave the rail," and focus goes back to the text.
+  function handleRailKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      textareaRef.current?.focus();
+      return;
+    }
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const rail = railRef.current;
+    if (!rail) return;
+    const tiles = Array.from(rail.querySelectorAll<HTMLButtonElement>(".rama-tile:not(:disabled)"));
+    const currentIndex = tiles.indexOf(document.activeElement as HTMLButtonElement);
+    if (currentIndex === -1) return;
+    e.preventDefault();
+    const nextIndex = e.key === "ArrowRight" ? (currentIndex + 1) % tiles.length : (currentIndex - 1 + tiles.length) % tiles.length;
+    tiles[nextIndex]?.focus();
+  }
+
   const contextUsed = usage?.contextUsed ?? activeChat?.contextUsed ?? 0;
   const contextMax = usage?.contextMax ?? activeChat?.contextMax ?? 200000;
   const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
@@ -390,9 +549,26 @@ export function ChatColumn() {
 
           {messages.map((msg) => {
             if (msg.role === "system") {
+              if (dismissedMetaIds.has(msg.id)) return null;
               return (
-                <div key={msg.id} className="rama-msg-meta">
-                  {msg.content}
+                <div key={msg.id} className="rama-msg-meta" style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span style={{ flex: 1 }}>{msg.content}</span>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedMetaIds((prev) => new Set(prev).add(msg.id))}
+                    aria-label="Dismiss"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "inherit",
+                      opacity: 0.6,
+                      fontSize: "var(--fs-xs)",
+                      padding: 0,
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
               );
             }
@@ -406,7 +582,50 @@ export function ChatColumn() {
             return (
               <div key={msg.id}>
                 {(toolCallsByMessage[msg.id] ?? []).map((tc) =>
-                  tc.name === "clarify" ? <ClarifyCard key={tc.id} toolCall={tc} /> : <ToolCallCard key={tc.id} toolCall={tc} />,
+                  tc.name === "clarify" ? (
+                    <ClarifyCard key={tc.id} toolCall={tc} />
+                  ) : (
+                    <ToolCallCard
+                      key={tc.id}
+                      toolCall={tc}
+                      isExpanded={
+                        !!tc.artifactId &&
+                        (toolCallOverrides[tc.id] !== undefined
+                          ? toolCallOverrides[tc.id]!
+                          : tc.id === lastToolCallId)
+                      }
+                      onToggle={() => toggleToolCall(tc.id)}
+                      artifact={tc.artifactId ? artifactsById[tc.artifactId] : undefined}
+                      streamingBuffer={tc.artifactId ? artifactBuffers[tc.artifactId] : undefined}
+                    />
+                  ),
+                )}
+                {msg.thinking && (
+                  <details
+                    className="rama-thinking-block"
+                    style={{
+                      marginBottom: 6,
+                      fontSize: "var(--fs-xs)",
+                      color: "rgba(var(--ink), 0.7)",
+                      background: "rgba(var(--ink), 0.03)",
+                      borderRadius: 4,
+                      padding: "4px 8px",
+                    }}
+                  >
+                    <summary style={{ cursor: "pointer", userSelect: "none", fontWeight: 500 }}>
+                      {msg.thinkingDurationMs != null ? formatThinkingDuration(msg.thinkingDurationMs) : "thinking"}
+                    </summary>
+                    <div
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        marginTop: 4,
+                        paddingLeft: 8,
+                        borderLeft: "2px solid rgba(var(--ink), 0.2)",
+                      }}
+                    >
+                      {msg.thinking}
+                    </div>
+                  </details>
                 )}
                 {msg.content && (
                   <div className="rama-msg-assistant">
@@ -457,14 +676,6 @@ export function ChatColumn() {
                   deny
                 </Button>
               </div>
-            </div>
-          )}
-
-          {isBusy && (
-            <div className="rama-status-line">
-              <span className="rama-status-verb">✻ {status.verb ?? status.state}…</span>
-              <span className="rama-status-meta">({elapsedSeconds}s · esc to interrupt)</span>
-              <span className="rama-caret" />
             </div>
           )}
 
@@ -526,17 +737,33 @@ export function ChatColumn() {
               disabled={!activeChat}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={handleKeyDown}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
             />
           </div>
-          <div className="rama-composer-toolbar">
+          <div className="rama-composer-rail" ref={railRef} onKeyDown={handleRailKeyDown}>
+            <button
+              type="button"
+              className="rama-tile rama-tile-mode"
+              disabled={!activeChat || isBusy}
+              onClick={() => handleModeChange(nextMode(mode))}
+              title="cycle mode — agent → plan → ask"
+            >
+              {mode}
+            </button>
             <ModelPicker chat={activeChat} disabled={isBusy} />
             <AgentPicker chat={activeChat} disabled={isBusy} />
-            <SegmentedControl options={MODES} value={mode} onChange={handleModeChange} />
-            <span style={{ flex: 1 }} />
-            <span className="rama-composer-hint">@ files · / commands · ⇧⏎ newline</span>
-            <button className="rama-composer-send" onClick={submit} disabled={!activeChat || isBusy || !typed.trim()}>
-              ⏎ send
-            </button>
+            <div className="rama-tile-status">
+              {isBusy ? (
+                <>
+                  <span className="rama-status-verb">✻ {status.verb ?? status.state}…</span>
+                  <span className="rama-status-meta">{elapsedSeconds}s · esc</span>
+                  <span className="rama-caret" />
+                </>
+              ) : (
+                <span className={`rama-tile-hint${composerFocused && !typed.trim() ? "" : " rama-tile-hint-hidden"}`}>⇧⏎ nl</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

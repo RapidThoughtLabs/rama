@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { mutate } from "./mutate";
 import { resolveInProject } from "./paths";
@@ -30,7 +30,7 @@ function pathsFor(input: z.infer<typeof inputSchema>): string[] {
 // docs/TOOL_LAYER_PLAN.md §6.8 — thin, but it exists so the file lifecycle (move/copy/remove/
 // mkdir) isn't invisible to checkpointing and the read tracker the way `bash mv` currently is.
 export function createFileOpTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Move, copy, remove, or create a directory, scoped to the project directory. Uses `git mv` " +
       "for a move when the source is tracked, so its history follows the rename. Removing a " +

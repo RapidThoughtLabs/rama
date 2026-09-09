@@ -10,8 +10,10 @@ import { useWindowTabsData } from "./data/WindowTabsProvider";
 // the traffic-light gap, a compact readout of the active tab (a window can still hold more than
 // one — see Sidebar.tsx's handleChatClick/adoptChat — just with no visible strip, hence the
 // position counter and the ⌃⇥/⌘1-9/⌘⇧O shortcuts in CommandPalette.tsx), the ⌘K pill, an explicit
-// pop-out button replacing the old tear-off drag, and the Mission Control toggle. The last slot is
-// always a theme picker (ThemePicker.tsx) — every window (main and popped-out/secondary alike) can
+// pop-out button replacing the old tear-off drag. Mission Control's own pane-switcher tabstrip
+// now doubles as its open/close control (clicking the active pane's tile closes it — see
+// mission-control/MissionControl.tsx), so there's no separate toggle button here anymore. The
+// last slot is always a theme picker (ThemePicker.tsx) — every window (main and popped-out/secondary alike) can
 // switch its own theme, since a chat's theme is per-chat, not per-app (see ProjectsProvider's
 // applyTheme wiring). Full Settings has no titlebar button in any window anymore; it's still
 // reachable everywhere via ⌘, / the ⌘K command palette (CommandPalette.tsx), plus the sidebar
@@ -30,8 +32,6 @@ import { useWindowTabsData } from "./data/WindowTabsProvider";
 // next to the traffic-gap, for exactly that state.
 export function Titlebar(props: {
   reserveTrafficGap: boolean;
-  panelOpen: boolean;
-  onTogglePanel: () => void;
   showViewTabs: boolean;
   showSidebarToggle: boolean;
   onToggleSidebar: () => void;
@@ -87,11 +87,6 @@ export function Titlebar(props: {
             title="Pop out into a new window (⌘⇧O)"
           >
             <IconPopOut />
-          </button>
-        )}
-        {showTabReadout && (
-          <button className="rama-btn rama-btn-icon" onClick={props.onTogglePanel} title="Toggle Mission Control">
-            <IconPanel />
           </button>
         )}
         {badProviders.length > 0 && (

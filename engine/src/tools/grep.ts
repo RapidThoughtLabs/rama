@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
@@ -61,7 +61,7 @@ function extractFile(line: string): string | null {
 }
 
 export function createGrepTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Search file contents for a regex pattern (Rust regex syntax under ripgrep, POSIX ERE " +
       "under the grep fallback), scoped to the project directory. " +

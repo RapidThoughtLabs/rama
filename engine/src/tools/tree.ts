@@ -1,6 +1,6 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
@@ -33,7 +33,7 @@ function countEntriesRecursive(abs: string): number {
 }
 
 export function createTreeTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Show a directory as an indented tree, scoped to the project directory. Gitignored " +
       "directories are collapsed to an entry count rather than expanded. Use for orientation, " +

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import type { ChatDTO, ModelInfo, ProviderDTO, ProviderHealthDTO, ProviderHealthStatus } from "@rama/protocol";
 import { patchChat } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
@@ -67,6 +68,17 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
     });
   }
 
+  // Escape closes the menu and keeps focus on the tile (standard combobox behavior) — a second
+  // Escape, once the menu is already closed, is left to the composer rail's own handler, which
+  // sends focus back to the text area.
+  function onTriggerKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
+    if (e.key === "Escape" && menuOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenuOpen(false);
+    }
+  }
+
   const activeProvider = providers.find((p) => p.id === chat?.providerId);
   const activeModel = activeProvider?.models.find((m) => m.id === chat?.model);
   // The pill is exempt from the filter entirely — it always reflects live health, not the
@@ -91,14 +103,20 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
   const bannerError = chat ? health[chat.providerId]?.error : null;
 
   return (
-    <div className="rama-model-picker" ref={rootRef}>
-      <button type="button" className="rama-model-pill" disabled={!chat || disabled} onClick={toggleMenu}>
+    <div className="rama-tile-wrap" ref={rootRef}>
+      <button
+        type="button"
+        className={`rama-tile rama-tile-model${menuOpen ? " rama-tile-open" : ""}`}
+        disabled={!chat || disabled}
+        onClick={toggleMenu}
+        onKeyDown={onTriggerKeyDown}
+      >
         <span
           className="rama-accent-dot"
           style={{ width: 6, height: 6, background: STATUS_COLOR[pillStatus], boxShadow: "none" }}
         />
         <span>{activeModel?.label ?? chat?.model ?? "no model"}</span>
-        {pillUnavailable && <span className="rama-model-pill-bad">unavailable</span>}
+        {pillUnavailable && <span className="rama-tile-unavailable">unavailable</span>}
       </button>
       {menuOpen && (
         <div className="rama-model-menu">

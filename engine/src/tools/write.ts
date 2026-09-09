@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname } from "node:path";
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { createArtifact } from "../db/artifacts";
 import { formatUnifiedDiff } from "./diffFormat";
@@ -17,7 +17,7 @@ const SHRINK_GUARD_MIN_LINES = 50;
 const SHRINK_GUARD_RATIO = 0.5;
 
 export function createWriteTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Create or overwrite a file, scoped to the project directory. Overwriting an existing file " +
       "requires it to have been read first, and refuses (unless overwrite: true) if the new " +

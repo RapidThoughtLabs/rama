@@ -5,13 +5,11 @@
 // `content` for ids the harness itself generated — it can add wording, never a new proposal, a
 // new section, or its own provenance. Removal proposals (verify.ts's stale-entry check) need no
 // model at all, since they're just "this exact existing line no longer checks out."
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, type LanguageModel } from "ai";
+import { complete } from "../../llm/complete";
 import { recordUtilityUsage } from "../../db/chats";
 import { createProposal, listDedupeKeys, type ProposalEvidence } from "../../db/curationProposals";
 import { listMessagesForProject } from "../../db/messages";
-import { getProvider, type ProviderRow } from "../../db/providers";
+import { getProvider } from "../../db/providers";
 import { listToolCallsForProject } from "../../db/toolCalls";
 import { getSecret } from "../../secrets";
 import { estimateCostUsd } from "../config";
@@ -28,11 +26,6 @@ const PHRASING_SYSTEM_PROMPT =
   "markdown bullet line (no leading '-', under 160 characters, factual, no fluff, no first person) " +
   "suitable for a project's own README-style notes file. Reply with ONLY a JSON array like " +
   '[{"id":"commands:0","content":"..."}]. One entry per input id, same ids, nothing invented.';
-
-function resolveModel(providerRow: ProviderRow, model: string, apiKey: string | undefined): LanguageModel {
-  if (providerRow.kind === "anthropic") return createAnthropic({ apiKey })(model);
-  return createOpenAICompatible({ name: providerRow.id, baseURL: providerRow.base_url ?? "", apiKey: apiKey ?? "unused" })(model);
-}
 
 function parsePhrased(text: string): Map<string, string> {
   const cleaned = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
@@ -61,18 +54,21 @@ async function phraseEvidence(chatId: string | null, items: EvidenceItem[]): Pro
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CURATOR_TIMEOUT_MS);
   try {
-    const result = await generateText({
-      model: resolveModel(providerRow, target.model, apiKey),
-      system: PHRASING_SYSTEM_PROMPT,
-      prompt: JSON.stringify(items.map((i) => ({ id: i.id, signal: i.signal, raw: i.raw }))),
-      maxOutputTokens: 80 * items.length,
-      temperature: 0.2,
-      abortSignal: controller.signal,
-    });
+    const result = await complete(
+      providerRow,
+      target.model,
+      apiKey,
+      [{ role: "user", content: JSON.stringify(items.map((i) => ({ id: i.id, signal: i.signal, raw: i.raw }))) }],
+      controller.signal,
+      {
+        system: PHRASING_SYSTEM_PROMPT,
+        maxOutputTokens: 80 * items.length,
+        temperature: 0.2,
+      }
+    );
 
-    const usage = await result.usage;
     if (chatId) {
-      const { usd } = estimateCostUsd(target.providerId, target.model, usage.inputTokens ?? 0, usage.outputTokens ?? 0);
+      const { usd } = estimateCostUsd(target.providerId, target.model, result.usage.inputTokens, result.usage.outputTokens);
       recordUtilityUsage(chatId, usd);
     }
 

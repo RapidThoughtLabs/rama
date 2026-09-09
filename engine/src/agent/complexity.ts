@@ -4,13 +4,11 @@
 // shape of this module: cheap, pure, synchronous signals decide the obvious cases for free;
 // the `utility` role (mirrors titling.ts exactly — same timeout, same fail-silent-to-a-default)
 // only gets called for the genuinely ambiguous middle.
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { generateText, type LanguageModel } from "ai";
+import { complete } from "../llm/complete";
 import { recordUtilityUsage } from "../db/chats";
-import { getProvider, type ProviderRow } from "../db/providers";
+import { getProvider } from "../db/providers";
 import { getSecret } from "../secrets";
 import { estimateCostUsd } from "./config";
 import { getUtilityTarget } from "./utility";
@@ -77,11 +75,6 @@ const CLASSIFY_SYSTEM_PROMPT =
   "where different reasonable interpretations would produce materially different work. \"normal\" means " +
   "it's a single, reasonably well-scoped task, even one that takes real effort.";
 
-function resolveClassifyModel(providerRow: ProviderRow, model: string, apiKey: string | undefined): LanguageModel {
-  if (providerRow.kind === "anthropic") return createAnthropic({ apiKey })(model);
-  return createOpenAICompatible({ name: providerRow.id, baseURL: providerRow.base_url ?? "", apiKey: apiKey ?? "unused" })(model);
-}
-
 // Fails silent to "normal" by design, same as maybeTitleChat's stub-stands rule: a missed
 // classification should never block or visibly disrupt a turn, only skip the nudge it would
 // have added.
@@ -96,17 +89,20 @@ async function classifyByModel(chatId: string, text: string): Promise<TaskComple
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLASSIFY_TIMEOUT_MS);
   try {
-    const result = await generateText({
-      model: resolveClassifyModel(providerRow, target.model, apiKey),
-      system: CLASSIFY_SYSTEM_PROMPT,
-      prompt: text.slice(0, 4000),
-      maxOutputTokens: 8,
-      temperature: 0,
-      abortSignal: controller.signal,
-    });
+    const result = await complete(
+      providerRow,
+      target.model,
+      apiKey,
+      [{ role: "user", content: text.slice(0, 4000) }],
+      controller.signal,
+      {
+        system: CLASSIFY_SYSTEM_PROMPT,
+        maxOutputTokens: 8,
+        temperature: 0,
+      }
+    );
 
-    const usage = await result.usage;
-    const { usd } = estimateCostUsd(target.providerId, target.model, usage.inputTokens ?? 0, usage.outputTokens ?? 0);
+    const { usd } = estimateCostUsd(target.providerId, target.model, result.usage.inputTokens, result.usage.outputTokens);
     recordUtilityUsage(chatId, usd);
 
     return result.text.trim().toLowerCase().startsWith("complex") ? "complex" : "normal";

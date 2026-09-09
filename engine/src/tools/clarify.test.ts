@@ -2,14 +2,13 @@
 // gate()'s risk="low" path (which itself never reads ctx at all), so a minimal fixture is enough
 // — same reasoning as search/providers/tools.ts's placeholder ToolCtx.
 import { describe, expect, test } from "bun:test";
-import type { LanguageModel } from "ai";
 import { createClarifyTool } from "./clarify";
 import type { ToolCtx, ToolResult } from "./types";
 
 // execute()'s return type includes the SDK's generic AsyncIterable streaming shape, which this
 // tool never uses — every call here really returns a plain ToolResult.
 async function run(tool: ReturnType<typeof createClarifyTool>, input: unknown): Promise<ToolResult> {
-  return (await tool.execute!(input as never, {} as never)) as ToolResult;
+  return (await tool.execute(input as never, {} as never)) as ToolResult;
 }
 
 function fakeCtx(mode: ToolCtx["mode"] = "agent"): ToolCtx {
@@ -25,8 +24,9 @@ function fakeCtx(mode: ToolCtx["mode"] = "agent"): ToolCtx {
     checkpoints: undefined as unknown as ToolCtx["checkpoints"],
     shell: undefined as unknown as ToolCtx["shell"],
     diagnostics: undefined as unknown as ToolCtx["diagnostics"],
-    languageModel: "placeholder" as unknown as LanguageModel,
-    subagentModel: "placeholder" as unknown as LanguageModel,
+    llmClient: undefined as unknown as ToolCtx["llmClient"],
+    subagentClient: undefined as unknown as ToolCtx["subagentClient"],
+    subagentModel: "placeholder",
   };
 }
 
@@ -54,9 +54,17 @@ describe("createClarifyTool", () => {
 
   test("the schema caps at 3 questions", () => {
     const tool = createClarifyTool(fakeCtx());
-    const parsed = (tool.inputSchema as { safeParse: (v: unknown) => { success: boolean } }).safeParse({
+    const schema = tool.inputSchema as { properties: { questions: { maxItems: number } } };
+    expect(schema.properties.questions.maxItems).toBe(3);
+  });
+
+  test("invalid arguments return ok: false with validation error", async () => {
+    const tool = createClarifyTool(fakeCtx());
+    const result = await run(tool, {
       questions: [{ question: "1" }, { question: "2" }, { question: "3" }, { question: "4" }],
     });
-    expect(parsed.success).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.summary).toBe("invalid tool arguments");
+    expect(result.content).toContain("Invalid arguments");
   });
 });

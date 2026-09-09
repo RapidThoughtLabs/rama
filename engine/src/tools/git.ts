@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { resolveInProject } from "./paths";
@@ -254,7 +254,7 @@ async function formatBlame(
 }
 
 export function createGitTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Inspect the project's git repository: status, diff, log, show, blame. Read-only and never " +
       "touches the network. diff defaults to hunks:false (file list + stats only) — pass hunks:true " +

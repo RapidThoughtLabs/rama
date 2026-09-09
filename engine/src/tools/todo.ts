@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { getTodos, setTodos, updateTodo } from "../db/todos";
@@ -21,7 +21,7 @@ export function formatTodoList(items: { text: string; status: string }[]): strin
 }
 
 export function createTodoTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Set or update your todo list for this chat — the plan for a multi-part task. `set` " +
       "replaces the whole list with fresh pending items (do this once, at the start, not per " +

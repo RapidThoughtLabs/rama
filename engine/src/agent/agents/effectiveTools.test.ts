@@ -3,16 +3,16 @@
 // criterion test: "an agent file requesting a tool the mode forbids gets nothing."
 
 import { describe, expect, test } from "bun:test";
-import { tool, type ToolSet } from "ai";
+import { defineTool, type RamaToolSet } from "../../tools/define";
 import { z } from "zod";
 import { computeEffectiveTools } from "./effectiveTools";
 import type { AgentDef } from "./types";
 
 function fakeTool() {
-  return tool({ description: "x", inputSchema: z.object({}), execute: async () => "ok" });
+  return defineTool({ description: "x", inputSchema: z.object({}), execute: async () => "ok" });
 }
 
-function harnessTools(): ToolSet {
+function harnessTools(): RamaToolSet {
   return {
     read: fakeTool(),
     grep: fakeTool(),

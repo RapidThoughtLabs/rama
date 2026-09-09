@@ -3,6 +3,8 @@ import type {
   AgentSummaryDTO,
   ArtifactDTO,
   CatalogProviderSummaryDTO,
+  ChangeDiffDTO,
+  ChangesDTO,
   ChatDTO,
   CreateChatInput,
   CreateProjectInput,
@@ -11,6 +13,8 @@ import type {
   DocContentDTO,
   DocDTO,
   EngineConnectionInfo,
+  FileContentDTO,
+  FileEntryDTO,
   GeneralSettingsDTO,
   InstructionsDTO,
   MessageDTO,
@@ -124,6 +128,31 @@ export function fetchArtifacts(chatId: string): Promise<ArtifactDTO[]> {
 
 export function fetchArtifactContent(artifactId: string): Promise<{ content: string }> {
   return engineJson(`/artifacts/${artifactId}/content`);
+}
+
+// docs/WORKSPACE_PANES_PLAN.md §5.2 — Phase W3 Changes API client helpers
+export function fetchChanges(projectId: string): Promise<ChangesDTO> {
+  return engineJson(`/projects/${projectId}/changes`);
+}
+
+export function fetchChangeDiff(projectId: string, path: string, staged: boolean): Promise<ChangeDiffDTO> {
+  const query = new URLSearchParams({ path, staged: staged ? "1" : "0" });
+  return engineJson(`/projects/${projectId}/changes/diff?${query.toString()}`);
+}
+
+export function initProjectRepo(projectId: string): Promise<ChangesDTO> {
+  return engineJson(`/projects/${projectId}/changes/init`, { method: "POST" });
+}
+
+// docs/WORKSPACE_PANES_PLAN.md §5.2 — Phase W5 Files API client helpers
+export function fetchProjectFiles(projectId: string, path = ""): Promise<{ entries: FileEntryDTO[] }> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return engineJson(`/projects/${projectId}/files${query}`);
+}
+
+export function fetchProjectFileContent(projectId: string, path: string): Promise<FileContentDTO> {
+  const query = new URLSearchParams({ path });
+  return engineJson(`/projects/${projectId}/files/content?${query.toString()}`);
 }
 
 // docs/MISSION_CONTROL_PLAN.md §8 Phase M2 — the terminal runtime's HTTP surface. The actual PTY

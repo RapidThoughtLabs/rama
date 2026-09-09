@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { WireMessage } from "../../llm/types";
 import { getStatus, isGitRepo } from "../../tools/gitShared";
 
 // docs/PROMPT_STACK_PLAN.md §4.1/§4.2, Phase PS2 — layer 7, the real C9 ephemeral layer. Separate
@@ -60,6 +60,6 @@ export function buildEphemeralText(inputs: EphemeralInputs): string {
 // (notably not on Claude Sonnet 5) ... a text-block fallback appended to the user turn." The
 // fallback is weaker (S4: a user-role message is technically forgeable content), but it's the
 // only channel every model actually accepts.
-export function buildEphemeralMessage(text: string, supportsMidConversationSystem: boolean): ModelMessage {
+export function buildEphemeralMessage(text: string, supportsMidConversationSystem: boolean): WireMessage {
   return supportsMidConversationSystem ? { role: "system", content: text } : { role: "user", content: text };
 }

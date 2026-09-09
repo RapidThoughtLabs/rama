@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { tool, type ToolSet } from "ai";
+import { defineTool, type RamaToolSet } from "../tools/define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import type { ToolCtx, ToolResult } from "../tools/types";
@@ -13,13 +13,13 @@ function sanitizeToolName(name: string): string {
 // One tool per discovered skill, named skill_<name> so it can never collide with the builtin
 // read/write/edit/grep/ls/bash set. Calling it loads SKILL.md's instructions into context —
 // mirrors how the harness's own Skill tool works, not an executable-code sandbox.
-export function createSkillTools(ctx: ToolCtx): ToolSet {
+export function createSkillTools(ctx: ToolCtx): RamaToolSet {
   const skills = discoverSkills(ctx);
-  const tools: ToolSet = {};
+  const tools: RamaToolSet = {};
 
   for (const skill of skills) {
     const toolName = `skill_${sanitizeToolName(skill.name)}`;
-    tools[toolName] = tool({
+    tools[toolName] = defineTool({
       description: skill.description || `Load instructions for the "${skill.name}" skill.`,
       inputSchema: z.object({}),
       execute: async (): Promise<ToolResult> =>

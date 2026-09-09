@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { createArtifact } from "../db/artifacts";
 import { formatUnifiedDiff } from "./diffFormat";
@@ -37,7 +37,7 @@ function formatEditFailure(path: string, totalEdits: number, outcome: PatchOutco
 }
 
 export function createEditTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Replace exact text in a file with new text, scoped to the project directory. Applies a " +
       "list of edits to that one file atomically — if any edit fails, none are written. Requires " +

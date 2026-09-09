@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { mutate } from "./mutate";
 import { resolveInProject } from "./paths";
@@ -154,7 +154,7 @@ async function runStash(projectPath: string, pop?: boolean): Promise<ToolResult>
 }
 
 export function createGitWriteTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Mutate the project's git repository: stage/unstage, commit, branch, checkout, restore, " +
       "stash. No push/pull/fetch/merge/rebase, no --force, no reset --hard or commit --amend — " +

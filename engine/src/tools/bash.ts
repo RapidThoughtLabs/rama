@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
@@ -23,7 +23,7 @@ const MAX_AGENT_TERMINALS = 8;
 // appear immediately) and only written to the DB once, at the end, with the full output —
 // the "streaming" experience in between is transport-only (artifact.updated deltas).
 export function createBashTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Run a shell command in a persistent shell scoped to the project directory — cd and " +
       "exported vars carry over to your next call. Output (stdout+stderr) is captured and " +

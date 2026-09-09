@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createGitTool } from "./git";
@@ -30,7 +30,7 @@ const REVIEW_ROLE_PROMPT =
 const REVIEW_SYSTEM_PROMPT = `${REVIEW_ROLE_PROMPT}\n\n${SUBAGENT_RETURN_CONTRACT}`;
 
 export function createReviewTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Review the current diff (uncommitted changes by default, or against a base ref) for correctness " +
       "bugs, using a fresh read-only sub-agent that sees only the diff and the repo — not this " +

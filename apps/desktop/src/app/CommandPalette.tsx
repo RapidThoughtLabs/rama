@@ -201,6 +201,14 @@ export function CommandPalette({
         subtitle: `⌥${i + 1}`,
         run: () => onSelectPane(pane.id),
       })),
+      {
+        id: "act:refresh-changes",
+        title: "refresh changes",
+        subtitle: "refetch git status for the active project",
+        run: () => {
+          window.dispatchEvent(new CustomEvent("rama:refresh-changes"));
+        },
+      },
     ];
     if (tabs.length > 1 && activeTabId) {
       list.push({

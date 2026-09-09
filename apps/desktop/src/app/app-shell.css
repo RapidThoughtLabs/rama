@@ -182,7 +182,9 @@
 /* Dragging bypasses React state, writing --mc-w straight to the DOM every frame — the collapse
    toggle's transition would otherwise rubber-band a third of a second behind the cursor. */
 .rama-body[data-dragging] { transition: none; }
-.rama-body-panel-collapsed { grid-template-columns: minmax(0, 1fr) 0px; }
+/* Collapsed still reserves the pane-switcher tabstrip's own 40px — it never collapses, only the
+   rail+stage body does (mission-control/MissionControl.tsx). */
+.rama-body-panel-collapsed { grid-template-columns: minmax(0, 1fr) 40px; }
 
 /* ── SIDEBAR ── */
 .rama-sidebar {
@@ -573,12 +575,18 @@
 .rama-msg-assistant-text { color: rgba(var(--ink), 0.86); min-width: 0; }
 .rama-inline-code { background: rgba(var(--ink), 0.07); border: 1px solid rgba(var(--ink), 0.1); border-radius: 4px; padding: 0 5px; font-size: var(--fs-sm); color: var(--accent-bright, var(--accent)); }
 .rama-tool-call { margin: 2px 0 2px 22px; border-radius: 6px; padding: 3px 8px 3px 6px; }
-.rama-tool-call:hover { background: rgba(var(--ink), 0.04); cursor: pointer; }
+.rama-tool-call-expandable:hover { background: rgba(var(--ink), 0.04); }
 .rama-tool-call-head { display: flex; align-items: center; gap: 9px; }
 .rama-tool-call-status { color: var(--good); font-size: var(--fs-micro); }
 .rama-tool-call-name { font-weight: 600; font-size: var(--fs-md); color: rgba(var(--ink), 0.88); }
 .rama-tool-call-target { font-size: var(--fs-md); color: rgba(var(--ink), 0.55); }
+.rama-tool-call-chevron { margin-left: auto; font-size: var(--fs-xs); color: rgba(var(--ink), 0.35); transition: transform 0.15s ease; user-select: none; display: inline-block; }
+.rama-tool-call-chevron-open { transform: rotate(90deg); }
 .rama-tool-call-result { display: flex; gap: 9px; font-size: var(--fs-sm); color: rgba(var(--ink), 0.38); padding-left: 3px; }
+.rama-tool-call-body { margin-top: 6px; max-height: 320px; overflow: auto; border-radius: 4px; background: rgba(var(--ink), 0.03); border: 1px solid rgba(var(--ink), 0.08); }
+.rama-tool-call-content { margin: 0; padding: 8px 10px; white-space: pre-wrap; font-family: inherit; font-size: var(--fs-sm); color: rgba(var(--ink), 0.75); }
+.rama-tool-call-body .rama-diff-body { font-size: var(--fs-xs); line-height: 1.4; padding: 4px 0; }
+.rama-tool-call-body .rama-diff-line-num { width: 28px; font-size: var(--fs-micro); }
 
 .rama-clarify-card:hover { cursor: default; background: none; }
 .rama-clarify-questions { margin: 4px 0 2px 22px; padding-left: 18px; font-size: var(--fs-md); color: rgba(var(--ink), 0.85); }
@@ -599,34 +607,68 @@
 .rama-composer-wrap { position: relative; padding: 10px 18px 14px; flex-shrink: 0; }
 .rama-composer {
   border: 1px solid rgba(var(--ink), 0.1);
-  border-radius: 11px;
-  background: rgba(var(--sf-lo), 0.62);
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  border-radius: 4px;
+  background: rgba(var(--sf-lo), 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--shadow-composer);
 }
 .rama-composer-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px 10px; }
 .rama-composer-glyph { color: var(--accent-bright, var(--accent)); font-weight: 700; text-shadow: 0 0 10px var(--a45); }
 .rama-composer-text { flex: 1; min-width: 0; font-size: var(--fs-lg); color: var(--ink-hi); line-height: 1.5; }
 .rama-composer-placeholder { font-style: italic; color: rgba(var(--ink), 0.3); }
-.rama-composer-toolbar { display: flex; align-items: center; gap: 8px; padding: 7px 10px 8px; border-top: 1px solid rgba(var(--ink), 0.05); flex-wrap: wrap; }
-.rama-model-picker { position: relative; }
-.rama-model-pill {
+
+/* Row 2 — a status rail of terminal-style tiles, not a toolbar of floating buttons. Tiles are
+   cells in a grid: separated by hairlines (not gaps), square (not pill), and a hover/open state
+   fills the whole tile rect edge-to-edge rather than glowing or lifting. The rightmost cell
+   (.rama-tile-status) doubles as the run-status readout, replacing the old standalone status
+   line above the composer — same rail, two states, so the row carries information instead of
+   just being decoration. */
+.rama-composer-rail { display: flex; align-items: stretch; height: 30px; border-top: 1px solid rgba(var(--ink), 0.07); }
+.rama-tile-wrap { position: relative; display: flex; }
+.rama-composer-rail > .rama-tile-wrap:not(:first-child),
+.rama-composer-rail > .rama-tile:not(:first-child) {
+  border-left: 1px solid rgba(var(--ink), 0.07);
+}
+.rama-tile {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 11px;
-  border: 1px solid var(--a25);
-  border-radius: 99px;
-  cursor: pointer;
+  gap: 6px;
+  height: 100%;
+  padding: 0 14px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
   font-size: var(--fs-sm);
-  font-family: inherit;
-  color: var(--accent-bright, var(--accent));
-  background: var(--a06);
+  color: rgba(var(--ink), 0.8);
+  cursor: pointer;
+  white-space: nowrap;
 }
-.rama-model-pill:hover { background: var(--a10); box-shadow: 0 0 14px -4px var(--a45); }
-.rama-model-pill:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
-.rama-model-pill-bad { color: var(--bad); font-style: italic; }
+.rama-tile:hover:not(:disabled) { background: rgba(var(--ink), 0.045); }
+.rama-tile:disabled { opacity: 0.5; cursor: default; }
+.rama-tile:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--a45); }
+.rama-tile-open { background: var(--a06); box-shadow: inset 0 1px 0 0 var(--accent-bright, var(--accent)); }
+/* The only accent-colored tile — mode is the one setting that changes what Enter does. */
+.rama-tile-mode { color: var(--accent-bright, var(--accent)); text-transform: uppercase; font-weight: 700; letter-spacing: 0.03em; }
+.rama-tile-unavailable { color: var(--bad); font-style: italic; }
+.rama-tile-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 0 14px;
+  font-size: var(--fs-xs);
+  color: rgba(var(--ink), 0.32);
+  border-left: 1px solid rgba(var(--ink), 0.07);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.rama-tile-status .rama-status-verb { font-size: var(--fs-sm); font-style: normal; }
+.rama-tile-status .rama-status-meta { font-size: var(--fs-xs); }
+.rama-tile-status .rama-caret { width: 5px; height: 11px; }
+.rama-tile-hint { transition: opacity 0.15s ease; }
+.rama-tile-hint-hidden { opacity: 0; }
 .rama-model-menu-banner {
   display: flex;
   align-items: center;
@@ -635,7 +677,7 @@
   padding: 7px 8px;
   margin-bottom: 4px;
   border: 1px solid rgba(255, 95, 87, 0.25);
-  border-radius: 7px;
+  border-radius: 3px;
   background: rgba(255, 95, 87, 0.08);
   color: var(--bad);
   font-size: var(--fs-sm);
@@ -659,18 +701,18 @@
 .rama-model-menu-item-badges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 .rama-model-menu {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 6px);
   left: 0;
   min-width: 260px;
   max-height: 340px;
   overflow-y: auto;
   padding: 6px;
-  border: 1px solid rgba(var(--ink), 0.12);
-  border-radius: 10px;
-  background: rgba(var(--sf-hi), 0.96);
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
-  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(var(--ink), 0.14);
+  border-radius: 3px;
+  background: rgba(var(--sf-hi), 0.98);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.45);
   z-index: 20;
 }
 .rama-model-menu-group + .rama-model-menu-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(var(--ink), 0.06); }
@@ -693,7 +735,7 @@
   width: 100%;
   padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 3px;
   background: none;
   color: var(--ink-hi);
   font-size: var(--fs-md);
@@ -822,21 +864,6 @@
 .rama-wizard-body { display: flex; flex-direction: column; gap: 12px; }
 .rama-wizard-actions { display: flex; align-items: center; gap: 8px; }
 
-.rama-composer-hint { font-size: var(--fs-xs); color: rgba(var(--ink), 0.32); }
-.rama-composer-send {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-xs);
-  color: rgba(var(--ink), 0.45);
-  border: 1px solid rgba(var(--ink), 0.1);
-  border-radius: 6px;
-  padding: 3px 8px;
-  cursor: pointer;
-  background: none;
-}
-.rama-composer-send:hover { color: var(--accent); border-color: var(--a25); }
-
 /* ── ARTIFACT ITEM STYLES (Mission Control's Artifacts pane, mission-control/panes/Artifacts*.tsx) ── */
 /* Flat, no-chrome rows matching .rama-chat-row's language (a plain glyph, no boxed/bordered icon
    swatch, no row margin) rather than the boxed "AI app" look this used to have — see the collapsed
@@ -865,6 +892,11 @@
    ever shows an old-side number, an added line only a new-side one, both columns hold on a
    context line. */
 .rama-diff-line { display: flex; }
+/* Zebra striping for plain code lines only — add/del/hunk already carry their own background,
+   so this is scoped off them rather than relying on source order to win the specificity fight. */
+.rama-diff-line:nth-child(even):not(.rama-diff-add):not(.rama-diff-del):not(.rama-diff-hunk) {
+  background: rgba(var(--ink), 0.025);
+}
 .rama-diff-line-num { width: 34px; text-align: right; padding-right: 8px; color: rgba(var(--ink), 0.2); flex-shrink: 0; user-select: none; }
 .rama-diff-line-num-old { border-right: 1px solid rgba(var(--ink), 0.06); }
 .rama-diff-marker,
@@ -877,6 +909,7 @@
 .rama-diff-del .rama-diff-line-num,
 .rama-diff-del .rama-diff-line-marker { color: var(--bad); }
 .rama-diff-ctx { color: rgba(var(--ink), 0.55); }
+.rama-diff-hunk { background: rgba(var(--ink), 0.04); color: rgba(var(--ink), 0.45); font-style: italic; }
 
 /* ══════════ WELCOME (fresh, empty chat) — docs/REDESIGN_PLAN.md Phase R5 trimmed this down to
    just the mark. Wordmark/tagline/status-card/suggestion-chips are gone; nothing replaced them. */
@@ -969,18 +1002,18 @@
 /* ══════════ COMPOSER · rama search (/ command dropdown) ══════════ */
 .rama-search-menu {
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 6px);
   left: 0;
   min-width: 320px;
   max-width: 480px;
   max-height: 280px;
   overflow-y: auto;
   padding: 6px;
-  border: 1px solid rgba(var(--ink), 0.12);
-  border-radius: 10px;
-  background: rgba(var(--sf-hi), 0.96);
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  border: 1px solid rgba(var(--ink), 0.14);
+  border-radius: 3px;
+  background: rgba(var(--sf-hi), 0.98);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   box-shadow: var(--shadow-menu);
   z-index: 20;
 }
@@ -1002,7 +1035,7 @@
   width: 100%;
   padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 3px;
   background: none;
   color: var(--ink-hi);
   font-size: var(--fs-md);

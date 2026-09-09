@@ -6,12 +6,10 @@
 // rather than silently doing nothing. Never writes anything: decision 6 (§6.2) means a draft only
 // ever reaches disk through instructions.ts's setProjectInstructions, called after the user
 // accepts it via the PUT endpoint.
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { generateText, type LanguageModel } from "ai";
-import { getProvider, type ProviderRow } from "../db/providers";
+import { complete } from "../llm/complete";
+import { getProvider } from "../db/providers";
 import { getSecret } from "../secrets";
 import { getUtilityTarget } from "./utility";
 
@@ -21,11 +19,6 @@ const INIT_SYSTEM_PROMPT =
   "commands (build/test/lint), directory layout, and anything a coding agent would otherwise get " +
   "wrong on the first try. Markdown, headers, under 100 lines. Output only the file content — no " +
   "preamble, no code fence.";
-
-function resolveModel(providerRow: ProviderRow, model: string, apiKey: string | undefined): LanguageModel {
-  if (providerRow.kind === "anthropic") return createAnthropic({ apiKey })(model);
-  return createOpenAICompatible({ name: providerRow.id, baseURL: providerRow.base_url ?? "", apiKey: apiKey ?? "unused" })(model);
-}
 
 function readIfExists(path: string, maxChars: number): string | null {
   if (!existsSync(path)) return null;
@@ -75,14 +68,18 @@ export async function draftProjectInstructions(projectPath: string): Promise<Dra
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), INIT_TIMEOUT_MS);
   try {
-    const result = await generateText({
-      model: resolveModel(providerRow, target.model, apiKey),
-      system: INIT_SYSTEM_PROMPT,
-      prompt: gatherSignals(projectPath),
-      maxOutputTokens: 800,
-      temperature: 0.2,
-      abortSignal: controller.signal,
-    });
+    const result = await complete(
+      providerRow,
+      target.model,
+      apiKey,
+      [{ role: "user", content: gatherSignals(projectPath) }],
+      controller.signal,
+      {
+        system: INIT_SYSTEM_PROMPT,
+        maxOutputTokens: 800,
+        temperature: 0.2,
+      }
+    );
     const content = result.text.trim();
     if (!content) return { ok: false, error: "the model returned an empty draft" };
     return { ok: true, content };

@@ -1,15 +1,15 @@
-/* docs/MISSION_CONTROL_PLAN.md M1 — the rail/stage primitive's chrome. §4.1's band grid: a 40px
-   MC header (pane tabs), then a 36px action band split across the splitter (rail header on one
-   side, the pane's own stage toolbar on the other), then the flex body. Item-level artifact
-   styling (.rama-artifact-row, .rama-diff-line, etc.) still lives in app-shell.css — only
-   pane-generic chrome lives here. */
+/* docs/MISSION_CONTROL_PLAN.md M1 — the rail/stage primitive's chrome. A 36px action band split
+   across the splitter (rail header on one side, the pane's own stage toolbar on the other), then
+   the flex body, then the pane-switcher tile strip on the panel's own right edge. Item-level
+   artifact styling (.rama-artifact-row, .rama-diff-line, etc.) still lives in app-shell.css —
+   only pane-generic chrome lives here. */
 
 .rama-mission-control {
   position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: rgba(var(--sf-hi), 0.6);
   backdrop-filter: blur(26px) saturate(1.25);
   -webkit-backdrop-filter: blur(26px) saturate(1.25);
@@ -17,71 +17,58 @@
   overflow: hidden;
 }
 
-/* ── MC header (40px) — rail toggle · pane tabs · overflow ── */
-.rama-mc-header {
+/* ── pane switcher — a vertical tile strip stuck to the panel's own right edge (the window's
+   right edge). Same tile grammar as the composer rail (app-shell.css): square cells, hairline
+   dividers, full-bleed hover/active fill instead of pills — no separate control for stacking the
+   rail on top of the stage, since the rail is always beside it. */
+.rama-mc-tabstrip {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 10px;
-  border-bottom: 1px solid rgba(var(--ink), 0.07);
+  flex-direction: column;
+  width: 40px;
   flex-shrink: 0;
+  border-left: 1px solid rgba(var(--ink), 0.07);
 }
-.rama-mc-collapse-btn {
+.rama-mc-tab-tile {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 100%;
+  height: 40px;
   flex-shrink: 0;
-  border-radius: 6px;
   border: none;
+  border-radius: 0;
   background: none;
   color: rgba(var(--ink), 0.5);
   font-size: var(--fs-md);
   cursor: pointer;
 }
-.rama-mc-collapse-btn:hover { background: var(--a08); color: var(--ink-hi); }
-
-.rama-mc-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
-.rama-mc-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  border-radius: 7px;
-  border: 1px solid transparent;
-  background: none;
-  color: rgba(var(--ink), 0.5);
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-  cursor: pointer;
+.rama-mc-tabstrip > .rama-mc-tab-tile:not(:first-child) { border-top: 1px solid rgba(var(--ink), 0.07); }
+.rama-mc-tab-tile:hover:not(:disabled) { background: rgba(var(--ink), 0.045); color: var(--ink-hi); }
+.rama-mc-tab-tile:disabled { cursor: default; opacity: 0.4; }
+.rama-mc-tab-tile:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--a45); }
+.rama-mc-tab-tile svg { width: 15px; height: 15px; flex-shrink: 0; }
+/* The active pane is the only tile that earns accent color — same rule as the composer's mode
+   tile: it's the one control that changes what the stage is currently showing. */
+.rama-mc-tab-tile-active {
+  background: var(--a06);
+  color: var(--accent-hi, var(--accent));
+  box-shadow: inset 2px 0 0 0 var(--accent-bright, var(--accent));
 }
-.rama-mc-tab:hover:not(:disabled) { background: var(--a08); color: var(--ink-hi); }
-.rama-mc-tab:disabled { cursor: default; opacity: 0.4; }
-.rama-mc-tab-active { background: var(--a06); border-color: var(--a25); color: var(--ink-hi); }
-.rama-mc-tab svg { width: 13px; height: 13px; flex-shrink: 0; }
-
-.rama-mc-overflow-btn {
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  border: none;
-  background: none;
-  color: rgba(var(--ink), 0.4);
-  cursor: pointer;
-}
-.rama-mc-overflow-btn:hover { background: var(--a08); color: var(--ink-hi); }
+.rama-mc-collapse-tile { color: rgba(var(--ink), 0.4); font-size: var(--fs-sm); }
 
 /* ── body: rail · splitter · stage ── */
-.rama-mc-body { flex: 1; min-height: 0; display: flex; position: relative; }
-.rama-mc-body[data-axis="stacked"] { flex-direction: column; }
-.rama-mc-body[data-axis="side"] { flex-direction: row; }
+.rama-mc-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: row; position: relative; }
 
-.rama-mc-rail { display: flex; flex-direction: column; min-height: 0; min-width: 0; flex-shrink: 0; }
-[data-axis="side"] .rama-mc-rail { border-right: 1px solid rgba(var(--ink), 0.07); }
-[data-axis="stacked"] .rama-mc-rail { width: 100%; }
+.rama-mc-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  flex-shrink: 0;
+  /* The rail sits between the stage and the tabstrip (MissionControl.tsx) — the hairline belongs
+     on the stage-facing edge; the tabstrip supplies its own border on the other side. */
+  border-left: 1px solid rgba(var(--ink), 0.07);
+}
 .rama-mc-rail-icons { align-items: center; padding-top: 6px; gap: 3px; }
 
 .rama-mc-rail-header {
@@ -171,38 +158,613 @@
 }
 .rama-body[data-dragging] .rama-mc-splitter-edge { background: var(--a25); }
 
-/* ── narrow / rail collapsed: breadcrumb + overlay sheet (§4.3) ── */
-.rama-mc-breadcrumb {
+/* ── Changes Pane (Phase W4) ── */
+.rama-changes-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rama-changes-dir-group {
+  display: flex;
+  flex-direction: column;
+}
+.rama-changes-dir-row {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  height: 32px;
-  padding: 0 12px;
-  flex-shrink: 0;
+  height: 26px;
+  padding: 0 8px;
   border: none;
-  border-bottom: 1px solid rgba(var(--ink), 0.07);
   background: none;
-  color: rgba(var(--ink), 0.6);
-  font-size: var(--fs-sm);
-  text-align: left;
+  border-radius: 4px;
   cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: rgba(var(--ink), 0.7);
 }
-.rama-mc-breadcrumb:hover { background: var(--a06); color: var(--ink-hi); }
-
-.rama-mc-overlay-sheet {
-  position: absolute;
-  inset: 0 0 auto 0;
-  max-height: 70%;
+.rama-changes-dir-row:hover {
+  background: rgba(var(--ink), 0.04);
+  color: var(--ink-hi);
+}
+.rama-changes-disclosure {
+  font-size: var(--fs-xs);
+  color: rgba(var(--ink), 0.4);
+  user-select: none;
+  width: 10px;
+  text-align: center;
+}
+.rama-changes-dir-label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rama-changes-dir-count {
+  font-size: var(--fs-micro);
+  display: flex;
+  gap: 4px;
+  user-select: none;
+}
+.rama-changes-row {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.rama-changes-row:hover {
+  background: rgba(var(--ink), 0.04);
+}
+.rama-changes-row-active {
+  background: var(--a08) !important;
+}
+.rama-changes-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.rama-changes-status-glyph {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.rama-changes-file-name {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.rama-changes-row-sub {
+  display: flex;
+  align-items: center;
+  padding-left: 20px;
+  font-size: var(--fs-micro);
+  color: rgba(var(--ink), 0.45);
+  margin-top: 1px;
+}
+.rama-changes-orig-path {
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.rama-changes-counts {
+  display: flex;
+  gap: 4px;
+}
+.rama-changes-binary-tag {
+  font-size: var(--fs-micro);
+  color: rgba(var(--ink), 0.4);
+  border: 1px solid rgba(var(--ink), 0.1);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.rama-changes-stage-toolbar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(var(--ink), 0.07);
+  flex-shrink: 0;
+}
+.rama-changes-stage-path {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+.rama-changes-status-pill {
+  font-size: var(--fs-micro);
+  padding: 1px 6px;
+  border-radius: 99px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.rama-changes-status-modified,
+.rama-changes-status-renamed {
+  color: var(--accent);
+  background: var(--a08);
+}
+.rama-changes-status-added {
+  color: var(--good);
+  background: rgba(52, 211, 153, 0.1);
+}
+.rama-changes-status-deleted,
+.rama-changes-status-conflicted {
+  color: var(--bad);
+  background: rgba(255, 95, 87, 0.1);
+}
+.rama-changes-status-untracked {
+  color: rgba(var(--ink), 0.5);
+  background: rgba(var(--ink), 0.06);
+}
+.rama-changes-segment-switch {
+  display: flex;
+  background: rgba(var(--ink), 0.05);
+  border-radius: 4px;
+  padding: 2px;
+}
+.rama-changes-segment-btn {
+  border: none;
+  background: none;
+  font-size: var(--fs-micro);
+  padding: 2px 7px;
+  border-radius: 3px;
+  color: rgba(var(--ink), 0.5);
+  cursor: pointer;
+  font-family: inherit;
+}
+.rama-changes-segment-btn.active {
+  background: rgba(var(--sf-hi), 0.9);
+  color: var(--ink-hi);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.rama-changes-action-btn {
+  border: none;
+  background: none;
+  font-size: var(--fs-sm);
+  color: rgba(var(--ink), 0.45);
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+.rama-changes-action-btn:hover {
+  color: var(--ink-hi);
+  background: rgba(var(--ink), 0.06);
+}
+.rama-changes-stage-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  z-index: 3;
-  padding: 8px 10px 10px;
-  display: grid;
-  gap: 3px;
-  align-content: start;
-  background: rgba(var(--sf-hi), 0.97);
-  backdrop-filter: blur(26px) saturate(1.25);
-  -webkit-backdrop-filter: blur(26px) saturate(1.25);
-  border-bottom: 1px solid rgba(var(--ink), 0.1);
-  box-shadow: 0 12px 24px -12px rgba(0, 0, 0, 0.4);
+  overflow-x: auto;
 }
+
+/* docs/WORKSPACE_PANES_PLAN.md Phase W6 — Files Rail & Stage */
+
+/* Collapsed rail (44px) strip */
+.rama-files-collapsed-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+.rama-files-collapsed-item {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: rgba(var(--ink), 0.6);
+  font-family: inherit;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+}
+.rama-files-collapsed-item:hover {
+  background: rgba(var(--ink), 0.06);
+  color: var(--ink-hi);
+}
+.rama-files-collapsed-item.active {
+  background: var(--a08);
+  color: var(--accent);
+}
+
+/* Files tree */
+.rama-files-tree {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 4px 0;
+  user-select: none;
+}
+.rama-files-dir-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.rama-files-dir-row,
+.rama-files-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  box-sizing: border-box;
+  font-size: var(--fs-sm);
+  color: rgba(var(--ink), 0.85);
+  gap: 6px;
+}
+.rama-files-dir-row:hover,
+.rama-files-row:hover {
+  background: rgba(var(--ink), 0.04);
+}
+.rama-files-row-active {
+  background: var(--a08) !important;
+  color: var(--accent) !important;
+  font-weight: 500;
+}
+.rama-files-row-preview {
+  font-style: italic;
+}
+.rama-files-arrow,
+.rama-files-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  text-align: center;
+  color: rgba(var(--ink), 0.4);
+  flex-shrink: 0;
+}
+.rama-files-dir-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.rama-files-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: rgba(var(--ink), 0.55);
+  flex-shrink: 0;
+}
+.rama-files-row-active .rama-files-file-icon {
+  color: var(--accent);
+}
+.rama-files-dir-name {
+  font-weight: 500;
+  color: var(--ink-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rama-files-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.rama-files-glyph {
+  font-size: 10px;
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+  color: rgba(var(--ink), 0.45);
+  flex-shrink: 0;
+}
+.rama-files-size {
+  font-size: var(--fs-micro);
+  color: rgba(var(--ink), 0.35);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.rama-files-ignored {
+  opacity: 0.45;
+}
+.rama-files-spinner {
+  font-size: var(--fs-micro);
+  color: rgba(var(--ink), 0.4);
+  margin-left: 4px;
+  animation: rama-spin 1s linear infinite;
+}
+
+
+/* Files Stage: 36px Action Band with In-band Tab Strip */
+.rama-files-stage-toolbar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 0;
+  border-bottom: 1px solid rgba(var(--ink), 0.07);
+  flex-shrink: 0;
+  background: rgba(var(--sf-hi), 0.6);
+  backdrop-filter: blur(12px);
+  min-width: 0;
+}
+.rama-files-tab-strip {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  min-width: 0;
+  flex: 1;
+}
+.rama-files-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+.rama-file-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-right: 1px solid rgba(var(--ink), 0.06);
+  background: none;
+  border-top: none;
+  border-bottom: 2px solid transparent;
+  border-left: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: rgba(var(--ink), 0.65);
+  max-width: 180px;
+  min-width: 80px;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 0.1s ease, color 0.1s ease;
+  box-sizing: border-box;
+}
+.rama-file-tab:hover {
+  background: rgba(var(--ink), 0.03);
+  color: var(--ink-hi);
+}
+.rama-file-tab-active {
+  background: rgba(var(--sf-hi), 0.95);
+  color: var(--ink-hi);
+  font-weight: 500;
+  border-bottom-color: var(--accent);
+}
+.rama-file-tab-preview .rama-file-tab-title {
+  font-style: italic;
+}
+.rama-file-tab-glyph {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(var(--ink), 0.4);
+  flex-shrink: 0;
+}
+.rama-file-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+.rama-file-tab-close {
+  border: none;
+  background: none;
+  color: rgba(var(--ink), 0.35);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rama-file-tab-close:hover {
+  background: rgba(var(--ink), 0.1);
+  color: var(--ink-hi);
+}
+
+.rama-files-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-left: 8px;
+}
+.rama-files-action-btn {
+  border: none;
+  background: none;
+  font-size: var(--fs-xs);
+  color: rgba(var(--ink), 0.55);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.rama-files-action-btn:hover {
+  color: var(--ink-hi);
+  background: rgba(var(--ink), 0.06);
+}
+
+.rama-files-stage-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+  background: var(--sf-lo);
+}
+.rama-file-viewer {
+  display: flex;
+  flex-direction: column;
+  min-width: max-content;
+  width: 100%;
+}
+.rama-files-oversize-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(234, 179, 8, 0.08);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.2);
+  color: var(--ink-hi);
+  font-size: var(--fs-xs);
+}
+.rama-file-lines {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+.rama-file-line {
+  display: flex;
+  align-items: baseline;
+  min-height: 20px;
+}
+.rama-file-line:hover {
+  background: rgba(var(--ink), 0.03);
+}
+.rama-file-line .rama-diff-line-num {
+  width: 44px;
+  text-align: right;
+  padding-right: 12px;
+  color: rgba(var(--ink), 0.25);
+  flex-shrink: 0;
+  user-select: none;
+}
+.rama-file-line-text {
+  white-space: pre;
+  padding-right: 14px;
+  color: var(--ink-hi);
+  flex: 1;
+}
+.rama-file-line-wrap {
+  white-space: pre-wrap !important;
+  word-break: break-all;
+}
+
+.rama-file-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.8;
+}
+.rama-file-tab-active .rama-file-tab-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Syntax Highlighting Tokens — mapped to Rama theme tokens
+   ════════════════════════════════════════════════════════════════════════ */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.hljs-string,
+.hljs-title.class_,
+.hljs-section,
+.hljs-attribute,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: var(--good);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-meta,
+.hljs-doctag {
+  color: var(--text-4);
+  font-style: italic;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--warn);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-function {
+  color: var(--accent-bright);
+}
+
+.hljs-type,
+.hljs-built_in {
+  color: var(--accent-hi, var(--accent));
+}
+
+.hljs-variable,
+.hljs-variable.language_,
+.hljs-params {
+  color: rgb(var(--ink));
+}
+
+.hljs-operator,
+.hljs-punctuation {
+  color: rgba(var(--ink), 0.65);
+}
+
+.hljs-addition {
+  color: var(--good);
+  background: rgba(var(--good), 0.1);
+}
+
+.hljs-deletion {
+  color: var(--bad);
+  background: rgba(var(--bad), 0.1);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+

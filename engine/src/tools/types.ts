@@ -1,5 +1,5 @@
 import type { ChatMode } from "@rama/protocol";
-import type { LanguageModel } from "ai";
+import type { LlmClient } from "../llm/types";
 import type { Checkpointer } from "../checkpoints";
 import type { DiagnosticRunner } from "../diagnostics";
 import type { ReadTracker } from "./readTracker";
@@ -67,15 +67,11 @@ export interface ToolCtx {
   checkpoints: Checkpointer;
   shell: ShellSession; // TL3, §5.5
   diagnostics: DiagnosticRunner; // TL5, §5.4
-  // TL6, §6.15 — already resolved (provider/key looked up once in loop.ts's runTurn) — the
-  // parent turn's own model.
-  languageModel: LanguageModel;
-  // docs/PROMPT_STACK_PLAN.md §6.1, Phase PS5 — reverses TL6's "same model by default": explore/
-  // review/test's nested streamText calls use this instead of `languageModel`. Resolved once per
-  // run from the `subagent` role (falling back to `languageModel` itself when that role isn't
-  // configured or its provider is unhealthy) — a sub-agent is a cost transfer, so it should not
-  // silently cost frontier-model rates just because nobody has set the role yet.
-  subagentModel: LanguageModel;
+  // LM3 — in-house transport client for the parent turn's model
+  llmClient: LlmClient;
+  // Subagent model client and model name
+  subagentClient: LlmClient;
+  subagentModel: string;
 }
 
 export type ToolRisk = "low" | "high";

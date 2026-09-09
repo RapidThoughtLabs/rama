@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createGlobTool } from "./glob";
@@ -28,7 +28,7 @@ const EXPLORE_ROLE_PROMPT =
 const EXPLORE_SYSTEM_PROMPT = `${EXPLORE_ROLE_PROMPT}\n\n${SUBAGENT_RETURN_CONTRACT}`;
 
 export function createExploreTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Delegate a specific, answerable-from-the-codebase question to an isolated read-only " +
       'sub-agent — "where is X defined", "how does Y flow through the system", "why is Z built ' +

@@ -1,4 +1,4 @@
-import { jsonSchema, tool, type ToolSet } from "ai";
+import { defineTool, defineRawTool, type RamaToolSet } from "../tools/define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
@@ -33,8 +33,8 @@ function formatRankedTool(row: HekuToolRow, connected: boolean): string {
 // docs/TOOL_LAYER_PLAN.md §7 (TL7) — the two-slot gateway that replaces mcp/registry.ts's
 // getServerTools flattening. Plus one real tool() entry per promoted tool (§7.6), generated fresh
 // each call since promotion is a live view over call_count/pinned, not a stored tool set.
-export function createHekuTools(ctx: ToolCtx): ToolSet {
-  const find = tool({
+export function createHekuTools(ctx: ToolCtx): RamaToolSet {
+  const find = defineTool({
     description:
       "Search external (MCP-connected) tools by what you want to do — \"create a pull request\", " +
       "\"screenshot a page\". Returns ranked matches with full argument schemas, so you can call " +
@@ -62,7 +62,7 @@ export function createHekuTools(ctx: ToolCtx): ToolSet {
       }),
   });
 
-  const call = tool({
+  const call = defineTool({
     description:
       "Call an external tool found via heku_find. `tool` must be the exact full_id it returned " +
       "(e.g. github.create_pull_request). Validates args against the tool's real schema before " +
@@ -112,7 +112,7 @@ export function createHekuTools(ctx: ToolCtx): ToolSet {
     },
   });
 
-  const out: ToolSet = { heku_find: find, heku_call: call };
+  const out: RamaToolSet = { heku_find: find, heku_call: call };
 
   // §7.6 — a real tool() per promoted row, sharing callExternalTool's exact dispatch path so a
   // promoted call behaves identically to heku_call, just without the two-step indirection.
@@ -127,9 +127,9 @@ export function createHekuTools(ctx: ToolCtx): ToolSet {
     } catch {
       parsedSchema = { type: "object" };
     }
-    out[name] = tool({
+    out[name] = defineRawTool({
       description: `${row.description} (promoted external tool, via ${row.server_name})`,
-      inputSchema: jsonSchema(parsedSchema as never),
+      jsonSchema: parsedSchema,
       execute: async (input: unknown, options): Promise<ToolResult> =>
         gate(ctx, { name, input, risk: resolveRisk(row) }, async () => {
           const result = await callExternalTool(row, input as Record<string, unknown>, { toolCallId: options.toolCallId });

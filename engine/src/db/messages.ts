@@ -55,8 +55,41 @@ export function appendMessage(
 
 // Finalizes an assistant row created empty at run start (before any tool calls, which need
 // its id as their message_id FK) once the run has fully streamed, errored, or been interrupted.
-export function finalizeMessage(id: string, content: string | null): void {
-  db.query("UPDATE messages SET content = ? WHERE id = ?").run(content, id);
+// `reasoningSignature` (docs/LOOP_MENDING_PLAN.md D6/MD4) — Anthropic's opaque thinking-block
+// signature — has no dedicated column; it rides the existing, otherwise-unused `meta_json`
+// rather than adding a migration for one nullable string.
+export function finalizeMessage(
+  id: string,
+  content: string | null,
+  thinking?: string | null,
+  reasoningSignature?: string,
+): void {
+  if (reasoningSignature) {
+    db.query("UPDATE messages SET content = ?, thinking = ?, meta_json = ? WHERE id = ?").run(
+      content,
+      thinking ?? null,
+      JSON.stringify({ reasoningSignature }),
+      id,
+    );
+  } else if (thinking !== undefined) {
+    db.query("UPDATE messages SET content = ?, thinking = ? WHERE id = ?").run(content, thinking, id);
+  } else {
+    db.query("UPDATE messages SET content = ? WHERE id = ?").run(content, id);
+  }
+}
+
+// The read half of the meta_json signature round-trip above — used only by
+// agent/run/transcript.ts's buildTranscriptFromDb when rebuilding a historical assistant entry
+// that has thinking text, so it isn't spent on the common (non-reasoning) case.
+export function getMessageReasoningSignature(id: string): string | undefined {
+  const row = db.query<{ meta_json: string }, [string]>("SELECT meta_json FROM messages WHERE id = ?").get(id);
+  if (!row) return undefined;
+  try {
+    const parsed = JSON.parse(row.meta_json) as { reasoningSignature?: unknown };
+    return typeof parsed.reasoningSignature === "string" ? parsed.reasoningSignature : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 interface ProjectMessageRow {

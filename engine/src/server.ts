@@ -8,7 +8,7 @@ import {
 } from "./agent/instructions";
 import { draftProjectInstructions } from "./agent/instructionsInit";
 import { runCurator } from "./agent/curator/curator";
-import { getPromptPreview, interrupt, isRunning, runTurn } from "./agent/loop";
+import { getPromptPreview, interrupt, isRunning, runTurn } from "./agent/run/run";
 import { resolvePermission } from "./agent/permissions";
 import { checkAuth } from "./auth";
 import { resolveBrowserResponse } from "./browserBridge";
@@ -77,6 +77,9 @@ import { setSecret } from "./secrets";
 import { installSkill, uninstallSkill } from "./skills/installer";
 import { listInstalledSkills } from "./skills/store";
 import { broadcast, broadcastProject, broadcastThemes, setServer, type SocketData } from "./ws";
+import { readChanges, readDiff } from "./git/status";
+import { isGitRepo, runGit } from "./tools/gitShared";
+import { listDirectory, readFileContent } from "./files/browse";
 
 function skillDTO(row: ReturnType<typeof listInstalledSkills>[number]) {
   return {
@@ -221,6 +224,97 @@ export function createServer() {
           }
         }
 
+        // WORKSPACE_PANES_PLAN.md §5.2 / §6.1 — GET /projects/:id/changes
+        const projectChangesMatch = pathname.match(/^\/projects\/([^/]+)\/changes$/);
+        if (projectChangesMatch && req.method === "GET") {
+          const project = getProject(projectChangesMatch[1]!);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          try {
+            const changes = await readChanges(project.path);
+            return json(changes);
+          } catch (err) {
+            return json({ error: String(err) }, { status: 500 });
+          }
+        }
+
+        // WORKSPACE_PANES_PLAN.md §5.2 / §6.1 — POST /projects/:id/changes/init: `git init` for a
+        // project directory that isn't a repo yet, surfaced as a button in the Changes pane's
+        // empty state rather than requiring the user to drop to a terminal.
+        const projectChangesInitMatch = pathname.match(/^\/projects\/([^/]+)\/changes\/init$/);
+        if (projectChangesInitMatch && req.method === "POST") {
+          const project = getProject(projectChangesInitMatch[1]!);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          try {
+            const alreadyRepo = await isGitRepo(project.path);
+            if (!alreadyRepo) {
+              const { output, exitCode } = await runGit(project.path, ["init"]);
+              if (exitCode !== 0) return json({ error: output.trim() || "git init failed" }, { status: 500 });
+            }
+            const changes = await readChanges(project.path);
+            broadcastProject(project.id, { type: "changes.invalidated", projectId: project.id });
+            return json(changes);
+          } catch (err) {
+            return json({ error: String(err) }, { status: 500 });
+          }
+        }
+
+        // WORKSPACE_PANES_PLAN.md §5.2 / §6.3 — GET /projects/:id/changes/diff?path=&staged=0|1
+        const projectChangesDiffMatch = pathname.match(/^\/projects\/([^/]+)\/changes\/diff$/);
+        if (projectChangesDiffMatch && req.method === "GET") {
+          const project = getProject(projectChangesDiffMatch[1]!);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const relPath = url.searchParams.get("path");
+          if (!relPath) return json({ error: "missing path query param" }, { status: 400 });
+          const staged = url.searchParams.get("staged") === "1";
+          try {
+            const diff = await readDiff(project.path, relPath, staged);
+            return json(diff);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("escapes the project directory")) {
+              return json({ error: msg }, { status: 400 });
+            }
+            return json({ error: msg }, { status: 500 });
+          }
+        }
+
+        // WORKSPACE_PANES_PLAN.md §5.2 / §6.5 — GET /projects/:id/files?path=<rel>
+        const projectFilesMatch = pathname.match(/^\/projects\/([^/]+)\/files$/);
+        if (projectFilesMatch && req.method === "GET") {
+          const project = getProject(projectFilesMatch[1]!);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const relPath = url.searchParams.get("path") ?? "";
+          try {
+            const files = await listDirectory(project.path, relPath);
+            return json(files);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("escapes the project directory")) {
+              return json({ error: msg }, { status: 400 });
+            }
+            return json({ error: msg }, { status: 500 });
+          }
+        }
+
+        // WORKSPACE_PANES_PLAN.md §5.2 / §6.5 — GET /projects/:id/files/content?path=<rel>
+        const projectFilesContentMatch = pathname.match(/^\/projects\/([^/]+)\/files\/content$/);
+        if (projectFilesContentMatch && req.method === "GET") {
+          const project = getProject(projectFilesContentMatch[1]!);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const relPath = url.searchParams.get("path");
+          if (!relPath) return json({ error: "missing path query param" }, { status: 400 });
+          try {
+            const content = await readFileContent(project.path, relPath);
+            return json(content);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("escapes the project directory") || msg.includes("ENOENT") || msg.includes("no such file")) {
+              return json({ error: msg }, { status: 400 });
+            }
+            return json({ error: msg }, { status: 500 });
+          }
+        }
+
         const chatMatch = pathname.match(/^\/chats\/([^/]+)$/);
         if (chatMatch && req.method === "PATCH") {
           const body = await req.json().catch(() => ({}));
@@ -272,7 +366,9 @@ export function createServer() {
           if (!chat) return json({ error: "chat not found" }, { status: 404 });
           const project = getProject(chat.projectId);
           if (!project) return json({ error: "project not found" }, { status: 404 });
-          return json(await undoLastRun(project.path));
+          const res = await undoLastRun(project.path);
+          broadcastProject(project.id, { type: "changes.invalidated", projectId: project.id });
+          return json(res);
         }
 
         // docs/MISSION_CONTROL_PLAN.md §8 Phase M2 — the terminal runtime's HTTP surface. PTY

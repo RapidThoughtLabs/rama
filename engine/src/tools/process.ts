@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { getScrollback, getTerminal, listTerminalsByProject } from "../db/terminals";
@@ -13,7 +13,7 @@ import type { ToolCtx, ToolResult } from "./types";
 const MODEL_OUTPUT_CHARS = 8_000;
 
 export function createProcessTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Inspect or control terminals in this project (both this agent's own background shells from " +
       "`bash background:true` and the user's own). `list` shows every terminal with its status; " +

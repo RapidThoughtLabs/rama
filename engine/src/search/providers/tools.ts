@@ -1,4 +1,4 @@
-import type { LanguageModel } from "ai";
+import type { LlmClient } from "../../llm/types";
 import { createCheckpointer } from "../../checkpoints";
 import { createDiagnosticRunner } from "../../diagnostics";
 import { createHekuTools } from "../../heku/tools";
@@ -29,10 +29,9 @@ export const toolsSearchProvider: SearchProvider = {
       checkpoints: createCheckpointer(projectPath),
       shell: createShellSession(projectPath),
       diagnostics: createDiagnosticRunner(projectPath),
-      // TL6/PS5 — explore/review/test read these off ctx but never run here either; same "never
-      // actually invoked" placeholder reasoning as the fields above.
-      languageModel: "placeholder" as unknown as LanguageModel,
-      subagentModel: "placeholder" as unknown as LanguageModel,
+      llmClient: "placeholder" as unknown as LlmClient,
+      subagentClient: "placeholder" as unknown as LlmClient,
+      subagentModel: "placeholder",
     };
     const tools = {
       ...createTools(toolCtx),

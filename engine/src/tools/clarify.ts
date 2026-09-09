@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import type { ToolCtx, ToolResult } from "./types";
@@ -23,7 +23,7 @@ const inputSchema = z.object({
 });
 
 export function createClarifyTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Ask the user up to 3 clarifying questions before proceeding, each with a proposed default. Only for " +
       "genuine ambiguity where different answers lead to materially different work — never for something " +

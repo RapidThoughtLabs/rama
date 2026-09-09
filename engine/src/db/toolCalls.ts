@@ -67,6 +67,22 @@ export function finalizeToolCall(
   );
 }
 
+// docs/LOOP_MENDING_PLAN.md D11/MD3 — a `tool_calls` row is created (step.ts) before the tool
+// actually runs, so it can carry that call's id as the FK target for its eventual result. An
+// interrupt or mid-stream failure between that create and finalizeToolCall leaves the row with
+// ok IS NULL forever: listToolCallsForHistory's `WHERE ok IS NOT NULL` silently skips it (not
+// wire-invalid), but buildTranscriptFromDb's old fallback path used to replay it as "tool call
+// failed" on the next turn — persistent noise for a call that never got a chance to run. Called
+// from runTurn's `finally`, where the terminal state (the real cause) is already known.
+export function finalizeOrphanedToolCalls(messageId: string, causeSummary: string): number {
+  const result = db
+    .query(
+      "UPDATE tool_calls SET ok = 0, result_summary = ?, ended_at = ? WHERE message_id = ? AND ok IS NULL",
+    )
+    .run(causeSummary, Date.now(), messageId);
+  return result.changes;
+}
+
 export interface ToolCallHistoryEntry {
   id: string;
   messageId: string;

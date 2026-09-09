@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { resolveInProject } from "./paths";
@@ -10,7 +10,7 @@ import type { ToolCtx, ToolResult } from "./types";
 const DEFAULT_LIMIT = 200;
 
 export function createGlobTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       'Find files by glob pattern (e.g. "**/*.ts", "src/**/*.test.*"), scoped to the project ' +
       "directory and respecting .gitignore. Results are sorted most-recently-modified first.",

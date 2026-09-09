@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { WallpaperStack } from "@rama/ui";
 import { Titlebar } from "./Titlebar";
@@ -30,12 +30,29 @@ export type MainView = "home" | "code" | "toolbox" | "docs";
 
 export function AppShell() {
   // docs/MISSION_CONTROL_PLAN.md M1 — Mission Control's whole width/collapse/pane/rail state,
-  // persisted per window. Owned here (not inside <MissionControl>) because Titlebar's toggle
-  // button and the command palette's "toggle mission control" action both need to drive
-  // `panelCollapsed` without a context.
+  // persisted per window. Owned here (not inside <MissionControl>) because the command palette's
+  // "toggle mission control" action needs to drive `panelCollapsed` without a context.
+  // MissionControl itself is always mounted now — its pane-switcher tabstrip never collapses, so
+  // it needs `geometry` regardless of `panelCollapsed`.
   const geometry = useMissionControlGeometry();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [view, setView] = useState<MainView>("code");
+
+  // docs/WORKSPACE_PANES_PLAN.md Phase W7 — rama:open-file cross-pane link: activate Files pane and expand panel if collapsed
+  useEffect(() => {
+    function handleOpenFile(e: Event) {
+      const ce = e as CustomEvent<{ path: string }>;
+      if (ce.detail?.path) {
+        geometry.setActivePaneId("files");
+        if (geometry.panelCollapsed) {
+          geometry.togglePanelCollapsed();
+        }
+      }
+    }
+    window.addEventListener("rama:open-file", handleOpenFile);
+    return () => window.removeEventListener("rama:open-file", handleOpenFile);
+  }, [geometry]);
+
   // docs/REDESIGN_PLAN.md Phase R4 — one settings modal, opened from the sidebar footer (main
   // window), ⌘, / the ⌘K command palette (every window — see CommandPalette.tsx), or a P1 deep
   // link (ModelPicker's banner, StatusBar's dot) — SettingsLinkContext owns open/close + target
@@ -69,8 +86,6 @@ export function AppShell() {
         <div className="rama-main">
           <Titlebar
             reserveTrafficGap={reserveTrafficGapInTitlebar}
-            panelOpen={!geometry.panelCollapsed}
-            onTogglePanel={geometry.togglePanelCollapsed}
             showViewTabs={IS_MAIN_WINDOW}
             showSidebarToggle={IS_MAIN_WINDOW && !sidebarOpen}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
@@ -88,7 +103,7 @@ export function AppShell() {
               style={{ "--mc-w": `${geometry.width}px` } as CSSProperties}
             >
               <ChatColumn />
-              {!geometry.panelCollapsed && <MissionControl geometry={geometry} />}
+              <MissionControl geometry={geometry} />
             </div>
           )}
         </div>

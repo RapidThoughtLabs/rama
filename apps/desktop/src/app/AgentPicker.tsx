@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import type { AgentSummaryDTO, ChatDTO } from "@rama/protocol";
 import { fetchAgents, patchChat } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 
 // docs/PROMPT_STACK_PLAN.md §5.3/§12 open question C, Phase PS4 — "composer pill, or session
-// start only?" — this ships as a composer pill (switching mid-session is legal, just invalidates
-// bp2 onward, same as the mode SegmentedControl right next to it). Reuses ModelPicker's CSS
-// classes rather than inventing new ones — it's the same "button opens a menu of named things"
-// shape.
+// start only?" — this ships as a composer rail tile (switching mid-session is legal, just
+// invalidates bp2 onward, same as the mode tile next to it). Reuses ModelPicker's tile CSS
+// rather than inventing new ones — it's the same "button opens a menu of named things" shape.
+//
+// A control with exactly one possible value is noise, not a control — so this renders nothing
+// until a project actually has more than one agent to switch between.
 export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; disabled: boolean }) {
   const [agents, setAgents] = useState<AgentSummaryDTO[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -45,11 +48,28 @@ export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
       });
   }
 
+  // See ModelPicker's onTriggerKeyDown for why this only closes the menu, not the tile focus.
+  function onTriggerKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
+    if (e.key === "Escape" && menuOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenuOpen(false);
+    }
+  }
+
   const active = agents.find((a) => a.name === chat?.agentId);
 
+  if (agents.length <= 1) return null;
+
   return (
-    <div className="rama-model-picker" ref={rootRef}>
-      <button type="button" className="rama-model-pill" disabled={!chat || disabled} onClick={() => setMenuOpen((v) => !v)}>
+    <div className="rama-tile-wrap" ref={rootRef}>
+      <button
+        type="button"
+        className={`rama-tile rama-tile-agent${menuOpen ? " rama-tile-open" : ""}`}
+        disabled={!chat || disabled}
+        onClick={() => setMenuOpen((v) => !v)}
+        onKeyDown={onTriggerKeyDown}
+      >
         <span>{active?.name ?? chat?.agentId ?? "default"}</span>
       </button>
       {menuOpen && (

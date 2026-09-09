@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { tool } from "ai";
+import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
@@ -57,7 +57,7 @@ async function suggestNearestPaths(projectPath: string, relPath: string): Promis
 }
 
 export function createReadTool(ctx: ToolCtx) {
-  return tool({
+  return defineTool({
     description:
       "Read a file's contents, scoped to the project directory. Each line is prefixed with a " +
       '"NNNN| " line number for display only — never copy that gutter into edit\'s oldString, it ' +

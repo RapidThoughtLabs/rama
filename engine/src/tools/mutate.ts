@@ -1,4 +1,5 @@
 import { gate } from "../agent/permissions";
+import { broadcastProject } from "../ws";
 import type { ToolCtx, ToolResult, ToolRisk } from "./types";
 
 // docs/TOOL_LAYER_PLAN.md §3.4 — checkpointing lives here, not inside gate(): permission and
@@ -13,6 +14,7 @@ export async function mutate(
     const checkpointId = await ctx.checkpoints.snapshot(`${opts.name} ${opts.paths[0] ?? ""}`);
     const result = await run();
     ctx.reads.invalidate(result.meta?.filesWritten ?? opts.paths);
+    broadcastProject(ctx.projectId, { type: "changes.invalidated", projectId: ctx.projectId });
     return { ...result, meta: { ...result.meta, checkpointId } };
   });
 }

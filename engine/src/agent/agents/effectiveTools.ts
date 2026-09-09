@@ -1,5 +1,5 @@
 import type { ChatMode } from "@rama/protocol";
-import type { ToolSet } from "ai";
+import type { RamaToolSet } from "../../tools/define";
 import type { AgentDef } from "./types";
 
 // Static risk ceiling for the fixed harness tool set (engine/src/tools/index.ts's createTools) —
@@ -47,9 +47,9 @@ function modeForbids(name: string, mode: ChatMode): boolean {
 // non-null allowlist can only narrow, never add back a tool mode has forbidden (rule 1 + rule 2,
 // enforced here — the one place that decides what the model is even offered, not just what gate()
 // will let it actually call).
-export function computeEffectiveTools(tools: ToolSet, mode: ChatMode, agent: AgentDef): ToolSet {
+export function computeEffectiveTools(tools: RamaToolSet, mode: ChatMode, agent: AgentDef): RamaToolSet {
   const allowed = agent.tools ? new Set(agent.tools) : null;
-  const out: ToolSet = {};
+  const out: RamaToolSet = {};
   for (const [name, def] of Object.entries(tools)) {
     if (isHarnessTool(name)) {
       if (modeForbids(name, mode)) continue;
