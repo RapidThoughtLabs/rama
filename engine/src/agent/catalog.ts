@@ -16,6 +16,15 @@ const RAMA_HOME = join(homedir(), ".rama");
 export type CatalogTier = "frontier" | "workhorse" | "small";
 export type CatalogAuthStyle = "bearer" | "header";
 
+// docs/PROMPT_STACK_PLAN.md §9.2, Phase PS1. `cacheStyle`/`cacheReadMultiplier`/
+// `cacheWriteMultiplier` are provider-family properties (every Anthropic model gets the same
+// ephemeral 5m pricing; every model behind an automatic-caching gateway gets whatever that
+// gateway does). `cacheMinTokens` and `supportsMidConversationSystem` are per-MODEL: §9.1's
+// minimum cacheable prefix is documented per model, not per provider, and at least one real
+// model (claude-sonnet-5) is known to reject a genuine mid-conversation `role: "system"` message
+// that a sibling model in the same provider accepts.
+export type CacheStyle = "explicit" | "automatic" | "none";
+
 export interface CatalogModel {
   id: string;
   label: string;
@@ -30,6 +39,9 @@ export interface CatalogModel {
   openrouterId: string | null;
   deprecated: boolean;
   supersededBy: string | null;
+  /** Below this, an explicit cache_control marker is silently ignored. Null when cacheStyle isn't "explicit". */
+  cacheMinTokens: number | null;
+  supportsMidConversationSystem: boolean;
 }
 
 export interface CatalogProvider {
@@ -44,6 +56,11 @@ export interface CatalogProvider {
   extraHeaders: Record<string, string>;
   utilityModel: string | null;
   models: CatalogModel[];
+  cacheStyle: CacheStyle;
+  /** Billing multiplier on a cache-read token vs. a normal input token. 1 = no known discount. */
+  cacheReadMultiplier: number;
+  /** Billing multiplier on a cache-write token. Meaningless (kept at 1) outside "explicit". */
+  cacheWriteMultiplier: number;
 }
 
 export interface CatalogFile {
@@ -111,4 +128,36 @@ export function getCatalogProvider(id: string): CatalogProvider | undefined {
 
 export function getCatalogModel(providerId: string, modelId: string): CatalogModel | undefined {
   return getCatalogProvider(providerId)?.models.find((m) => m.id === modelId);
+}
+
+export interface CachePolicy {
+  style: CacheStyle;
+  minTokens: number | null;
+  readMultiplier: number;
+  writeMultiplier: number;
+}
+
+// docs/PROMPT_STACK_PLAN.md §9.2, Phase PS1 — single lookup used by both prompt assembly
+// (whether to place a cache_control marker) and cost accounting (which multiplier bills a cache
+// read/write token). An unknown provider/model gets "none" rather than guessing "automatic": a
+// silently-wrong discount would misreport cost, whereas "none" just means the marker step and
+// the billing split are both skipped, same as today.
+export function getCachePolicy(providerId: string, modelId: string): CachePolicy {
+  const provider = getCatalogProvider(providerId);
+  const model = getCatalogModel(providerId, modelId);
+  if (!provider) return { style: "none", minTokens: null, readMultiplier: 1, writeMultiplier: 1 };
+  return {
+    style: provider.cacheStyle,
+    minTokens: model?.cacheMinTokens ?? null,
+    readMultiplier: provider.cacheReadMultiplier,
+    writeMultiplier: provider.cacheWriteMultiplier,
+  };
+}
+
+// docs/PROMPT_STACK_PLAN.md §4.2, Phase PS2 — the ephemeral block's fallback gate. Defaults true
+// (most models accept a mid-conversation role:"system" message) so an unlisted model gets the
+// real trailing system message rather than being silently downgraded to the weaker text-in-user
+// fallback for no reason.
+export function getSupportsMidConversationSystem(providerId: string, modelId: string): boolean {
+  return getCatalogModel(providerId, modelId)?.supportsMidConversationSystem ?? true;
 }

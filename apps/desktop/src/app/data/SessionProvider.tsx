@@ -21,6 +21,11 @@ export interface UsageInfo {
   outputTokens: number;
   contextUsed: number;
   contextMax: number;
+  // docs/PROMPT_STACK_PLAN.md Phase PS1 — undefined for a chat that hasn't sent a turn since
+  // caching landed, or for a provider that doesn't report the split.
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  noCacheTokens?: number;
 }
 
 export interface PendingPermission {
@@ -85,6 +90,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // state avoids re-subscribing the WS listener below on every delta.
   const activeRunIdByChatRef = useRef<Record<string, string>>({});
 
+  // Tracks which runs made at least one tool call, outside React state for the same reason as
+  // activeRunIdByChatRef above. A run that ends with a tool call and no closing text (common
+  // once the model has 16+ tools to reach for, and stopWhen: stepCountIs(8) can cut a turn off
+  // mid-loop) must still leave its tool-call cards visible — see message.done below.
+  const hadToolCallsByRunIdRef = useRef<Record<string, boolean>>({});
+
   // Single global listener for the whole app-lifetime WS connection; every event carries its
   // own chatId (see engine/src/ws.ts's broadcast envelope), so this doesn't need to know which
   // chat is "active" — it just files events under the chat they belong to.
@@ -132,10 +143,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             return { ...prev, [chatId]: { runId: event.runId, text } };
           });
           break;
-        case "message.done":
+        case "message.done": {
+          const hadToolCalls = hadToolCallsByRunIdRef.current[event.runId] ?? false;
+          delete hadToolCallsByRunIdRef.current[event.runId];
           setPendingByChat((prev) => {
             const pending = prev[chatId];
-            if (pending && pending.text) {
+            // A turn that ended on a tool call with no closing text still needs its message row
+            // materialized — otherwise the re-tag below points tool-call cards at a message id
+            // that was never created, and they vanish the instant the run finishes.
+            if (pending && (pending.text || hadToolCalls)) {
               appendLocalMessage(chatId, (seq) => ({
                 id: `local-${event.runId}`,
                 chatId,
@@ -162,6 +178,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             return { ...prev, [chatId]: remapped };
           });
           break;
+        }
         case "usage.update":
           setUsageByChat((prev) => ({
             ...prev,
@@ -170,6 +187,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
               outputTokens: event.outputTokens,
               contextUsed: event.contextUsed,
               contextMax: event.contextMax,
+              cacheReadTokens: event.cacheReadTokens,
+              cacheWriteTokens: event.cacheWriteTokens,
+              noCacheTokens: event.noCacheTokens,
             },
           }));
           break;
@@ -182,6 +202,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         case "tool.call": {
           const runId = activeRunIdByChatRef.current[chatId];
           const messageId = runId ? `pending-${runId}` : `pending-unknown`;
+          if (runId) hadToolCallsByRunIdRef.current[runId] = true;
           setToolCallsByChat((prev) => {
             const list = prev[chatId] ?? [];
             const entry: ToolCallDTO = {

@@ -1,10 +1,11 @@
 // docs/PROVIDERS_PLAN.md Phase P2 — a role names *why* a call happens, not a setting like
 // "cheap model". 'chat' replaces DEFAULT_PROVIDER_ID/DEFAULT_MODEL (engine/src/agent/config.ts);
 // 'utility' backs auto-titling and future background calls; 'summarize' is reserved for
-// compaction and has no writer yet.
+// compaction and has no writer yet. 'subagent' (docs/PROMPT_STACK_PLAN.md §6.1, Phase PS5) backs
+// explore/review/test's nested streamText calls.
 import { db } from "./index";
 
-export type ModelRole = "chat" | "utility" | "summarize";
+export type ModelRole = "chat" | "utility" | "summarize" | "subagent";
 
 export interface ModelRoleRow {
   role: ModelRole;

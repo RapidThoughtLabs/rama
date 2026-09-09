@@ -1,6 +1,8 @@
 import { IconPanel, IconPopOut } from "@rama/ui";
 import type { MainView } from "./AppShell";
 import { ThemePicker } from "./ThemePicker";
+import { useProvidersData } from "./data/ProvidersProvider";
+import { useSettingsLink } from "./data/SettingsLinkContext";
 import { useWindowTabsData } from "./data/WindowTabsProvider";
 
 // docs/REDESIGN_PLAN.md Phase R3 — the tab strip lived here (a pointer-drag reorder/tear-off
@@ -36,9 +38,15 @@ export function Titlebar(props: {
   view: MainView;
 }) {
   const { tabs, activeTabId, popOutTab } = useWindowTabsData();
+  const { providers, health } = useProvidersData();
+  const { open: openSettings } = useSettingsLink();
   const activeIndex = tabs.findIndex((t) => t.id === activeTabId);
   const activeTab = activeIndex >= 0 ? tabs[activeIndex] : undefined;
   const showTabReadout = !props.showViewTabs || props.view === "code";
+  // docs/PROVIDERS_PLAN.md Phase P1 — "without it, a dead key is invisible." Used to live in the
+  // now-removed StatusBar footer (docs/REDESIGN_PLAN.md Phase R3); moved here rather than deleted
+  // outright when that footer went away, since this is the only place a broken provider surfaces.
+  const badProviders = providers.filter((p) => health[p.id]?.status === "bad");
 
   return (
     // "deep" (not bare) so any non-interactive point in the titlebar drags the window — a bare
@@ -84,6 +92,16 @@ export function Titlebar(props: {
         {showTabReadout && (
           <button className="rama-btn rama-btn-icon" onClick={props.onTogglePanel} title="Toggle Mission Control">
             <IconPanel />
+          </button>
+        )}
+        {badProviders.length > 0 && (
+          <button
+            type="button"
+            className="rama-titlebar-alert"
+            onClick={() => openSettings({ pane: "providers", providerId: badProviders[0].id })}
+            title={badProviders.length === 1 ? `${badProviders[0].label} unavailable` : `${badProviders.length} providers unavailable`}
+          >
+            <span className="rama-titlebar-alert-dot" />
           </button>
         )}
         <ThemePicker />

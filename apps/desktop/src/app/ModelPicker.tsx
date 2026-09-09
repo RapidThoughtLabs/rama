@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatDTO, ModelInfo, ProviderDTO, ProviderHealthDTO, ProviderHealthStatus } from "@rama/protocol";
 import { patchChat } from "../engine/client";
+import { useProjectsData } from "./data/ProjectsProvider";
 import { useSettingsLink } from "./data/SettingsLinkContext";
 import { useProvidersData } from "./data/ProvidersProvider";
 
@@ -15,35 +16,6 @@ const STATUS_COLOR: Record<ProviderHealthStatus, string> = {
   "no-key": "var(--warn)",
   checking: "var(--warn)",
 };
-
-const RECENTS_KEY = "rama.recentModels";
-const MAX_RECENTS = 5;
-
-interface RecentPick {
-  providerId: string;
-  modelId: string;
-}
-
-function loadRecents(): RecentPick[] {
-  try {
-    const raw = window.localStorage.getItem(RECENTS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((r) => r && typeof r.providerId === "string" && typeof r.modelId === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function pushRecent(providerId: string, modelId: string): RecentPick[] {
-  const existing = loadRecents().filter((r) => !(r.providerId === providerId && r.modelId === modelId));
-  const next = [{ providerId, modelId }, ...existing].slice(0, MAX_RECENTS);
-  try {
-    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
-  } catch {
-    // best-effort — a full/blocked localStorage just means no recents section, not a crash
-  }
-  return next;
-}
 
 // Guard 1 — `checking` counts as visible. Hide only on a resolved bad status; a provider still
 // mid-first-check (or persistently offline) must not make the whole picker look empty.
@@ -69,9 +41,9 @@ function healthOf(health: Record<string, ProviderHealthDTO>, providerId: string)
 
 export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; disabled: boolean }) {
   const { providers, health } = useProvidersData();
+  const { applyChatPatch } = useProjectsData();
   const { open: openSettings } = useSettingsLink();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [recents, setRecents] = useState<RecentPick[]>(() => loadRecents());
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Guard 2, second half — "the list never re-filters while the menu is open." Snapshotting
@@ -104,28 +76,16 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
 
   function choose(providerId: string, modelId: string) {
     setMenuOpen(false);
-    setRecents(pushRecent(providerId, modelId));
     if (!chat || (providerId === chat.providerId && modelId === chat.model)) return;
-    patchChat(chat.id, { providerId, model: modelId }).catch((err) => {
-      console.error("[rama] failed to switch provider/model", err);
-    });
+    patchChat(chat.id, { providerId, model: modelId })
+      .then(applyChatPatch)
+      .catch((err) => {
+        console.error("[rama] failed to switch provider/model", err);
+      });
   }
 
   const list = snapshot;
   const visibleProviders = list ? list.providers.filter((p) => providerVisible(healthOf(list.health, p.id))) : [];
-  const visibleProviderIds = new Set(visibleProviders.map((p) => p.id));
-
-  const recentEntries = list
-    ? recents
-        .filter((r) => visibleProviderIds.has(r.providerId))
-        .map((r) => {
-          const provider = list.providers.find((p) => p.id === r.providerId);
-          const model = provider?.models.find((m) => m.id === r.modelId);
-          return provider && model ? { provider, model } : null;
-        })
-        .filter((e): e is { provider: ProviderDTO; model: ModelInfo } => e !== null)
-    : [];
-
   // The current chat's own unhealthy provider isn't in the list (guard 3) — it's the banner.
   const bannerProvider = chat && !providerVisible(pillStatus) ? activeProvider ?? { id: chat.providerId, label: chat.providerId } : null;
   const bannerError = chat ? health[chat.providerId]?.error : null;
@@ -137,7 +97,7 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
           className="rama-accent-dot"
           style={{ width: 6, height: 6, background: STATUS_COLOR[pillStatus], boxShadow: "none" }}
         />
-        <span>{activeProvider ? `${activeProvider.label} · ${activeModel?.label ?? chat?.model}` : (chat?.model ?? "no model")}</span>
+        <span>{activeModel?.label ?? chat?.model ?? "no model"}</span>
         {pillUnavailable && <span className="rama-model-pill-bad">unavailable</span>}
       </button>
       {menuOpen && (
@@ -154,27 +114,6 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
               <span className="rama-statusbar-dot" style={{ background: STATUS_COLOR[pillStatus] }} />
               {bannerProvider.label} — {pillStatus === "no-key" ? "no key configured" : (bannerError ?? "unavailable")} · fix in settings →
             </button>
-          )}
-
-          {recentEntries.length > 0 && (
-            <div className="rama-model-menu-group">
-              <div className="rama-model-menu-group-label">recent</div>
-              {recentEntries.map(({ provider, model }) => (
-                <button
-                  type="button"
-                  key={`${provider.id}:${model.id}`}
-                  className={
-                    "rama-model-menu-item" +
-                    (chat?.providerId === provider.id && chat?.model === model.id ? " rama-model-menu-item-active" : "")
-                  }
-                  onClick={() => choose(provider.id, model.id)}
-                >
-                  <span>
-                    {provider.label} · {model.label}
-                  </span>
-                </button>
-              ))}
-            </div>
           )}
 
           {visibleProviders.map((p) => {

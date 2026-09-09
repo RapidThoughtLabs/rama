@@ -23,7 +23,14 @@ function statusGlyph(t: TerminalDTO, running: boolean): string {
 
 export function TerminalRail({ collapsed }: { collapsed: boolean }) {
   const { projects, allChats } = useProjectsData();
-  const { terminals, activeId, setActiveId, runningIds } = useTerminalPane();
+  const { terminals, activeId, setActiveId, runningIds, killTerminal, removeTerminal } = useTerminalPane();
+
+  async function closeTerminal(t: TerminalDTO) {
+    // A still-running shell has to be killed before its row can go away — deleting the DB row
+    // out from under a live PTY would just leave it running with nothing referencing it.
+    if (runningIds.has(t.id)) await killTerminal(t.id);
+    await removeTerminal(t.id);
+  }
 
   if (collapsed) {
     return (
@@ -76,6 +83,17 @@ export function TerminalRail({ collapsed }: { collapsed: boolean }) {
               <div className="rama-artifact-meta">{endedRemotely ? "ended — app restarted" : relativeCwd(t.cwd, project?.path)}</div>
             </div>
             {t.status === "exited" && <span className="rama-artifact-badge">{t.exitCode === 0 ? "ok" : `exit ${t.exitCode}`}</span>}
+            <button
+              type="button"
+              className="rama-btn rama-btn-icon"
+              title="Close"
+              onClick={(e) => {
+                e.stopPropagation();
+                void closeTerminal(t);
+              }}
+            >
+              ✕
+            </button>
           </div>
         );
       })}

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS chats (
   provider_id TEXT NOT NULL DEFAULT 'together',
   model TEXT,
   mode TEXT NOT NULL DEFAULT 'agent',
+  agent_id TEXT NOT NULL DEFAULT 'default', -- docs/PROMPT_STACK_PLAN.md Phase PS4 — engine/src/agent/agents/discover.ts's DEFAULT_AGENT_NAME
   wallpaper TEXT NOT NULL DEFAULT 'indigo', -- dead: SETTINGS_PLAN.md Phase S0, wallpaper moved into the theme record
   theme_id TEXT NOT NULL DEFAULT 'kanagawa',
   accent TEXT NOT NULL DEFAULT 'plasma', -- dead: superseded by theme_id (docs/REDESIGN_PLAN.md Phase R0)
@@ -211,4 +212,25 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
+
+-- docs/PROMPT_STACK_PLAN.md §7.2, Phase PS7 — the curator's output: one row per candidate RAMA.md
+-- change, never applied to disk until a human accepts it (decision 6). dedupe_key is deterministic
+-- per signal (e.g. the normalized command, or a hash of the exact line being proposed for removal)
+-- so a re-run of the same evidence can't spam duplicate rows; the unique index below is what makes
+-- "insert or ignore" the whole dedupe mechanism instead of a read-before-write race.
+CREATE TABLE IF NOT EXISTS instruction_proposals (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  kind TEXT NOT NULL,          -- 'add' | 'remove'
+  section TEXT NOT NULL,       -- RAMA.md '## <section>' heading this bullet belongs under
+  content TEXT NOT NULL,       -- the bullet line's text, no leading '- '
+  signal TEXT NOT NULL,        -- which collector produced it: commands|gotcha|correction|orientation|stale
+  evidence_json TEXT NOT NULL, -- provenance: tool_call/message ids and a human-readable "why"
+  dedupe_key TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'accepted' | 'rejected'
+  created_at INTEGER NOT NULL,
+  resolved_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_instruction_proposals_dedupe ON instruction_proposals(project_id, dedupe_key);
+CREATE INDEX IF NOT EXISTS idx_instruction_proposals_project ON instruction_proposals(project_id, status);
 `;

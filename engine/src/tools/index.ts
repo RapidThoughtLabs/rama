@@ -1,6 +1,7 @@
 import { createBashTool } from "./bash";
 import { createBrowserTool } from "./browser";
 import { createCheckTool } from "./check";
+import { createClarifyTool } from "./clarify";
 import { createEditTool } from "./edit";
 import { createExploreTool } from "./explore";
 import { createFileOpTool } from "./fileOp";
@@ -11,6 +12,8 @@ import { createGrepTool } from "./grep";
 import { createOutlineTool } from "./outline";
 import { createProcessTool } from "./process";
 import { createReadTool } from "./read";
+import { createReviewTool } from "./review";
+import { createTestTool } from "./test";
 import { createTodoTool } from "./todo";
 import { createTreeTool } from "./tree";
 import type { ToolCtx } from "./types";
@@ -36,6 +39,14 @@ export function createTools(ctx: ToolCtx) {
     git_write: createGitWriteTool(ctx),
     check: createCheckTool(ctx),
     todo: createTodoTool(ctx),
+    // docs/PROMPT_STACK_PLAN.md §8.1/§8.2 (PS6) — always available, any mode: stopWhen's
+    // hasToolCall("clarify") (loop.ts) ends the run right after this is called.
+    clarify: createClarifyTool(ctx),
+    // docs/PROMPT_STACK_PLAN.md §6.4 (PS5) — the sub-agent roster: explore (read-only, no diff),
+    // review (read-only, diff + repo, not the conversation), test (diff + repo, test-files-only
+    // write). All three run on ctx.subagentModel, not the parent's own.
     explore: createExploreTool(ctx),
+    review: createReviewTool(ctx),
+    test: createTestTool(ctx),
   };
 }

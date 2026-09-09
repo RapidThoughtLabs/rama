@@ -1,10 +1,20 @@
-import type { ClientCommand, GeneralSettingsDTO, PermissionSettings } from "@rama/protocol";
-import { interrupt, isRunning, runTurn } from "./agent/loop";
+import type { AgentSummaryDTO, ClientCommand, CurationProposalDTO, GeneralSettingsDTO, InstructionsDTO, PermissionSettings } from "@rama/protocol";
+import {
+  applyProjectProposal,
+  getGlobalInstructions,
+  getProjectInstructions,
+  setGlobalInstructions,
+  setProjectInstructions,
+} from "./agent/instructions";
+import { draftProjectInstructions } from "./agent/instructionsInit";
+import { runCurator } from "./agent/curator/curator";
+import { getPromptPreview, interrupt, isRunning, runTurn } from "./agent/loop";
 import { resolvePermission } from "./agent/permissions";
 import { checkAuth } from "./auth";
 import { resolveBrowserResponse } from "./browserBridge";
 import { undoLastRun } from "./checkpoints";
 import { getArtifactContent, listArtifacts } from "./db/artifacts";
+import { getProposal, listProposals, resolveProposal, type ProposalStatus } from "./db/curationProposals";
 import { createChat, deleteChat, getChat, listAllChats, listChatsByProject, migrateLegacyCliChats, updateChat } from "./db/chats";
 import { deleteDoc, listDocs, readDoc, writeDoc } from "./docs/store";
 import { listMessages } from "./db/messages";
@@ -47,8 +57,11 @@ import {
   setModelEnabled,
   switchSupersededModel,
 } from "./db/providerModels";
-import { getSetting, setSetting } from "./db/settings";
+import { DEFAULT_PERMISSIONS, getSetting, setSetting } from "./db/settings";
 import { maybeDefaultChatRole, maybeDefaultUtilityRole } from "./agent/utility";
+import { maybeDefaultSubagentRole } from "./agent/subagentRole";
+import { discoverAgents } from "./agent/agents/discover";
+import type { AgentDef } from "./agent/agents/types";
 import { listToolCalls } from "./db/toolCalls";
 import { indexServer } from "./heku/indexer";
 import { deleteToolsForServer } from "./heku/store";
@@ -79,6 +92,10 @@ function mcpServerDTO(row: ReturnType<typeof listMcpServers>[number]) {
   return { id: row.id, name: row.name, transport: parseTransport(row), enabled: !!row.enabled };
 }
 
+function instructionsDTO(doc: { content: string; lines: number; oversize: boolean } | null): InstructionsDTO {
+  return doc ? { ...doc, exists: true } : { content: "", lines: 0, oversize: false, exists: false };
+}
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
@@ -88,13 +105,15 @@ const CORS_HEADERS = {
 // docs/REDESIGN_PLAN.md Phase R4 — Settings modal defaults, returned whenever a key hasn't been
 // saved yet rather than leaving the UI to invent its own fallback shape.
 const DEFAULT_GENERAL_SETTINGS: GeneralSettingsDTO = { defaultProjectDir: "", defaultMode: "agent", autoNameChats: true, enrichFromOpenRouter: false };
-const MODEL_ROLES: ModelRole[] = ["chat", "utility", "summarize"];
+const MODEL_ROLES: ModelRole[] = ["chat", "utility", "summarize", "subagent"];
 
 function modelRoleDTO(row: ReturnType<typeof getModelRole>) {
   return row ? { role: row.role, providerId: row.provider_id, modelId: row.model_id, updatedAt: row.updated_at } : null;
 }
-const DEFAULT_PERMISSIONS: PermissionSettings = { bash: "ask", write: "ask", edit: "allow", web: "allow" };
 
+function agentSummaryDTO(agent: AgentDef): AgentSummaryDTO {
+  return { name: agent.name, description: agent.description, tools: agent.tools, mode: agent.mode, model: agent.model, source: agent.source };
+}
 function json(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     ...init,
@@ -123,6 +142,8 @@ export function createServer() {
   // Phase P2 — idempotent; only ever assigns `utility` the first time it's genuinely unset, e.g.
   // an existing install upgrading into this phase with a provider already configured.
   maybeDefaultUtilityRole();
+  // docs/PROMPT_STACK_PLAN.md §6.1, Phase PS5 — same idempotency, for `subagent`.
+  maybeDefaultSubagentRole();
   // Phase P5 — same idempotency, for `chat`. Covers an install that configured a provider via
   // fast-add or the wizard but never visited General settings to name a default explicitly.
   maybeDefaultChatRole();
@@ -258,6 +279,26 @@ export function createServer() {
         // spawn/write/resize/kill themselves are Tauri commands (Section 6, apps/desktop/src-
         // tauri/src/pty.rs) — this side only owns the `terminals` row: identity, scrollback
         // persistence, and the project-scoped `terminal.*` broadcast.
+        // docs/PROMPT_STACK_PLAN.md Phase PS1 — the assembled prefix exactly as the model would
+        // receive it (per-layer content, cache breakpoints marked, approx token counts), for
+        // inspecting cache layout without waiting on a live provider round-trip.
+        const chatPromptPreviewMatch = pathname.match(/^\/chats\/([^/]+)\/prompt-preview$/);
+        if (chatPromptPreviewMatch && req.method === "GET") {
+          const preview = await getPromptPreview(chatPromptPreviewMatch[1]);
+          if (!preview) return json({ error: "chat not found" }, { status: 404 });
+          return json(preview);
+        }
+
+        // docs/PROMPT_STACK_PLAN.md §5.3, Phase PS4 — the picker's list. `projectId` is optional
+        // (bundled + global agents are always visible; a project's own .rama/agents only shows up
+        // once a real project path is known).
+        if (pathname === "/agents" && req.method === "GET") {
+          const projectId = url.searchParams.get("projectId") ?? undefined;
+          const project = projectId ? getProject(projectId) : null;
+          const agents = discoverAgents({ projectId, projectPath: project?.path });
+          return json(agents.map(agentSummaryDTO));
+        }
+
         const projectTerminalsMatch = pathname.match(/^\/projects\/([^/]+)\/terminals$/);
         if (projectTerminalsMatch && req.method === "GET") {
           const projectId = projectTerminalsMatch[1];
@@ -393,6 +434,7 @@ export function createServer() {
           if (result.created) enableDefaultModels(body.providerId);
           maybeDefaultChatRole();
           maybeDefaultUtilityRole();
+          maybeDefaultSubagentRole();
           return json(getProviderDTO(body.providerId), { status: result.created ? 201 : 200 });
         }
 
@@ -422,6 +464,7 @@ export function createServer() {
           });
           maybeDefaultChatRole();
           maybeDefaultUtilityRole();
+          maybeDefaultSubagentRole();
           return json(getProviderDTO(row.id), { status: 201 });
         }
 
@@ -502,6 +545,15 @@ export function createServer() {
           const next = { ...DEFAULT_PERMISSIONS, ...(getSetting<PermissionSettings>("permissions") ?? {}), ...body };
           setSetting("permissions", next);
           return json(next);
+        }
+
+        if (pathname === "/settings/instructions" && req.method === "GET") {
+          return json(instructionsDTO(getGlobalInstructions()));
+        }
+        if (pathname === "/settings/instructions" && req.method === "PUT") {
+          const body = await req.json().catch(() => null);
+          if (typeof body?.content !== "string") return json({ error: "content is required" }, { status: 400 });
+          return json(instructionsDTO(setGlobalInstructions(body.content)));
         }
 
         if (pathname === "/search" && req.method === "GET") {
@@ -641,6 +693,66 @@ export function createServer() {
           }
         }
 
+        const projectInstructionsInitMatch = pathname.match(/^\/projects\/([^/]+)\/instructions\/init$/);
+        if (projectInstructionsInitMatch && req.method === "POST") {
+          const project = getProject(projectInstructionsInitMatch[1]);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const result = await draftProjectInstructions(project.path);
+          if (!result.ok) return json({ error: result.error }, { status: 502 });
+          return json({ content: result.content });
+        }
+
+        const projectInstructionsMatch = pathname.match(/^\/projects\/([^/]+)\/instructions$/);
+        if (projectInstructionsMatch) {
+          const project = getProject(projectInstructionsMatch[1]);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+
+          if (req.method === "GET") {
+            return json(instructionsDTO(getProjectInstructions(project.path)));
+          }
+          if (req.method === "PUT") {
+            const body = await req.json().catch(() => null);
+            if (typeof body?.content !== "string") return json({ error: "content is required" }, { status: 400 });
+            return json(instructionsDTO(setProjectInstructions(project.path, body.content)));
+          }
+        }
+
+        // docs/PROMPT_STACK_PLAN.md §7.2, Phase PS7 — the curator's accept/reject surface. Listing
+        // and resolving never touch the filesystem; only accept does, via applyProjectProposal,
+        // and only after the row itself is marked accepted (decision 6 — nothing is written until
+        // a human says so).
+        const projectCurationRunMatch = pathname.match(/^\/projects\/([^/]+)\/curation\/run$/);
+        if (projectCurationRunMatch && req.method === "POST") {
+          const project = getProject(projectCurationRunMatch[1]);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          await runCurator(null, project.id, project.path);
+          return json({ ok: true });
+        }
+
+        const projectCurationMatch = pathname.match(/^\/projects\/([^/]+)\/curation\/proposals$/);
+        if (projectCurationMatch && req.method === "GET") {
+          const project = getProject(projectCurationMatch[1]);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const status = url.searchParams.get("status") as ProposalStatus | null;
+          return json(listProposals(project.id, status ?? undefined) satisfies CurationProposalDTO[]);
+        }
+
+        const proposalResolveMatch = pathname.match(/^\/projects\/([^/]+)\/curation\/proposals\/([^/]+)\/(accept|reject)$/);
+        if (proposalResolveMatch && req.method === "POST") {
+          const [, projectId, proposalId, action] = proposalResolveMatch;
+          const project = getProject(projectId);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const existing = getProposal(proposalId);
+          if (!existing || existing.projectId !== projectId) return json({ error: "proposal not found" }, { status: 404 });
+          if (existing.status !== "pending") return json({ error: `proposal already ${existing.status}` }, { status: 409 });
+
+          if (action === "accept") {
+            applyProjectProposal(project.path, { kind: existing.kind, section: existing.section, content: existing.content });
+          }
+          const resolved = resolveProposal(proposalId, action === "accept" ? "accepted" : "rejected");
+          return json(resolved satisfies CurationProposalDTO | null);
+        }
+
         const projectPermissionsMatch = pathname.match(/^\/projects\/([^/]+)\/settings\/permissions$/);
         if (projectPermissionsMatch) {
           const projectId = projectPermissionsMatch[1];
@@ -676,6 +788,7 @@ export function createServer() {
           // Phase P2 — "on configuring a provider, if utility is unset, assign..."; a no-op once
           // a role already exists, so this is safe to call on every key save.
           maybeDefaultUtilityRole();
+          maybeDefaultSubagentRole();
           maybeDefaultChatRole();
           return json({ ok: true });
         }
@@ -748,6 +861,9 @@ export function createServer() {
             break;
           case "setMode":
             updateChat(command.chatId, { mode: command.mode });
+            break;
+          case "setAgent":
+            updateChat(command.chatId, { agentId: command.agentId });
             break;
           case "approvePermission":
             resolvePermission(command.reqId, command.approve);

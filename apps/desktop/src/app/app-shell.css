@@ -89,6 +89,23 @@
   cursor: pointer;
 }
 .rama-cmdk-pill:hover { color: var(--accent); border-color: var(--a25); }
+
+/* Dead-provider alert, relocated from the removed StatusBar footer (docs/REDESIGN_PLAN.md Phase
+   R3 note in the old StatusBar.tsx) — just the dot, since the titlebar has no room for the
+   footer's label text; the tooltip carries that instead. */
+.rama-titlebar-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.rama-titlebar-alert:hover { background: var(--a08); }
+.rama-titlebar-alert-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bad); }
 .rama-accent-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 9px var(--a70); }
 /* Pop-out/artifacts-toggle/theme buttons in the titlebar's control cluster get a filled
    accent-circle treatment — `color: var(--bg-base)` rides each theme's own contrast pairing
@@ -562,6 +579,11 @@
 .rama-tool-call-name { font-weight: 600; font-size: var(--fs-md); color: rgba(var(--ink), 0.88); }
 .rama-tool-call-target { font-size: var(--fs-md); color: rgba(var(--ink), 0.55); }
 .rama-tool-call-result { display: flex; gap: 9px; font-size: var(--fs-sm); color: rgba(var(--ink), 0.38); padding-left: 3px; }
+
+.rama-clarify-card:hover { cursor: default; background: none; }
+.rama-clarify-questions { margin: 4px 0 2px 22px; padding-left: 18px; font-size: var(--fs-md); color: rgba(var(--ink), 0.85); }
+.rama-clarify-questions li { margin: 2px 0; }
+.rama-clarify-default { color: rgba(var(--ink), 0.5); }
 .rama-status-line {
   display: flex;
   align-items: center;
@@ -816,10 +838,14 @@
 .rama-composer-send:hover { color: var(--accent); border-color: var(--a25); }
 
 /* ── ARTIFACT ITEM STYLES (Mission Control's Artifacts pane, mission-control/panes/Artifacts*.tsx) ── */
-.rama-artifact-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+/* Flat, no-chrome rows matching .rama-chat-row's language (a plain glyph, no boxed/bordered icon
+   swatch, no row margin) rather than the boxed "AI app" look this used to have — see the collapsed
+   icon strip's .rama-mc-rail-icon-row below for the same treatment. */
+.rama-artifact-row { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 6px 9px; border-radius: 7px; cursor: pointer; }
 .rama-artifact-row:hover { background: rgba(var(--ink), 0.05); }
-.rama-artifact-row[aria-selected="true"] { border-color: var(--a25); background: var(--a06); }
-.rama-artifact-glyph { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: var(--fs-md); color: rgba(var(--ink), 0.55); background: rgba(var(--ink), 0.05); border: 1px solid rgba(var(--ink), 0.07); flex-shrink: 0; }
+.rama-artifact-row[aria-selected="true"] { background: var(--a08); }
+.rama-artifact-glyph { width: 15px; height: 15px; display: flex; align-items: center; justify-content: center; font-size: var(--fs-sm); color: rgba(var(--ink), 0.45); flex-shrink: 0; }
+.rama-artifact-row[aria-selected="true"] .rama-artifact-glyph { color: var(--accent-hi, var(--accent)); }
 .rama-artifact-name { font-size: var(--fs-md); color: rgba(var(--ink), 0.85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rama-artifact-meta { font-size: var(--fs-micro); color: rgba(var(--ink), 0.34); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rama-artifact-badge { font-size: var(--fs-micro); color: rgba(var(--ink), 0.4); white-space: nowrap; }
@@ -834,46 +860,23 @@
   flex-shrink: 0;
 }
 .rama-artifact-preview-body { flex: 1; min-height: 0; overflow: auto; background: rgba(var(--rc), 0.35); padding: 8px 0; font-size: var(--fs-sm); line-height: 1.62; font-family: var(--font-code); }
+/* Editor-style dual gutter (old line # | new line # | +/− marker | code) instead of one
+   sequential counter — matches how a code editor's inline diff view reads: a deleted line only
+   ever shows an old-side number, an added line only a new-side one, both columns hold on a
+   context line. */
 .rama-diff-line { display: flex; }
-.rama-diff-line-num { width: 36px; text-align: right; padding-right: 11px; color: rgba(var(--ink), 0.2); flex-shrink: 0; user-select: none; }
+.rama-diff-line-num { width: 34px; text-align: right; padding-right: 8px; color: rgba(var(--ink), 0.2); flex-shrink: 0; user-select: none; }
+.rama-diff-line-num-old { border-right: 1px solid rgba(var(--ink), 0.06); }
+.rama-diff-marker,
+.rama-diff-line-marker { width: 16px; text-align: center; flex-shrink: 0; user-select: none; }
 .rama-diff-line-text { white-space: pre; padding-right: 14px; }
 .rama-diff-add { background: rgba(52, 211, 153, 0.08); color: var(--good); }
+.rama-diff-add .rama-diff-line-num,
+.rama-diff-add .rama-diff-line-marker { color: var(--good); }
 .rama-diff-del { background: rgba(255, 95, 87, 0.08); color: var(--bad); }
+.rama-diff-del .rama-diff-line-num,
+.rama-diff-del .rama-diff-line-marker { color: var(--bad); }
 .rama-diff-ctx { color: rgba(var(--ink), 0.55); }
-
-/* ══════════ STATUS BAR ══════════ */
-.rama-statusbar {
-  min-height: 27px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 16px;
-  background: rgba(var(--sf-lo), 0.6);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid rgba(var(--ink), 0.07);
-  font-size: var(--fs-micro);
-  letter-spacing: 0.04em;
-  color: rgba(var(--ink), 0.42);
-  min-width: 0;
-  overflow: hidden;
-}
-.rama-statusbar-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-.rama-statusbar-spacer { flex: 1; }
-.rama-statusbar-alert {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  background: none;
-  padding: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  color: var(--bad);
-  cursor: pointer;
-}
-.rama-statusbar-alert:hover { text-decoration: underline; }
 
 /* ══════════ WELCOME (fresh, empty chat) — docs/REDESIGN_PLAN.md Phase R5 trimmed this down to
    just the mark. Wordmark/tagline/status-card/suggestion-chips are gone; nothing replaced them. */
@@ -1203,9 +1206,29 @@ select.rama-input { cursor: pointer; }
 }
 
 /* ══════════ TERMINAL SURFACE (Mission Control's Terminal pane, MISSION_CONTROL_PLAN.md M2) ══════════ */
-.rama-terminal-surface { flex: 1; min-height: 0; padding: 10px 16px; }
+/* Trimmed from 10px/16px — that padding, stacked on top of the removed StatusBar footer's height,
+   was eating a visible chunk of the already-tight vertical space a terminal pane gets. */
+.rama-terminal-surface { flex: 1; min-height: 0; padding: 6px 10px; overflow: hidden; }
 .rama-terminal-surface .xterm-viewport { background: transparent !important; }
 
 /* docs/MISSION_CONTROL_PLAN.md §8 Phase M5 — a placeholder only; useWebviewVisibility positions
    the real (native, DOM-invisible) child webview on top of this box's rect. */
 .rama-web-surface { flex: 1; min-height: 0; background: rgba(var(--rc), 0.35); }
+
+/* Loading ring sits inside the omnibox's own input, not as a floating "loading…" label off to the
+   side — the input gets right-padding (see WebStage.tsx) so the ring never overlaps typed/loaded
+   URL text, however long. */
+@keyframes rama-spin { to { transform: rotate(360deg); } }
+.rama-web-omnibox-spinner {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--ink), 0.18);
+  border-top-color: rgba(var(--ink), 0.55);
+  animation: rama-spin 0.7s linear infinite;
+  pointer-events: none;
+}

@@ -39,18 +39,16 @@ export function WebStage() {
         <button type="button" className="rama-btn rama-btn-icon" title="Reload" onClick={() => void reload()}>
           ⟳
         </button>
-        <form onSubmit={submit} style={{ flex: 1, minWidth: 0 }}>
+        <form onSubmit={submit} style={{ flex: 1, minWidth: 0, position: "relative", display: "flex" }}>
           <input
             className="rama-input"
-            style={{ width: "100%" }}
+            style={{ width: "100%", paddingRight: active.loading ? 28 : undefined }}
             value={omnibox}
             onChange={(e) => setOmnibox(e.target.value)}
             spellCheck={false}
           />
+          {active.loading && <span className="rama-web-omnibox-spinner" aria-label="Loading" />}
         </form>
-        {active.loading && (
-          <span style={{ fontSize: "var(--fs-micro)", color: "rgba(var(--ink),0.4)", flexShrink: 0 }}>loading…</span>
-        )}
       </div>
       <div ref={containerRef} className="rama-web-surface" />
     </>

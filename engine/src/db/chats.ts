@@ -60,6 +60,7 @@ interface ChatRow {
   provider_id: string;
   model: string | null;
   mode: ChatMode;
+  agent_id: string;
   theme_id: ThemeIdDTO;
   status: string;
   cost_usd: number;
@@ -79,6 +80,7 @@ function toDTO(row: ChatRow): ChatDTO {
     providerId: row.provider_id,
     model: row.model,
     mode: row.mode,
+    agentId: row.agent_id,
     themeId: row.theme_id,
     status: row.status,
     costUsd: row.cost_usd,
@@ -91,7 +93,7 @@ function toDTO(row: ChatRow): ChatDTO {
 }
 
 const CHAT_COLUMNS =
-  "id, project_id, title, backend_json, provider_id, model, mode, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at";
+  "id, project_id, title, backend_json, provider_id, model, mode, agent_id, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at";
 
 export function listAllChats(): ChatDTO[] {
   const rows = db.query<ChatRow, []>(`SELECT ${CHAT_COLUMNS} FROM chats ORDER BY updated_at DESC`).all();
@@ -118,15 +120,16 @@ export function createChat(projectId: string, input: CreateChatInput): ChatDTO {
   const chatRole = getChatRoleModel();
   const providerId = input.providerId ?? chatRole.providerId;
   const mode = input.mode ?? "agent";
+  const agentId = input.agentId ?? "default";
   const themeId = input.themeId ?? "kanagawa";
 
   db.query(
     // `wallpaper` isn't in this insert (engine/src/db/schema.ts marks the column dead —
     // SETTINGS_PLAN.md Phase S0: the wallpaper is theme-authored data now, not per-chat state).
     // It keeps its NOT NULL DEFAULT, so the row still inserts fine without it named here.
-    `INSERT INTO chats (id, project_id, title, backend_json, provider_id, model, mode, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'idle', 0, 0, 0, 200000, ?, ?)`,
-  ).run(id, projectId, title, backendJson, providerId, input.model ?? chatRole.model, mode, themeId, now, now);
+    `INSERT INTO chats (id, project_id, title, backend_json, provider_id, model, mode, agent_id, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', 0, 0, 0, 200000, ?, ?)`,
+  ).run(id, projectId, title, backendJson, providerId, input.model ?? chatRole.model, mode, agentId, themeId, now, now);
 
   return getChat(id)!;
 }
@@ -147,6 +150,7 @@ const PATCHABLE_COLUMNS: Record<keyof UpdateChatInput, string> = {
   providerId: "provider_id",
   model: "model",
   mode: "mode",
+  agentId: "agent_id",
   themeId: "theme_id",
   status: "status",
 };

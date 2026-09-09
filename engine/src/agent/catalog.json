@@ -25,7 +25,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -40,7 +42,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "deepseek-ai/DeepSeek-V3",
@@ -55,7 +59,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "Qwen/Qwen2.5-72B-Instruct-Turbo",
@@ -70,9 +76,252 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "zai-org/GLM-5.3",
+          "label": "GLM 5.3",
+          "tier": "frontier",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 1048576,
+          "inputPerMillion": 1.4,
+          "outputPerMillion": 4.4,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "moonshotai/Kimi-K3",
+          "label": "Kimi K3",
+          "tier": "frontier",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 1048576,
+          "inputPerMillion": 3,
+          "outputPerMillion": 15,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "zai-org/GLM-5.3-Flash",
+          "label": "GLM 5.3 Flash",
+          "tier": "small",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 1048575,
+          "inputPerMillion": 0.15,
+          "outputPerMillion": 0.5,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "zai-org/GLM-5.2",
+          "label": "GLM 5.2",
+          "tier": "workhorse",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 512000,
+          "inputPerMillion": 1.4,
+          "outputPerMillion": 4.4,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": "zai-org/GLM-5.3",
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+          "label": "DeepSeek V4 Pro 0813",
+          "tier": "frontier",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 1048576,
+          "inputPerMillion": 1.32,
+          "outputPerMillion": 3.96,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "meta-models/Muse-Glimmer-30B",
+          "label": "Muse Glimmer 30B",
+          "tier": "workhorse",
+          "supportsTools": true,
+          "supportsThinking": false,
+          "supportsVision": true,
+          "contextWindow": 131072,
+          "inputPerMillion": 0.35,
+          "outputPerMillion": 1.5,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "Qwen/Qwen3.8-2.4T-A95B",
+          "label": "Qwen3.8-2.4T-A95B",
+          "tier": "frontier",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": true,
+          "contextWindow": 1048576,
+          "inputPerMillion": 2,
+          "outputPerMillion": 6,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "label": "DeepSeek V4 Flash 0731",
+          "tier": "small",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 1000000,
+          "inputPerMillion": 0.14,
+          "outputPerMillion": 0.28,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "thinkingmachines/Inkling",
+          "label": "Inkling FP4",
+          "tier": "frontier",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": true,
+          "contextWindow": 524288,
+          "inputPerMillion": 1,
+          "outputPerMillion": 4.05,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "Qwen/Qwen3.8-Flash",
+          "label": "Qwen3.8 Flash",
+          "tier": "small",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": true,
+          "contextWindow": 1048576,
+          "inputPerMillion": 0.15,
+          "outputPerMillion": 0.47,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "MiniMaxAI/MiniMax-M3",
+          "label": "MiniMax M3",
+          "tier": "workhorse",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": false,
+          "contextWindow": 524288,
+          "inputPerMillion": 0.3,
+          "outputPerMillion": 1.2,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "thinkingmachines/Inkling-Small",
+          "label": "Inkling Small",
+          "tier": "workhorse",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": true,
+          "contextWindow": 1000000,
+          "inputPerMillion": 0.5,
+          "outputPerMillion": 1.2,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "Qwen/Qwen3.7-Max",
+          "label": "Qwen3.7 Max",
+          "tier": "frontier",
+          "supportsTools": true,
+          "supportsThinking": false,
+          "supportsVision": false,
+          "contextWindow": 1000000,
+          "inputPerMillion": 2.5,
+          "outputPerMillion": 7.5,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
+        },
+        {
+          "id": "google/gemma-4-31B-it",
+          "label": "Gemma 4 31B-it FP8",
+          "tier": "workhorse",
+          "supportsTools": true,
+          "supportsThinking": true,
+          "supportsVision": true,
+          "contextWindow": 262144,
+          "inputPerMillion": 0.39,
+          "outputPerMillion": 0.97,
+          "defaultEnabled": true,
+          "openrouterId": null,
+          "deprecated": false,
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         }
-      ]
+      ],
+      "cacheStyle": "automatic",
+      "cacheReadMultiplier": 1,
+      "cacheWriteMultiplier": 1
     },
     {
       "id": "openai",
@@ -99,7 +348,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "gpt-4.1",
@@ -114,7 +365,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "gpt-4.1-mini",
@@ -129,7 +382,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "o4-mini",
@@ -144,9 +399,14 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         }
-      ]
+      ],
+      "cacheStyle": "automatic",
+      "cacheReadMultiplier": 0.5,
+      "cacheWriteMultiplier": 1
     },
     {
       "id": "anthropic",
@@ -173,7 +433,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": 1024,
+          "supportsMidConversationSystem": false
         },
         {
           "id": "claude-opus-4-8",
@@ -188,7 +450,9 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": 1024,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "claude-haiku-4-5-20251001",
@@ -203,9 +467,14 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": 4096,
+          "supportsMidConversationSystem": true
         }
-      ]
+      ],
+      "cacheStyle": "explicit",
+      "cacheReadMultiplier": 0.1,
+      "cacheWriteMultiplier": 1.25
     },
     {
       "id": "groq",
@@ -232,7 +501,9 @@
           "defaultEnabled": true,
           "openrouterId": "meta-llama/llama-3.1-8b-instruct",
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "llama-3.3-70b-versatile",
@@ -247,9 +518,14 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         }
-      ]
+      ],
+      "cacheStyle": "automatic",
+      "cacheReadMultiplier": 1,
+      "cacheWriteMultiplier": 1
     },
     {
       "id": "openrouter",
@@ -276,7 +552,9 @@
           "defaultEnabled": false,
           "openrouterId": "meta-llama/llama-3.1-8b-instruct:free",
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         },
         {
           "id": "meta-llama/llama-3.3-70b-instruct",
@@ -291,9 +569,14 @@
           "defaultEnabled": true,
           "openrouterId": "meta-llama/llama-3.3-70b-instruct",
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         }
-      ]
+      ],
+      "cacheStyle": "automatic",
+      "cacheReadMultiplier": 1,
+      "cacheWriteMultiplier": 1
     },
     {
       "id": "ollama",
@@ -320,9 +603,14 @@
           "defaultEnabled": true,
           "openrouterId": null,
           "deprecated": false,
-          "supersededBy": null
+          "supersededBy": null,
+          "cacheMinTokens": null,
+          "supportsMidConversationSystem": true
         }
-      ]
+      ],
+      "cacheStyle": "none",
+      "cacheReadMultiplier": 1,
+      "cacheWriteMultiplier": 1
     }
   ]
 }

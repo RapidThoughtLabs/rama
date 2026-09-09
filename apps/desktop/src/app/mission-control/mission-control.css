@@ -93,7 +93,13 @@
   border-bottom: 1px solid rgba(var(--ink), 0.07);
   flex-shrink: 0;
 }
-.rama-mc-rail-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px 10px; display: grid; gap: 3px; align-content: start; }
+/* `overflow-x: hidden` matters here, not just overflow-y: a CSS grid track sizes to its
+   children's min-content by default, so a long unbroken name (a UUID, a long path) would stretch
+   the row past the rail's own width instead of the row's own ellipsis ever kicking in — the
+   "artifacts pane cuts off text with no ellipsis when it isn't wide enough" bug. min-width: 0 on
+   the row itself (below) is the other half: a grid item's implicit min-width is auto, same as a
+   flex item's, so without it the row refuses to shrink below its content's intrinsic width. */
+.rama-mc-rail-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 10px 10px; display: grid; gap: 3px; align-content: start; }
 
 /* §4.6 — the rail header's right-aligned action (e.g. Terminal's `+`), a registry `RailActions`. */
 .rama-mc-rail-action-btn {
@@ -114,6 +120,9 @@
 .rama-mc-rail-action-btn:hover:not(:disabled) { background: var(--a08); color: var(--ink-hi); }
 .rama-mc-rail-action-btn:disabled { cursor: default; opacity: 0.35; }
 
+/* Flat, no border/background box around the glyph itself — only the hover/active states paint a
+   background, matching .rama-artifact-row's redesign. The old version drew a bordered square
+   around every glyph unconditionally, which read as boxy "icon button" chrome even at rest. */
 .rama-mc-rail-icon-row {
   width: 30px;
   height: 26px;
@@ -121,14 +130,14 @@
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  border: 1px solid transparent;
+  border: none;
   background: none;
-  color: rgba(var(--ink), 0.55);
-  font-size: var(--fs-md);
+  color: rgba(var(--ink), 0.5);
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
-.rama-mc-rail-icon-row:hover { background: var(--a08); }
-.rama-mc-rail-icon-row-active { border-color: var(--a25); background: var(--a06); color: var(--ink-hi); }
+.rama-mc-rail-icon-row:hover { background: var(--a08); color: var(--ink-hi); }
+.rama-mc-rail-icon-row-active { background: var(--a10); color: var(--accent-hi, var(--accent)); }
 
 .rama-mc-stage { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 

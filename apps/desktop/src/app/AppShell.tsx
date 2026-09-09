@@ -12,7 +12,6 @@ import { AgentWebBridge } from "./mission-control/AgentWebBridge";
 import { MissionControl } from "./mission-control/MissionControl";
 import { useMissionControlGeometry } from "./mission-control/useMissionControlGeometry";
 import { SettingsModal } from "./SettingsModal";
-import { StatusBar } from "./StatusBar";
 import { ToolboxPage } from "./ToolboxPage";
 import { useSettingsLink } from "./data/SettingsLinkContext";
 import { WINDOW_LABEL } from "../engine/window";
@@ -92,8 +91,6 @@ export function AppShell() {
               {!geometry.panelCollapsed && <MissionControl geometry={geometry} />}
             </div>
           )}
-
-          <StatusBar />
         </div>
       </div>
       <CommandPalette

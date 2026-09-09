@@ -58,3 +58,36 @@ export function appendMessage(
 export function finalizeMessage(id: string, content: string | null): void {
   db.query("UPDATE messages SET content = ? WHERE id = ?").run(content, id);
 }
+
+interface ProjectMessageRow {
+  id: string;
+  chat_id: string;
+  seq: number;
+  role: MessageRole;
+  content: string | null;
+}
+
+export interface ProjectMessage {
+  id: string;
+  chatId: string;
+  seq: number;
+  role: MessageRole;
+  content: string | null;
+}
+
+// docs/PROMPT_STACK_PLAN.md §7.2, Phase PS7 — the curator's other evidence read path: user turns
+// across a project, ordered so a collector can look at each one's immediate predecessor to tell
+// "opening ask" from "reply to what the agent just did" without a second query per row.
+export function listMessagesForProject(projectId: string, limit = 4000): ProjectMessage[] {
+  const rows = db
+    .query<
+      ProjectMessageRow,
+      [string, number]
+    >(`SELECT m.id, m.chat_id, m.seq, m.role, m.content
+       FROM messages m JOIN chats c ON c.id = m.chat_id
+       WHERE c.project_id = ?
+       ORDER BY m.chat_id ASC, m.seq ASC LIMIT ?`,
+    )
+    .all(projectId, limit);
+  return rows.map((row) => ({ id: row.id, chatId: row.chat_id, seq: row.seq, role: row.role, content: row.content }));
+}

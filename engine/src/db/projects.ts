@@ -9,6 +9,7 @@ import type {
 import { db } from "./index";
 import { newId } from "./ids";
 import { listChatsByProject } from "./chats";
+import { deleteProposalsForProject } from "./curationProposals";
 
 interface ProjectRow {
   id: string;
@@ -79,6 +80,7 @@ export function updateProject(id: string, patch: UpdateProjectInput): ProjectDTO
 export function deleteProject(id: string): "ok" | "not-found" | "has-chats" {
   if (!getProject(id)) return "not-found";
   if (listChatsByProject(id).length > 0) return "has-chats";
+  deleteProposalsForProject(id);
   db.query("DELETE FROM projects WHERE id = ?").run(id);
   return "ok";
 }

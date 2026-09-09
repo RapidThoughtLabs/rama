@@ -1,15 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AgentSummaryDTO,
   ArtifactDTO,
   CatalogProviderSummaryDTO,
   ChatDTO,
   CreateChatInput,
   CreateProjectInput,
+  CurationProposalDTO,
   CustomProviderInput,
   DocContentDTO,
   DocDTO,
   EngineConnectionInfo,
   GeneralSettingsDTO,
+  InstructionsDTO,
   MessageDTO,
   PermissionSettings,
   ProjectDTO,
@@ -220,6 +223,22 @@ export function webviewDestroy(pageId: string): Promise<void> {
   return invoke<void>("webview_destroy", { pageId });
 }
 
+// Native reload/back/forward — not routed through webviewEval's ack round-trip. That round-trip
+// signals completion with its own navigation (`location.href = 'rama-eval://...'`), which races the
+// navigation these three calls themselves trigger and can silently lose, making the button a no-op.
+// See webview.rs's comment on webview_reload for the full story.
+export function webviewReload(pageId: string): Promise<void> {
+  return invoke<void>("webview_reload", { pageId });
+}
+
+export function webviewGoBack(pageId: string): Promise<void> {
+  return invoke<void>("webview_go_back", { pageId });
+}
+
+export function webviewGoForward(pageId: string): Promise<void> {
+  return invoke<void>("webview_go_forward", { pageId });
+}
+
 // `expr` is a JS expression's *body* (evaluated as `(function(){ ${expr} })()`) — always one of a
 // small set of hardcoded strings this app supplies (see WebPaneContext.tsx), never agent- or
 // page-controlled text.
@@ -322,6 +341,10 @@ export function fetchSkills(): Promise<SkillDTO[]> {
   return engineJson("/skills");
 }
 
+export function fetchAgents(projectId?: string): Promise<AgentSummaryDTO[]> {
+  return engineJson(projectId ? `/agents?projectId=${encodeURIComponent(projectId)}` : "/agents");
+}
+
 export function installSkill(source: string): Promise<SkillDTO> {
   return engineJson("/skills/install", { method: "POST", body: JSON.stringify({ source }) });
 }
@@ -375,6 +398,37 @@ export function saveDoc(projectId: string, name: string, content: string): Promi
 
 export function deleteDoc(projectId: string, name: string): Promise<{ ok: true }> {
   return engineJson(`/projects/${projectId}/docs/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+// docs/PROMPT_STACK_PLAN.md §7.1/§7.2, Phases PS3/PS7 — RAMA.md itself, plus the curator's
+// accept/reject queue on top of it.
+export function fetchProjectInstructions(projectId: string): Promise<InstructionsDTO> {
+  return engineJson(`/projects/${projectId}/instructions`);
+}
+
+export function saveProjectInstructions(projectId: string, content: string): Promise<InstructionsDTO> {
+  return engineJson(`/projects/${projectId}/instructions`, { method: "PUT", body: JSON.stringify({ content }) });
+}
+
+export function draftProjectInstructions(projectId: string): Promise<{ content: string }> {
+  return engineJson(`/projects/${projectId}/instructions/init`, { method: "POST" });
+}
+
+export function fetchCurationProposals(projectId: string, status?: "pending" | "accepted" | "rejected"): Promise<CurationProposalDTO[]> {
+  const qs = status ? `?status=${status}` : "";
+  return engineJson(`/projects/${projectId}/curation/proposals${qs}`);
+}
+
+export function resolveCurationProposal(
+  projectId: string,
+  proposalId: string,
+  action: "accept" | "reject",
+): Promise<CurationProposalDTO> {
+  return engineJson(`/projects/${projectId}/curation/proposals/${proposalId}/${action}`, { method: "POST" });
+}
+
+export function runCuratorNow(projectId: string): Promise<{ ok: true }> {
+  return engineJson(`/projects/${projectId}/curation/run`, { method: "POST" });
 }
 
 // SETTINGS_PLAN.md Phase S1 — themes from ~/.rama/themes. `getEngineConnection` (already exported

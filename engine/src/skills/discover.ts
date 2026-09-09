@@ -10,7 +10,11 @@ export const SKILLS_HOME = join(RAMA_HOME, "skills");
 function scanSkillsDir(dir: string): SkillMeta[] {
   if (!existsSync(dir)) return [];
   const out: SkillMeta[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  // docs/PROMPT_STACK_PLAN.md §9.4 PS0 — readdirSync's order is filesystem-dependent, not
+  // alphabetical; skill_* tools built from this list render at prefix position 0, so an
+  // unsorted scan silently invalidates the entire cache on every reorder.
+  const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const skillPath = join(dir, entry.name);
     const mdPath = join(skillPath, "SKILL.md");

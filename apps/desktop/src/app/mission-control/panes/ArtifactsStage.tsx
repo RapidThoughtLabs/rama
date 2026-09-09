@@ -1,11 +1,18 @@
 import { useArtifactsPane } from "./ArtifactsPaneContext";
 
-// Lifted unchanged from the old ArtifactsPanel.tsx (docs/MISSION_CONTROL_PLAN.md M1).
-function parseDiffLines(text: string): { n: string; t: string; kind: "ctx" | "add" | "del" }[] {
-  return text.split("\n").map((line, i) => {
+// Real old/new line-number gutters instead of one sequential counter (the old behaviour numbered
+// every printed line 1, 2, 3... regardless of which side of the diff it came from — nothing like
+// what a code editor's diff view shows). `formatUnifiedDiff` walks the whole file, not just
+// changed hunks, so old/new stay in lockstep on context lines and diverge only across add/del runs.
+function parseDiffLines(text: string): { oldNum: number | null; newNum: number | null; t: string; kind: "ctx" | "add" | "del" }[] {
+  let oldNum = 0;
+  let newNum = 0;
+  return text.split("\n").map((line) => {
     const prefix = line[0];
     const kind = prefix === "+" ? "add" : prefix === "-" ? "del" : "ctx";
-    return { n: String(i + 1), t: line.slice(1), kind };
+    if (kind !== "add") oldNum++;
+    if (kind !== "del") newNum++;
+    return { oldNum: kind === "add" ? null : oldNum, newNum: kind === "del" ? null : newNum, t: line.slice(1), kind };
   });
 }
 
@@ -21,6 +28,8 @@ export function ArtifactsStage() {
       <div className="rama-artifact-preview-toolbar">
         <span
           style={{
+            flex: 1,
+            minWidth: 0,
             fontSize: "var(--fs-sm)",
             color: "rgb(var(--ink))",
             fontWeight: 600,
@@ -58,7 +67,9 @@ export function ArtifactsStage() {
               key={i}
               className={`rama-diff-line ${l.kind === "add" ? "rama-diff-add" : l.kind === "del" ? "rama-diff-del" : ""}`}
             >
-              <span className="rama-diff-line-num">{l.n}</span>
+              <span className="rama-diff-line-num rama-diff-line-num-old">{l.oldNum ?? ""}</span>
+              <span className="rama-diff-line-num rama-diff-line-num-new">{l.newNum ?? ""}</span>
+              <span className="rama-diff-line-marker">{l.kind === "add" ? "+" : l.kind === "del" ? "−" : ""}</span>
               <span className="rama-diff-line-text">{l.t}</span>
             </div>
           ))

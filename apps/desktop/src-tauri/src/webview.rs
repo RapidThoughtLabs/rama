@@ -106,6 +106,33 @@ pub fn webview_navigate(app: AppHandle, page_id: String, url: String) -> Result<
     webview.navigate(parsed).map_err(|e| e.to_string())
 }
 
+// Reload/back/forward used to be routed through `webview_eval`'s ack round-trip (`history.back();
+// return '';`, signaled back via a `rama-eval://` navigation — see the module doc). That's broken
+// for exactly these three calls: the signal itself is a navigation (`location.href = 'rama-eval:...'`),
+// dispatched synchronously right after `history.back()`/`location.reload()` queue theirs, so the two
+// navigations race on the same frame. Whichever wins, the eval promise settles either way — but the
+// *actual* back/forward/reload can lose that race and never happen, which is exactly what "the
+// button does nothing" looks like. These three go straight to Tauri/wry instead: `.reload()` is a
+// real API on Webview, and back/forward fire `webview.eval` directly with no ack expected, so there's
+// no second navigation competing with the one the button asked for.
+#[tauri::command]
+pub fn webview_reload(app: AppHandle, page_id: String) -> Result<(), String> {
+    let webview = app.get_webview(&page_webview_label(&page_id)).ok_or_else(|| "no such page".to_string())?;
+    webview.reload().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn webview_go_back(app: AppHandle, page_id: String) -> Result<(), String> {
+    let webview = app.get_webview(&page_webview_label(&page_id)).ok_or_else(|| "no such page".to_string())?;
+    webview.eval("history.back();").map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn webview_go_forward(app: AppHandle, page_id: String) -> Result<(), String> {
+    let webview = app.get_webview(&page_webview_label(&page_id)).ok_or_else(|| "no such page".to_string())?;
+    webview.eval("history.forward();").map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn webview_set_bounds(app: AppHandle, page_id: String, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
     let webview = app.get_webview(&page_webview_label(&page_id)).ok_or_else(|| "no such page".to_string())?;

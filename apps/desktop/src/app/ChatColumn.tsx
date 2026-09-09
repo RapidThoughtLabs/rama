@@ -6,6 +6,7 @@ import { patchChat, ramaSearch } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useProvidersData } from "./data/ProvidersProvider";
 import { useSessionData } from "./data/SessionProvider";
+import { AgentPicker } from "./AgentPicker";
 import { ModelPicker } from "./ModelPicker";
 import { ProviderSetupWizard } from "./ProviderSetupWizard";
 
@@ -45,9 +46,48 @@ function formatToolTarget(name: string, input: unknown): string {
       return typeof obj.command === "string" ? obj.command : "";
     case "browser":
       return typeof obj.url === "string" ? obj.url : "";
+    case "clarify": {
+      const n = Array.isArray(obj.questions) ? obj.questions.length : 0;
+      return `${n} question${n === 1 ? "" : "s"}`;
+    }
     default:
       return "";
   }
+}
+
+interface ClarifyQuestion {
+  question: string;
+  default?: string;
+}
+
+function isClarifyQuestion(v: unknown): v is ClarifyQuestion {
+  return !!v && typeof (v as ClarifyQuestion).question === "string";
+}
+
+// docs/PROMPT_STACK_PLAN.md §8.1, Phase PS6 — "a tool call is legible... the UI renders a question
+// card" is the reason clarify exists as a tool instead of prose. This is that card: every other
+// tool call gets the one-line ToolCallCard treatment above, clarify gets its questions spelled out.
+function ClarifyCard({ toolCall }: { toolCall: ToolCallDTO }) {
+  const raw = (toolCall.input as Record<string, unknown> | null)?.questions;
+  const questions = Array.isArray(raw) ? raw.filter(isClarifyQuestion) : [];
+  return (
+    <div className="rama-tool-call rama-clarify-card">
+      <div className="rama-tool-call-head">
+        <span className="rama-tool-call-status" style={{ color: "var(--accent)" }}>
+          ●
+        </span>
+        <span className="rama-tool-call-name">clarify</span>
+      </div>
+      <ol className="rama-clarify-questions">
+        {questions.map((q, i) => (
+          <li key={i}>
+            <span>{q.question}</span>
+            {q.default && <span className="rama-clarify-default"> (default: {q.default})</span>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function isBackgroundBash(input: unknown): boolean {
@@ -365,9 +405,9 @@ export function ChatColumn() {
               );
             return (
               <div key={msg.id}>
-                {(toolCallsByMessage[msg.id] ?? []).map((tc) => (
-                  <ToolCallCard key={tc.id} toolCall={tc} />
-                ))}
+                {(toolCallsByMessage[msg.id] ?? []).map((tc) =>
+                  tc.name === "clarify" ? <ClarifyCard key={tc.id} toolCall={tc} /> : <ToolCallCard key={tc.id} toolCall={tc} />,
+                )}
                 {msg.content && (
                   <div className="rama-msg-assistant">
                     <span className="rama-msg-assistant-glyph">◆</span>
@@ -490,6 +530,7 @@ export function ChatColumn() {
           </div>
           <div className="rama-composer-toolbar">
             <ModelPicker chat={activeChat} disabled={isBusy} />
+            <AgentPicker chat={activeChat} disabled={isBusy} />
             <SegmentedControl options={MODES} value={mode} onChange={handleModeChange} />
             <span style={{ flex: 1 }} />
             <span className="rama-composer-hint">@ files · / commands · ⇧⏎ newline</span>

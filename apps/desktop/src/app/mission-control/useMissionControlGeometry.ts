@@ -23,7 +23,9 @@ interface PersistedGeometry {
   width: number;
   panelCollapsed: boolean;
   activePaneId: MissionControlPaneId;
-  railCollapsedByPane: Partial<Record<MissionControlPaneId, boolean>>;
+  /** One shared collapse flag, not per-pane — a rail collapsed on the Artifacts tab should stay
+   *  collapsed when you switch to Terminal, same as any other view-chrome preference. */
+  railCollapsed: boolean;
   railSize: number;
   narrowRailSize: number;
   axisOverride: MissionControlAxis | null;
@@ -35,7 +37,7 @@ const DEFAULTS: PersistedGeometry = {
   width: DEFAULT_WIDTH,
   panelCollapsed: false,
   activePaneId: "artifacts",
-  railCollapsedByPane: {},
+  railCollapsed: false,
   railSize: DEFAULT_RAIL_SIZE,
   narrowRailSize: DEFAULT_NARROW_RAIL_SIZE,
   axisOverride: null,
@@ -74,8 +76,8 @@ export interface MissionControlGeometry {
   setAxisOverride: (a: MissionControlAxis | null) => void;
   activePaneId: MissionControlPaneId;
   setActivePaneId: (id: MissionControlPaneId) => void;
-  /** Rail-within-Mission-Control collapse — per pane, so switching panes doesn't fight over one
-   *  flag (§4.5's icon strip / §4.3's breadcrumb). */
+  /** Rail-within-Mission-Control collapse — one flag shared across every pane (§4.5's icon strip
+   *  / §4.3's breadcrumb), so collapsing it on one tab keeps it collapsed on the others. */
   railCollapsed: boolean;
   toggleRailCollapsed: () => void;
   railSize: number;
@@ -95,7 +97,7 @@ export function useMissionControlGeometry(): MissionControlGeometry {
   const [width, setWidthState] = useState(initial.width);
   const [panelCollapsed, setPanelCollapsed] = useState(initial.panelCollapsed);
   const [activePaneId, setActivePaneIdState] = useState<MissionControlPaneId>(initial.activePaneId);
-  const [railCollapsedByPane, setRailCollapsedByPane] = useState(initial.railCollapsedByPane);
+  const [railCollapsed, setRailCollapsedState] = useState(initial.railCollapsed);
   const [railSize, setRailSizeState] = useState(initial.railSize);
   const [narrowRailSize, setNarrowRailSizeState] = useState(initial.narrowRailSize);
   const [axisOverride, setAxisOverrideState] = useState<MissionControlAxis | null>(initial.axisOverride);
@@ -108,6 +110,33 @@ export function useMissionControlGeometry(): MissionControlGeometry {
   useEffect(() => {
     widthRef.current = width;
   }, [width]);
+
+  // Resizing the OS window itself used to do nothing to `width` — it's only ever written by a
+  // drag or a snap, so shrinking the window could leave the panel wider than `clamp()` would
+  // allow, or straddling the axis breakpoint in a way that never got a chance to settle. That's
+  // what "doesn't shift the sidebar fluently" was actually describing: the layout wasn't reacting
+  // to the resize at all until the next manual drag. Debounced (not rAF-throttled like a drag —
+  // this fires far less often and doesn't need to track the cursor) via a plain timeout.
+  useEffect(() => {
+    let timer: number | undefined;
+    function onResize() {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const max = Math.max(MIN_WIDTH, window.innerWidth - RIGHT_MARGIN);
+        const clamped = Math.min(Math.max(widthRef.current, MIN_WIDTH), max);
+        if (clamped !== widthRef.current) {
+          widthRef.current = clamped;
+          setWidthState(clamped);
+          save({ width: clamped });
+        }
+      }, 80);
+    }
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
 
   const axis: MissionControlAxis = axisOverride ?? (width >= AXIS_BREAKPOINT ? "side" : "stacked");
 
@@ -125,12 +154,12 @@ export function useMissionControlGeometry(): MissionControlGeometry {
   }, []);
 
   const toggleRailCollapsed = useCallback(() => {
-    setRailCollapsedByPane((prev) => {
-      const next = { ...prev, [activePaneId]: !prev[activePaneId] };
-      save({ railCollapsedByPane: next });
+    setRailCollapsedState((v) => {
+      const next = !v;
+      save({ railCollapsed: next });
       return next;
     });
-  }, [activePaneId]);
+  }, []);
 
   const setRailSize = useCallback((n: number) => {
     setRailSizeState(n);
@@ -186,8 +215,6 @@ export function useMissionControlGeometry(): MissionControlGeometry {
     setWidthState(next);
     save({ width: next });
   }, []);
-
-  const railCollapsed = !!railCollapsedByPane[activePaneId];
 
   return {
     panelCollapsed,

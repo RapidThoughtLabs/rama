@@ -1,6 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { webviewCreate, webviewDestroy, webviewEval, webviewNavigate } from "../../../engine/client";
+import {
+  webviewCreate,
+  webviewDestroy,
+  webviewEval,
+  webviewGoBack,
+  webviewGoForward,
+  webviewNavigate,
+  webviewReload,
+} from "../../../engine/client";
 import { WINDOW_LABEL } from "../../../engine/window";
 import { useProjectsData } from "../../data/ProjectsProvider";
 
@@ -50,7 +58,10 @@ function patchPage(id: string, patch: Partial<WebPageState>) {
 
 export function normalizeUrl(input: string): string {
   const trimmed = input.trim();
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  // Any URL that already names a scheme — including ones with no "//" (about:blank, data:...) —
+  // is left alone. The old check required "://" specifically, which mangled "about:blank" (the
+  // Rail's own "+" button default) into "https://about:blank", a bogus host that just errors.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
   if (/^localhost(:\d+)?(\/|$)/i.test(trimmed) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/|$)/.test(trimmed)) {
     return `http://${trimmed}`;
   }
@@ -98,15 +109,23 @@ export async function createWebPage(
     loading: true,
     createdAt: Date.now(),
   };
-  pages = [...pages, page];
-  notify();
+  // Publishing to the store (and thus mounting WebStage) before the native webview actually
+  // exists on the Rust side used to be the whole bug: useWebviewVisibility's mount-time
+  // `webview_set_bounds`/`webview_set_visible` calls would race webview_create, lose, get a
+  // "no such page" error, and — since they only ever run again on a real bounds/visibility
+  // change — never retry. The page would sit there permanently 1x1 and hidden, which is exactly
+  // what "opening a page shows nothing" looks like. Awaiting creation first closes that race.
   try {
     await webviewCreate(WINDOW_LABEL, id, url);
-    void refreshPageMeta(id);
   } catch (err) {
     console.error("[rama] failed to create web page", err);
-    patchPage(id, { loading: false });
+    pages = [...pages, { ...page, loading: false }];
+    notify();
+    return page;
   }
+  pages = [...pages, page];
+  notify();
+  void refreshPageMeta(id);
   return page;
 }
 
@@ -187,21 +206,28 @@ export function WebPaneProvider({ children }: { children: ReactNode }) {
     [active],
   );
 
-  // Back/forward/reload reuse `webview_eval` (M6 needs it anyway) instead of adding three more
-  // Rust commands — see webview.rs's module doc on keeping the unstable-API surface to one file.
+  // Native commands, not `webview_eval` — that ack round-trip signals completion with its own
+  // navigation, which races the navigation these calls themselves trigger and can silently lose
+  // (the button visibly does nothing). See webview.rs's comment on webview_reload for the story.
   const reload = useCallback(async () => {
     if (!active) return;
-    await webviewEval(active.id, "location.reload(); return '';").catch(() => {});
+    patchPage(active.id, { loading: true });
+    await webviewReload(active.id).catch(() => {});
+    void refreshPageMeta(active.id);
   }, [active]);
 
   const goBack = useCallback(async () => {
     if (!active) return;
-    await webviewEval(active.id, "history.back(); return '';").catch(() => {});
+    patchPage(active.id, { loading: true });
+    await webviewGoBack(active.id).catch(() => {});
+    void refreshPageMeta(active.id);
   }, [active]);
 
   const goForward = useCallback(async () => {
     if (!active) return;
-    await webviewEval(active.id, "history.forward(); return '';").catch(() => {});
+    patchPage(active.id, { loading: true });
+    await webviewGoForward(active.id).catch(() => {});
+    void refreshPageMeta(active.id);
   }, [active]);
 
   const closePage = useCallback(async (id: string) => {

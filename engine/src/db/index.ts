@@ -68,3 +68,7 @@ addColumnIfMissing("chats", "utility_cost_usd", "utility_cost_usd REAL NOT NULL 
 // summary) so a later turn can rebuild real tool-call/tool-result history instead of losing it.
 addColumnIfMissing("tool_calls", "result_content", "result_content TEXT");
 addColumnIfMissing("tool_calls", "result_meta_json", "result_meta_json TEXT");
+
+// docs/PROMPT_STACK_PLAN.md Phase PS4 — which agent file (engine/src/agent/agents/discover.ts)
+// shapes this chat's bp2 agent block. 'default' is the bundled floor agent, always present.
+addColumnIfMissing("chats", "agent_id", "agent_id TEXT NOT NULL DEFAULT 'default'");

@@ -123,3 +123,47 @@ export function listToolCalls(chatId: string): ToolCallDTO[] {
     .all(chatId);
   return rows.map(toDTO);
 }
+
+export interface ProjectToolCallRow {
+  id: string;
+  chatId: string;
+  name: string;
+  input: unknown;
+  ok: boolean;
+  startedAt: number;
+}
+
+interface RawProjectToolCallRow {
+  id: string;
+  chat_id: string;
+  name: string;
+  input_json: string;
+  ok: number;
+  started_at: number;
+}
+
+// docs/PROMPT_STACK_PLAN.md §7.2, Phase PS7 — the curator's evidence read path: every finalized
+// tool call across every chat in a project, newest-first-capped rather than unbounded, since a
+// long-lived project can accumulate thousands of rows and the collectors only need a recent
+// window to spot a repeating pattern. Only `ok IS NOT NULL` calls count as evidence, same
+// reasoning as listToolCallsForHistory — an interrupted call never got a real result.
+export function listToolCallsForProject(projectId: string, limit = 2000): ProjectToolCallRow[] {
+  const rows = db
+    .query<
+      RawProjectToolCallRow,
+      [string, number]
+    >(`SELECT tc.id, tc.chat_id, tc.name, tc.input_json, tc.ok, tc.started_at
+       FROM tool_calls tc JOIN chats c ON c.id = tc.chat_id
+       WHERE c.project_id = ? AND tc.ok IS NOT NULL
+       ORDER BY tc.started_at DESC LIMIT ?`,
+    )
+    .all(projectId, limit);
+  return rows.map((row) => ({
+    id: row.id,
+    chatId: row.chat_id,
+    name: row.name,
+    input: JSON.parse(row.input_json),
+    ok: row.ok === 1,
+    startedAt: row.started_at,
+  }));
+}

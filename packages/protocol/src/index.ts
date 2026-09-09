@@ -18,7 +18,19 @@ export type SessionEvent =
   | { type: "tool.result"; callId: string; ok: boolean; summary: string; artifactId?: string }
   | { type: "artifact.created"; artifactId: string; kind: ArtifactKind; name: string; meta: object }
   | { type: "artifact.updated"; artifactId: string; delta?: string; status: "streaming" | "done" }
-  | { type: "usage.update"; inputTokens: number; outputTokens: number; contextUsed: number; contextMax: number }
+  // cacheReadTokens/cacheWriteTokens/noCacheTokens: docs/PROMPT_STACK_PLAN.md Phase PS1 — the
+  // usage.inputTokenDetails split, optional so any other future emitter of this event doesn't
+  // have to invent numbers it doesn't have.
+  | {
+      type: "usage.update";
+      inputTokens: number;
+      outputTokens: number;
+      contextUsed: number;
+      contextMax: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      noCacheTokens?: number;
+    }
   | { type: "cost.update"; usd: number }
   | { type: "permission.request"; reqId: string; tool: string; input: unknown; risk: "low" | "high" }
   | { type: "status"; state: SessionStatusState; verb?: string }
@@ -74,6 +86,7 @@ export type ClientCommand =
   | { type: "interrupt"; chatId: string }
   | { type: "setModel"; chatId: string; model: string }
   | { type: "setMode"; chatId: string; mode: ChatMode }
+  | { type: "setAgent"; chatId: string; agentId: string }
   | { type: "approvePermission"; reqId: string; approve: boolean }
   // docs/MISSION_CONTROL_PLAN.md §5.3 — the project-scoped counterpart to subscribeChat/
   // unsubscribeChat, for the `terminal.*` events above.
@@ -105,6 +118,16 @@ export interface ProjectDTO {
   createdAt: number;
 }
 
+// docs/PROMPT_STACK_PLAN.md §7.1, Phase PS3 — GET/PUT /projects/:id/instructions and
+// GET/PUT /settings/instructions (global) both return this shape. `exists: false` (empty content,
+// lines: 0) means no RAMA.md is on disk yet, distinct from an existing-but-empty file.
+export interface InstructionsDTO {
+  content: string;
+  lines: number;
+  oversize: boolean;
+  exists: boolean;
+}
+
 export interface ChatDTO {
   id: string;
   projectId: string;
@@ -113,6 +136,7 @@ export interface ChatDTO {
   providerId: string;
   model: string | null;
   mode: ChatMode;
+  agentId: string;
   themeId: ThemeIdDTO;
   status: string;
   costUsd: number;
@@ -140,10 +164,25 @@ export interface CreateChatInput {
   providerId?: string;
   model?: string;
   mode?: ChatMode;
+  agentId?: string;
   themeId?: ThemeIdDTO;
 }
 
 export type UpdateChatInput = Partial<CreateChatInput & { status: string }>;
+
+// docs/PROMPT_STACK_PLAN.md §5.3, Phase PS4 — GET /agents. No body/tools-vs-mode-intersection
+// here (that's server-side, per-turn, per §5.2) — just enough for a picker: what it's called,
+// what it's for, and which tier of the three-tier discovery it came from, so a project-local
+// agent overriding a bundled one of the same name is visible as "this one wins".
+export interface AgentSummaryDTO {
+  name: string;
+  description: string;
+  /** null = unrestricted (harness ∩ mode only) — see engine/src/agent/agents/effectiveTools.ts. */
+  tools: string[] | null;
+  mode: ChatMode | null;
+  model: ModelRole;
+  source: "bundled" | "global" | "project";
+}
 
 export interface EngineConnectionInfo {
   url: string;
@@ -390,6 +429,23 @@ export interface DocDTO {
   updatedAt: number;
 }
 
+// docs/PROMPT_STACK_PLAN.md §7.2, Phase PS7 — one curator-generated candidate change to RAMA.md.
+// `kind: "remove"` is the verification hook (§7.2's second hard rule): an entry whose referent
+// (a script, a path) no longer checks out is proposed for deletion here, not silently served to
+// the model. Never applied until accept/{proposalId} — decision 6.
+export interface CurationProposalDTO {
+  id: string;
+  projectId: string;
+  kind: "add" | "remove";
+  section: string;
+  content: string;
+  signal: string;
+  evidence: { why: string; toolCallIds?: string[]; messageIds?: string[] };
+  status: "pending" | "accepted" | "rejected";
+  createdAt: number;
+  resolvedAt: number | null;
+}
+
 export interface DocContentDTO {
   name: string;
   content: string;
@@ -423,7 +479,9 @@ export interface GeneralSettingsDTO {
 
 // docs/PROVIDERS_PLAN.md Phase P2 — a role names *why* a call happens ('chat', 'utility'), not a
 // "cheap model" setting. 'summarize' is reserved for compaction; no UI row until that exists.
-export type ModelRole = "chat" | "utility" | "summarize";
+// docs/PROMPT_STACK_PLAN.md §6.1, Phase PS5 — 'subagent' backs explore/review/test's nested
+// streamText calls, defaulted from the catalog the same way 'utility' is (small/workhorse tier).
+export type ModelRole = "chat" | "utility" | "summarize" | "subagent";
 
 export interface ModelRoleDTO {
   role: ModelRole;

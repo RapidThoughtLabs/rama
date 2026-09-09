@@ -2,40 +2,16 @@
 // background work (auto-titling today; tagging/compaction later). This never touches the `chat`
 // role or a chat's own model — purely which model receives background calls.
 import { getModelRole, setModelRole } from "../db/modelRoles";
-import { listProviderModels } from "../db/providerModels";
-import { getProvider, listProviders } from "../db/providers";
-import { getCatalog, getCatalogProvider } from "./catalog";
+import { listProviders } from "../db/providers";
+import { getCatalog } from "./catalog";
+import { candidateFromCatalogHint, cheapestModelByTier, isProviderHealthy, type RoleTarget } from "./roleDefaults";
 
-export interface UtilityTarget {
-  providerId: string;
-  model: string;
-}
+export type UtilityTarget = RoleTarget;
 
 // Ollama is free and private but unloads a model after ~5m idle, so a cold utility call can take
 // ~10s — it must never be silently auto-picked. It only becomes the utility model once a human
 // assigns it in settings, and that row has to say why (see SettingsModal's role UI).
 const AUTO_DEFAULT_EXCLUDED_PROVIDERS = new Set(["ollama"]);
-
-function isProviderHealthy(providerId: string): boolean {
-  return getProvider(providerId)?.last_health_status === "ok";
-}
-
-function candidateFromCatalogHint(providerId: string): UtilityTarget | null {
-  const hint = getCatalogProvider(providerId)?.utilityModel;
-  if (!hint) return null;
-  const match = listProviderModels(providerId).find((m) => m.id === hint);
-  if (!match || match.status === "missing" || match.status === "erroring") return null;
-  return { providerId, model: match.id };
-}
-
-function cheapestSmallModel(providerId: string): UtilityTarget | null {
-  const candidates = listProviderModels(providerId).filter(
-    (m) => m.tier === "small" && m.status !== "missing" && m.status !== "erroring",
-  );
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => (a.pricing?.inputPerMillion ?? Infinity) - (b.pricing?.inputPerMillion ?? Infinity));
-  return { providerId, model: candidates[0].id };
-}
 
 // Preference order: whichever provider already holds `chat` (so nobody needs a second key just
 // to name a chat), then every other catalog provider. Within a provider: the catalog's explicit
@@ -50,7 +26,7 @@ function computeDefaultUtilityTarget(): UtilityTarget | null {
   for (const providerId of order) {
     if (AUTO_DEFAULT_EXCLUDED_PROVIDERS.has(providerId)) continue;
     if (!isProviderHealthy(providerId)) continue;
-    const candidate = candidateFromCatalogHint(providerId) ?? cheapestSmallModel(providerId);
+    const candidate = candidateFromCatalogHint(providerId) ?? cheapestModelByTier(providerId, ["small"]);
     if (candidate) return candidate;
   }
   return null;

@@ -67,10 +67,15 @@ export interface ToolCtx {
   checkpoints: Checkpointer;
   shell: ShellSession; // TL3, §5.5
   diagnostics: DiagnosticRunner; // TL5, §5.4
-  // TL6, §6.15 — already resolved (provider/key looked up once in loop.ts's runTurn); `explore`
-  // reuses this exact instance for its nested streamText call rather than re-resolving, so the
-  // sub-agent always runs on the same provider and model as the parent turn.
+  // TL6, §6.15 — already resolved (provider/key looked up once in loop.ts's runTurn) — the
+  // parent turn's own model.
   languageModel: LanguageModel;
+  // docs/PROMPT_STACK_PLAN.md §6.1, Phase PS5 — reverses TL6's "same model by default": explore/
+  // review/test's nested streamText calls use this instead of `languageModel`. Resolved once per
+  // run from the `subagent` role (falling back to `languageModel` itself when that role isn't
+  // configured or its provider is unhealthy) — a sub-agent is a cost transfer, so it should not
+  // silently cost frontier-model rates just because nobody has set the role yet.
+  subagentModel: LanguageModel;
 }
 
 export type ToolRisk = "low" | "high";

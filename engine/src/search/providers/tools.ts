@@ -29,9 +29,10 @@ export const toolsSearchProvider: SearchProvider = {
       checkpoints: createCheckpointer(projectPath),
       shell: createShellSession(projectPath),
       diagnostics: createDiagnosticRunner(projectPath),
-      // TL6 — `explore` reads this off ctx but never runs here either; same "never actually
-      // invoked" placeholder reasoning as the fields above.
+      // TL6/PS5 — explore/review/test read these off ctx but never run here either; same "never
+      // actually invoked" placeholder reasoning as the fields above.
       languageModel: "placeholder" as unknown as LanguageModel,
+      subagentModel: "placeholder" as unknown as LanguageModel,
     };
     const tools = {
       ...createTools(toolCtx),

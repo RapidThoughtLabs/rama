@@ -1,6 +1,34 @@
+import type { PermissionRule, PermissionSettings, PermissionTool } from "@rama/protocol";
 import { newId } from "../db/ids";
+import { getProjectPermissions } from "../db/projects";
+import { DEFAULT_PERMISSIONS, getSetting } from "../db/settings";
 import { broadcast } from "../ws";
 import type { ToolCtx, ToolResult, ToolRisk } from "../tools/types";
+
+// Maps a tool's `gate()` name to the Settings modal's per-tool bucket (PermissionSettings never
+// grew a "process" or "browser" slot of its own — background-bash kill rides on "bash"'s rule,
+// and the `browser` tool rides on "web"'s, same as the tool registry's own PermissionTool comment
+// already implied). A tool with no bucket here (none exist today) falls back to mode-only gating.
+function permissionToolFor(name: string): PermissionTool | null {
+  switch (name) {
+    case "bash":
+    case "process":
+      return "bash";
+    case "write":
+    case "edit":
+      return name;
+    case "browser":
+      return "web";
+    default:
+      return null;
+  }
+}
+
+function resolvePermissionRule(projectId: string, tool: PermissionTool): PermissionRule {
+  const global: PermissionSettings = { ...DEFAULT_PERMISSIONS, ...(getSetting<PermissionSettings>("permissions") ?? {}) };
+  const projectOverride = getProjectPermissions(projectId) ?? {};
+  return projectOverride[tool] ?? global[tool] ?? "ask";
+}
 
 // Pending `ask`-mode approvals, keyed by reqId — resolved from server.ts's approvePermission
 // WS handler, or auto-denied if the run's AbortController fires while we're waiting.
@@ -86,7 +114,12 @@ export async function gate(
     if (ctx.mode === "plan") {
       return { ok: false, summary: "blocked: plan mode is read-only" };
     }
-    if (ctx.mode === "ask") {
+    const tool = permissionToolFor(opts.name);
+    const rule = tool ? resolvePermissionRule(ctx.projectId, tool) : null;
+    if (rule === "deny") {
+      return { ok: false, summary: `blocked: ${opts.name} is disabled in permission settings` };
+    }
+    if (rule === "ask" || ctx.mode === "ask") {
       const approved = await requestPermission(ctx.chatId, opts.name, opts.input, opts.risk, ctx.abortSignal);
       if (!approved) return { ok: false, summary: "denied by user" };
       broadcast(ctx.chatId, { type: "status", state: "tool", verb: `running ${opts.name}` });

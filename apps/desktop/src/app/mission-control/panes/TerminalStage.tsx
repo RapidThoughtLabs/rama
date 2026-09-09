@@ -28,6 +28,8 @@ export function TerminalStage() {
       <div className="rama-artifact-preview-toolbar">
         <span
           style={{
+            flexShrink: 0,
+            maxWidth: "40%",
             fontSize: "var(--fs-sm)",
             color: "rgb(var(--ink))",
             fontWeight: 600,
@@ -38,8 +40,19 @@ export function TerminalStage() {
         >
           {cwdLabel}
         </span>
-        <span style={{ fontSize: "var(--fs-micro)", color: "rgba(var(--ink),0.4)" }}>{commandLine}</span>
-        <span style={{ flex: 1 }} />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: "var(--fs-micro)",
+            color: "rgba(var(--ink),0.4)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {commandLine}
+        </span>
         {active.status === "exited" && (
           <span className={`rama-badge ${active.exitCode === 0 ? "rama-badge-good" : "rama-badge-warn"}`}>
             exit {active.exitCode}

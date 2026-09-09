@@ -10,7 +10,10 @@ use engine::{get_engine_connection, spawn_engine, EngineState};
 use pty::{pty_is_running, pty_kill, pty_list_running, pty_resize, pty_spawn, pty_write, PtyState};
 use secrets::{delete_provider_key, get_provider_key, set_provider_key};
 use tauri::Manager;
-use webview::{webview_create, webview_destroy, webview_eval, webview_navigate, webview_set_bounds, webview_set_visible, EvalState};
+use webview::{
+    webview_create, webview_destroy, webview_eval, webview_go_back, webview_go_forward, webview_navigate,
+    webview_reload, webview_set_bounds, webview_set_visible, EvalState,
+};
 use window_registry::{
     add_chat_to_window, attach_lifecycle_handlers, get_window_tabs, initialize_window_tabs, list_all_window_tabs,
     remove_chat_from_windows, WindowRegistry,
@@ -53,7 +56,10 @@ pub fn run() {
             webview_set_bounds,
             webview_set_visible,
             webview_destroy,
-            webview_eval
+            webview_eval,
+            webview_reload,
+            webview_go_back,
+            webview_go_forward
         ])
         .setup(|app| {
             match spawn_engine() {

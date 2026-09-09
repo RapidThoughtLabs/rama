@@ -39,6 +39,7 @@ export interface ProjectsDataValue {
   removeProject: (projectId: string) => Promise<void>;
   addChat: (projectId: string, backend?: BackendConfig) => Promise<ChatDTO>;
   removeChat: (chatId: string) => Promise<void>;
+  applyChatPatch: (chat: ChatDTO) => void;
 }
 
 const ProjectsContext = createContext<ProjectsDataValue | null>(null);
@@ -138,6 +139,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     };
   }, [applyTheme]);
 
+  // The one place a chat mutated elsewhere (model/agent pickers, theme sync) gets folded back
+  // into chatsByProject — without this, patchChat's server-side write succeeds but every consumer
+  // of allChats (the composer pill, the sidebar) keeps rendering the pre-patch chat forever, since
+  // nothing else here re-fetches after a PATCH.
+  const applyChatPatch = useCallback((updated: ChatDTO) => {
+    setChatsByProject((prev) => {
+      const list = prev[updated.projectId];
+      if (!list) return prev;
+      return { ...prev, [updated.projectId]: list.map((c) => (c.id === updated.id ? updated : c)) };
+    });
+  }, []);
+
   useEffect(() => {
     if (!activeChatId) return;
     const current = { themeId };
@@ -147,17 +160,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
     lastAppliedTheme.current = current;
     patchChat(activeChatId, current)
-      .then((updated) => {
-        setChatsByProject((prev) => {
-          const list = prev[updated.projectId];
-          if (!list) return prev;
-          return { ...prev, [updated.projectId]: list.map((c) => (c.id === updated.id ? updated : c)) };
-        });
-      })
+      .then(applyChatPatch)
       .catch((err) => {
         console.error("[rama] failed to persist chat theme", err);
       });
-  }, [themeId, activeChatId]);
+  }, [themeId, activeChatId, applyChatPatch]);
 
   // docs/PROVIDERS_PLAN.md Phase P2 — auto-titling's only way to reach the sidebar; a chat's
   // title lives in this provider's chatsByProject, not SessionProvider's per-run state, so the
@@ -250,6 +257,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       removeProject,
       addChat,
       removeChat,
+      applyChatPatch,
     }),
     [
       loading,
@@ -265,6 +273,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       removeProject,
       addChat,
       removeChat,
+      applyChatPatch,
     ],
   );
 

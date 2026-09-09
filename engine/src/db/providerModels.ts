@@ -6,7 +6,7 @@
 // providerHealth.ts, which already has both a ProviderRow and this module in scope.
 import { createHash } from "node:crypto";
 import type { ModelInfo, ModelPricing, ModelStatus, ModelTier } from "@rama/protocol";
-import { getCatalog, getCatalogProvider } from "../agent/catalog";
+import { getCachePolicy, getCatalog, getCatalogProvider } from "../agent/catalog";
 import { db } from "./index";
 
 export interface ProviderModelRow {
@@ -204,6 +204,41 @@ export function computeCostUsd(
     return { usd: 0, pricingKnown: false };
   }
   const usd = (inputTokens / 1_000_000) * row.input_per_million + (outputTokens / 1_000_000) * row.output_per_million;
+  return { usd, pricingKnown: true };
+}
+
+export interface CacheTokenBreakdown {
+  noCacheTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
+// docs/PROMPT_STACK_PLAN.md §9.3, Phase PS1 — computeCostUsd's cache-aware sibling. The bug this
+// replaces at the one call site that matters (loop.ts's main run): usage.inputTokens includes
+// cache reads and writes, and billing all of it at the full input rate means the moment caching
+// actually works, the cost line shows no savings and overcharges on top. Each bucket gets its own
+// multiplier from the catalog (1 = no known discount, never a guessed one — see catalog.ts's
+// getCachePolicy).
+export function computeCostUsdDetailed(
+  providerId: string,
+  modelId: string,
+  input: CacheTokenBreakdown,
+  outputTokens: number,
+): { usd: number; pricingKnown: boolean } {
+  const row = db
+    .query<Pick<ProviderModelRow, "input_per_million" | "output_per_million">, [string, string]>(
+      "SELECT input_per_million, output_per_million FROM provider_models WHERE provider_id = ? AND model_id = ?",
+    )
+    .get(providerId, modelId);
+  if (!row || row.input_per_million == null || row.output_per_million == null) {
+    return { usd: 0, pricingKnown: false };
+  }
+  const policy = getCachePolicy(providerId, modelId);
+  const inputUsd =
+    (input.noCacheTokens / 1_000_000) * row.input_per_million +
+    (input.cacheReadTokens / 1_000_000) * row.input_per_million * policy.readMultiplier +
+    (input.cacheWriteTokens / 1_000_000) * row.input_per_million * policy.writeMultiplier;
+  const usd = inputUsd + (outputTokens / 1_000_000) * row.output_per_million;
   return { usd, pricingKnown: true };
 }
 
