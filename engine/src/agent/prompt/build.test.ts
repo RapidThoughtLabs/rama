@@ -107,24 +107,24 @@ describe("buildPrompt", () => {
     expect(blocks.every((b) => !b.cached)).toBe(true);
   });
 
-  test("cache_control on every block for an explicit-caching provider — bp1/bp2/bp3 (PS2/PS3 exit)", () => {
+  test("cache_control on every block for an explicit-caching provider — bp1/bp2 (CB5/D5: 2 system blocks, freeing 2 breakpoints for the conversation-tail anchors)", () => {
     const { system, blocks } = buildPrompt(inputs({ cache: EXPLICIT }));
-    expect(system).toHaveLength(3);
+    expect(system).toHaveLength(2);
     for (const message of system) {
       expect(message.annotations?.cacheBreakpoint).toBe(true);
     }
     expect(blocks.every((b) => b.cached)).toBe(true);
   });
 
-  test("mode text is in the agent+mode block (bp2), not the kernel block (bp1)", () => {
+  test("mode text is in the merged agent+mode+project+env block (bp2), not the kernel block (bp1)", () => {
     const plan = buildPrompt(inputs({ mode: "plan" }));
     expect(plan.blocks[0].label).toBe("kernel+tools");
-    expect(plan.blocks[1].label).toBe("agent+mode");
+    expect(plan.blocks[1].label).toBe("agent+mode+project+env");
     expect(plan.blocks[0].content).not.toContain("Mode: plan");
     expect(plan.blocks[1].content).toContain("Mode: plan");
   });
 
-  test("switching mode changes only the agent+mode block's content, not kernel+tools (bp1 stays warm)", () => {
+  test("switching mode changes only bp2's content, not kernel+tools (bp1 stays warm)", () => {
     const agentMode = buildPrompt(inputs({ mode: "agent" }));
     const plan = buildPrompt(inputs({ mode: "plan" }));
     expect(agentMode.blocks[0].content).toBe(plan.blocks[0].content);
@@ -132,12 +132,11 @@ describe("buildPrompt", () => {
     expect(agentMode.hash).not.toBe(plan.hash);
   });
 
-  test("agent body renders in bp2 alongside mode text, never in kernel or project blocks", () => {
+  test("agent body renders in bp2 alongside mode text, never in the kernel block", () => {
     const reviewer = fakeAgent({ name: "reviewer", body: "You review changes you did not write." });
     const { blocks } = buildPrompt(inputs({ agent: reviewer }));
     expect(blocks[1].content).toContain("You review changes you did not write.");
     expect(blocks[0].content).not.toContain("You review changes you did not write.");
-    expect(blocks[2].content).not.toContain("You review changes you did not write.");
   });
 
   test("switching agent (same mode) invalidates only bp2, keeps kernel+tools warm (PS4 exit criterion)", () => {
@@ -167,17 +166,17 @@ describe("buildPrompt", () => {
     expect(blocks[0].content).not.toContain("Your actual toolset this turn");
   });
 
-  test("project knowledge renders in the project block (bp3), with static env, never the kernel block", () => {
+  test("project knowledge renders in bp2, alongside static env, never the kernel block", () => {
     const { blocks } = buildPrompt(inputs({ projectKnowledge: { global: "use bun", project: null } }));
-    expect(blocks[2].label).toBe("project+env");
-    expect(blocks[2].content).toContain("use bun");
+    expect(blocks[1].label).toBe("agent+mode+project+env");
+    expect(blocks[1].content).toContain("use bun");
     expect(blocks[0].content).not.toContain("use bun");
   });
 
-  test("no RAMA.md anywhere still produces a project block (static env alone)", () => {
+  test("no RAMA.md anywhere still produces non-empty bp2 content (static env alone)", () => {
     const { blocks } = buildPrompt(inputs());
-    expect(blocks[2].content.length).toBeGreaterThan(0);
-    expect(blocks[2].content).not.toContain("instructions");
+    expect(blocks[1].content.length).toBeGreaterThan(0);
+    expect(blocks[1].content).not.toContain("instructions");
   });
 });
 

@@ -58,9 +58,9 @@ describe("buildProjectionContext (MD0)", () => {
     expect(a.policy.system).toEqual(b.policy.system);
   });
 
-  test("project() emits exactly the 3 buildPrompt blocks first, in order, before any transcript entry", () => {
+  test("project() emits exactly the 2 buildPrompt blocks first, in order, before any transcript entry (CB5/D5: 2 system blocks)", () => {
     const { promptBlocks, policy } = buildProjectionContext(baseParams());
-    expect(promptBlocks.system).toHaveLength(3);
+    expect(promptBlocks.system).toHaveLength(2);
 
     const transcript: Transcript = {
       entries: [{ kind: "user", id: "u1", text: "hello" }],
@@ -68,8 +68,8 @@ describe("buildProjectionContext (MD0)", () => {
     };
     const wire = project(transcript, policy);
 
-    expect(wire.slice(0, 3)).toEqual(promptBlocks.system);
-    expect(wire[3]).toEqual({ role: "user", content: "hello" });
+    expect(wire.slice(0, 2)).toEqual(promptBlocks.system);
+    expect(wire[2]).toEqual({ role: "user", content: "hello" });
   });
 
   test("cache annotations on the system blocks survive projection untouched (unblocks G2)", () => {

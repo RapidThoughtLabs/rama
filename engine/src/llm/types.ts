@@ -83,11 +83,19 @@ export interface LlmRequest {
 /**
  * docs/LOOP_MIGRATION_PLAN.md §4.4 — the three-bucket breakdown that PS1 §9.3 established.
  * A provider that omits usage details yields cacheReadTokens: 0 (conservative / correct fallback).
+ *
+ * CONTEXT_BUDGET_PLAN.md CB1 — `inputTokens` keeps each provider's raw field verbatim
+ * (Anthropic's `input_tokens` excludes cache; OpenAI's `prompt_tokens` includes it — same field,
+ * opposite meanings, kept only for callers that already accept that ambiguity). `promptTokens` is
+ * the one number with a single meaning on every provider: the full request size, cache reads and
+ * writes included. Anything that needs real context occupancy — the compaction watermark, the
+ * context meter — reads `promptTokens`, never `inputTokens`.
  */
 export interface LlmUsage {
   inputTokens: number;
   outputTokens: number;
-  totalTokens: number;
+  /** Full prompt size, cache-inclusive. The one occupancy number with the same meaning on every provider. */
+  promptTokens: number;
   /** prompt_tokens - cached_tokens */
   noCacheTokens: number;
   /** prompt_tokens_details.cached_tokens ?? 0 */
@@ -105,9 +113,9 @@ export interface LlmUsage {
  * docs/LOOP_MIGRATION_PLAN.md §4.1
  */
 export type LlmEvent =
-  | { type: "text.delta"; text: string }
+  | { type: "text.delta"; text: string; blockIndex?: number }
   /** LM6 — emitted on thinking models; present in protocol but unconsumed until LM6. */
-  | { type: "reasoning.delta"; text: string }
+  | { type: "reasoning.delta"; text: string; blockIndex?: number }
   /**
    * Terminal event for the reasoning stream — emitted once, after the last reasoning.delta.
    * `signature` carries Anthropic's opaque signature (from a `signature_delta` chunk) when the
@@ -116,12 +124,12 @@ export type LlmEvent =
    * provider without one never has to fake a value on every delta.
    * docs/LOOP_MENDING_PLAN.md D6/MD4.
    */
-  | { type: "reasoning.done"; signature?: string }
+  | { type: "reasoning.done"; signature?: string; blockIndex?: number }
   /**
    * Emitted once, whole — arguments are fully accumulated before this fires.
    * docs/LOOP_MIGRATION_PLAN.md §4.1: "Buffer inside the parser and emit once."
    */
-  | { type: "tool_call"; id: string; name: string; input: unknown }
+  | { type: "tool_call"; id: string; name: string; input: unknown; blockIndex?: number }
   | { type: "usage"; usage: LlmUsage }
   | { type: "finish"; reason: WireFinishReason };
 

@@ -63,7 +63,7 @@ describe("OpenAIStreamClient — D5: flush at EOF with no finish_reason", () => 
     const events = await collect(client().stream({ model: "m", messages: [], signal: new AbortController().signal }));
 
     const toolCall = events.find((e) => e.type === "tool_call");
-    expect(toolCall).toEqual({ type: "tool_call", id: "call_1", name: "read", input: { path: "a.ts" } });
+    expect(toolCall).toEqual({ type: "tool_call", id: "call_1", name: "read", input: { path: "a.ts" }, blockIndex: 0 });
     const finish = events.find((e) => e.type === "finish");
     expect(finish).toEqual({ type: "finish", reason: "tool_calls" });
   });
@@ -73,7 +73,7 @@ describe("OpenAIStreamClient — D5: flush at EOF with no finish_reason", () => 
 
     const events = await collect(client().stream({ model: "m", messages: [], signal: new AbortController().signal }));
 
-    expect(events.filter((e) => e.type === "text.delta")).toEqual([{ type: "text.delta", text: "hi" }]);
+    expect(events.filter((e) => e.type === "text.delta")).toEqual([{ type: "text.delta", text: "hi", blockIndex: 0 }]);
     expect(events.at(-1)).toEqual({ type: "finish", reason: "stop" });
   });
 

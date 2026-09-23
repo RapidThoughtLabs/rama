@@ -53,16 +53,15 @@ export interface StepHookContext {
   usageTotals: {
     inputTokens: number;
     outputTokens: number;
-    totalTokens: number;
     noCacheTokens: number;
     cacheReadTokens: number;
     cacheWriteTokens: number;
   };
   /**
-   * The step that just ran's own `usage.inputTokens` — actual context occupancy at request time,
-   * not `usageTotals.totalTokens`'s running sum across every step of the run. This is the only
-   * field contextPressureHook may read for its watermark check.
-   * docs/LOOP_MENDING_PLAN.md D3/MD2.
+   * The step that just ran's own `usage.promptTokens` — actual context occupancy at request time,
+   * never a running sum across every step of the run. This is the only field contextPressureHook
+   * may read for its watermark check.
+   * docs/LOOP_MENDING_PLAN.md D3/MD2; docs/CONTEXT_BUDGET_PLAN.md CB1.
    */
   lastStepInputTokens: number;
   /**
@@ -190,6 +189,7 @@ export const completionGateHook: StepHook = {
   after(ctx) {
     if (
       ctx.stepResult.toolCalls.length === 0 &&
+      !ctx.stepResult.text?.trim() &&
       ctx.checkAvailable &&
       ctx.unverifiedWrites.size > 0
     ) {
@@ -212,9 +212,9 @@ export const completionGateHook: StepHook = {
 /**
  * 7. contextPressure: Preemptive compaction trigger above watermark (LM5)
  *
- * Reads `lastStepInputTokens` — the last request's actual prompt size — never
- * `usageTotals.totalTokens`, which is a running sum across every step of the run and keeps
- * climbing even as real context occupancy shrinks after a compaction (D3). Also refuses to
+ * Reads `lastStepInputTokens` — the last request's actual prompt size — never a running sum
+ * across every step of the run, which keeps climbing even as real context occupancy shrinks
+ * after a compaction (D3). Also refuses to
  * re-fire on a transcript that hasn't grown since the last compaction: compacting again would
  * summarize the same summary, one step's worth of budget for no measurable effect.
  * docs/LOOP_MENDING_PLAN.md D3/MD2.

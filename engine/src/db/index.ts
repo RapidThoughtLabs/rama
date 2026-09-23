@@ -72,3 +72,8 @@ addColumnIfMissing("tool_calls", "result_meta_json", "result_meta_json TEXT");
 // docs/PROMPT_STACK_PLAN.md Phase PS4 — which agent file (engine/src/agent/agents/discover.ts)
 // shapes this chat's bp2 agent block. 'default' is the bundled floor agent, always present.
 addColumnIfMissing("chats", "agent_id", "agent_id TEXT NOT NULL DEFAULT 'default'");
+
+// docs/CONTEXT_BUDGET_PLAN.md CB2 — persists the decay decision (D1: the raw result_content is
+// never mutated) so buildTranscriptFromDb's projection survives a reload instead of re-deriving
+// it from a working copy that dies with the run.
+addColumnIfMissing("tool_calls", "decayed_at", "decayed_at INTEGER");

@@ -22,7 +22,7 @@ export function buildCompletionGateNudgeText(files: ReadonlySet<string>): string
   const note = formatUnverifiedWrites(files) ?? "Files were written this run and have not been verified.";
   return (
     `<system-reminder id="${GATE_TAG}">\n` +
-    `Before finishing: ${note} Run check now, or say plainly why verification doesn't apply here — then finish.\n` +
+    `Before finishing: ${note} Run check now to verify, or say plainly why verification doesn't apply here — then stop. Do not restate or repeat your summary.\n` +
     `</system-reminder>`
   );
 }

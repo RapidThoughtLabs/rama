@@ -28,7 +28,8 @@ describe("buildCompletionGateNudgeText", () => {
   test("renders the nudge with the file list and the check instruction", () => {
     const text = buildCompletionGateNudgeText(new Set(["a.ts"]));
     expect(text).toContain("a.ts");
-    expect(text).toContain("Run check now");
+    expect(text).toContain("Run check now to verify");
+    expect(text).toContain("Do not restate or repeat your summary");
   });
 });
 

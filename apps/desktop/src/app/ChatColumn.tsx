@@ -6,10 +6,13 @@ import { fetchArtifactContent, patchChat, ramaSearch } from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useProvidersData } from "./data/ProvidersProvider";
 import { useSessionData } from "./data/SessionProvider";
+import { useWindowTabsData } from "./data/WindowTabsProvider";
 import { AgentPicker } from "./AgentPicker";
 import { ModelPicker } from "./ModelPicker";
 import { ProviderSetupWizard } from "./ProviderSetupWizard";
 import { DiffView } from "./diff/DiffView";
+import { Markdown } from "./chat/Markdown";
+import { requestOpenFile } from "./mission-control/panes/openFileBridge";
 
 const MODES: { id: ChatMode; label: string }[] = [
   { id: "agent", label: "agent" },
@@ -106,7 +109,9 @@ function ClarifyCard({ toolCall }: { toolCall: ToolCallDTO }) {
         <span className="rama-tool-call-status" style={{ color: "var(--accent)" }}>
           ●
         </span>
-        <span className="rama-tool-call-name">clarify</span>
+        <div className="rama-tool-call-summary">
+          <span className="rama-tool-call-name">clarify</span>
+        </div>
       </div>
       <ol className="rama-clarify-questions">
         {questions.map((q, i) => (
@@ -192,40 +197,44 @@ function ToolCallCard({
         <span className="rama-tool-call-status" style={{ color: dotColor }}>
           ●
         </span>
-        <span className="rama-tool-call-name">{toolCall.name}</span>
-        {(() => {
-          const targetPath = getToolTargetPath(toolCall.name, toolCall.input);
-          const targetLabel = formatToolTarget(toolCall.name, toolCall.input);
-          return (
-            <span
-              className="rama-tool-call-target"
-              style={targetPath ? { cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" } : undefined}
-              title={targetPath ? `Open ${targetPath} in Files pane` : undefined}
-              onClick={
-                targetPath
-                  ? (e) => {
-                      e.stopPropagation();
-                      window.dispatchEvent(new CustomEvent("rama:open-file", { detail: { path: targetPath } }));
-                    }
-                  : undefined
-              }
-            >
-              {targetLabel}
+        <div className="rama-tool-call-summary">
+          <span className="rama-tool-call-name">{toolCall.name}</span>
+          {(() => {
+            const targetPath = getToolTargetPath(toolCall.name, toolCall.input);
+            const targetLabel = formatToolTarget(toolCall.name, toolCall.input);
+            return (
+              <span
+                className="rama-tool-call-target"
+                style={targetPath ? { cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" } : undefined}
+                title={targetPath ? `Open ${targetPath} in Files pane` : undefined}
+                onClick={
+                  targetPath
+                    ? (e) => {
+                        e.stopPropagation();
+                        requestOpenFile(targetPath);
+                      }
+                    : undefined
+                }
+              >
+                {targetLabel}
+              </span>
+            );
+          })()}
+          {hasArtifact && (
+            <span className={`rama-tool-call-chevron${isExpanded ? " rama-tool-call-chevron-open" : ""}`}>
+              ▸
             </span>
-          );
-        })()}
-        {hasArtifact && (
-          <span className={`rama-tool-call-chevron${isExpanded ? " rama-tool-call-chevron-open" : ""}`}>
-            ▸
-          </span>
-        )}
+          )}
+        </div>
       </div>
       <div className="rama-tool-call-result">
-        <span>⎿</span>
-        {toolCall.resultSummary ? renderResultSummary(toolCall.resultSummary) : <span>running…</span>}
+        <span className="rama-tool-call-result-glyph">⎿</span>
+        <div className="rama-tool-call-result-summary">
+          {toolCall.resultSummary ? renderResultSummary(toolCall.resultSummary) : <span>running…</span>}
+        </div>
       </div>
       {isExpanded && hasArtifact && (
-        <div className="rama-tool-call-body">
+        <div className="rama-tool-call-body rama-breakout">
           {kind === "diff" ? (
             <DiffView diff={content} />
           ) : (
@@ -237,8 +246,55 @@ function ToolCallCard({
   );
 }
 
+function ThinkingBlock({
+  text,
+  durationMs,
+  autoExpand,
+}: {
+  text: string;
+  durationMs?: number;
+  autoExpand: boolean;
+}) {
+  const [userToggled, setUserToggled] = useState<boolean | null>(null);
+  const isOpen = userToggled ?? autoExpand;
+
+  return (
+    <details
+      className="rama-thinking-block"
+      open={isOpen}
+      onToggle={(e) => {
+        setUserToggled((e.currentTarget as HTMLDetailsElement).open);
+      }}
+      style={{
+        marginBottom: 6,
+        fontSize: "var(--fs-xs)",
+        color: "rgba(var(--ink), 0.7)",
+        background: "rgba(var(--ink), 0.03)",
+        borderRadius: 4,
+        padding: "4px 8px",
+      }}
+    >
+      <summary style={{ cursor: "pointer", userSelect: "none", fontWeight: 500 }}>
+        {durationMs != null ? formatThinkingDuration(durationMs) : "thinking"}
+      </summary>
+      <div
+        style={{
+          whiteSpace: "pre-wrap",
+          marginTop: 4,
+          paddingLeft: 8,
+          borderLeft: "2px solid rgba(var(--ink), 0.2)",
+        }}
+      >
+        {text}
+      </div>
+    </details>
+  );
+}
+
 export function ChatColumn() {
-  const { projects, allChats, activeChatId } = useProjectsData();
+  const { projects, allChats, activeChatId, draft, viewingDraft, updateDraftText, updateDraftMode, updateDraftModel, updateDraftAgent } =
+    useProjectsData();
+  const { promoteDraft } = useWindowTabsData();
   const { providers, loading: providersLoading } = useProvidersData();
   const {
     messages,
@@ -250,13 +306,21 @@ export function ChatColumn() {
     artifactBuffers,
     pendingPermission,
     sendUserTurn,
+    sendUserTurnTo,
     interrupt,
     approvePermission,
     restoreLastRun,
   } = useSessionData();
 
   const activeChat = allChats.find((c) => c.id === activeChatId);
-  const activeProject = activeChat ? projects.find((p) => p.id === activeChat.projectId) : undefined;
+  // While viewing the draft, `activeChat`/`activeProject` above still point at whichever real
+  // chat was last active (see ProjectsProvider.openDraft — it deliberately never touches
+  // activeChatId) — everything the header and composer rail show has to read the draft's own
+  // project instead, or it'd render that stale chat's mode/model/messages underneath the "new
+  // chat" screen.
+  const draftProject = draft ? projects.find((p) => p.id === draft.projectId) : undefined;
+  const activeProject = viewingDraft ? draftProject : activeChat ? projects.find((p) => p.id === activeChat.projectId) : undefined;
+  const displayChat = viewingDraft ? undefined : activeChat;
 
   const [toolCallOverrides, setToolCallOverrides] = useState<Record<string, boolean>>({});
 
@@ -288,6 +352,36 @@ export function ChatColumn() {
     }
     return map;
   }, [toolCalls]);
+
+  const toolCallsById = useMemo(() => {
+    const map: Record<string, ToolCallDTO> = {};
+    for (const tc of toolCalls) {
+      map[tc.id] = tc;
+    }
+    return map;
+  }, [toolCalls]);
+
+  const renderToolCall = useCallback(
+    (tc: ToolCallDTO) =>
+      tc.name === "clarify" ? (
+        <ClarifyCard key={tc.id} toolCall={tc} />
+      ) : (
+        <ToolCallCard
+          key={tc.id}
+          toolCall={tc}
+          isExpanded={
+            !!tc.artifactId &&
+            (toolCallOverrides[tc.id] !== undefined
+              ? toolCallOverrides[tc.id]!
+              : tc.id === lastToolCallId)
+          }
+          onToggle={() => toggleToolCall(tc.id)}
+          artifact={tc.artifactId ? artifactsById[tc.artifactId] : undefined}
+          streamingBuffer={tc.artifactId ? artifactBuffers[tc.artifactId] : undefined}
+        />
+      ),
+    [toolCallOverrides, lastToolCallId, toggleToolCall, artifactsById, artifactBuffers],
+  );
 
   const [typed, setTyped] = useState("");
   const [mode, setMode] = useState<ChatMode>(activeChat?.mode ?? "agent");
@@ -399,9 +493,30 @@ export function ChatColumn() {
 
   // Resync only on chat switch, not on every activeChat field change — an optimistic mode
   // change (below) shouldn't get clobbered by a stale patchChat response for the same chat.
+  // Keyed off `displayChat` (undefined while viewing the draft) rather than `activeChat` so
+  // switching to "new chat" picks up the draft's own mode instead of showing whatever real
+  // chat's mode was active before — `displayChat?.id` alone already flips on every transition
+  // into and out of the draft screen, since `displayChat` is undefined throughout it.
   useEffect(() => {
-    setMode(activeChat?.mode ?? "agent");
-  }, [activeChat?.id]);
+    setMode(viewingDraft ? (draft?.mode ?? "agent") : (displayChat?.mode ?? "agent"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayChat?.id]);
+
+  // The composer's text follows whichever screen is on display: the draft's own saved text
+  // while viewing it, empty otherwise. This is what makes an unsent "New chat" prompt come back
+  // intact after visiting an old chat and clicking "New chat" again — the draft (and its text)
+  // lives in ProjectsProvider and outlives the navigation, this just resyncs the textarea to it.
+  useEffect(() => {
+    setTyped(viewingDraft ? (draft?.text ?? "") : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewingDraft, activeChatId]);
+
+  // ...and the other direction: while viewing the draft, every keystroke is saved back into it
+  // so it survives navigating away before the first message is sent.
+  useEffect(() => {
+    if (viewingDraft) updateDraftText(typed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typed, viewingDraft]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -414,7 +529,8 @@ export function ChatColumn() {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
-  const isBusy = status.state === "thinking" || status.state === "streaming";
+  // A draft has no run of its own — ignore whatever status the last real chat left behind.
+  const isBusy = !viewingDraft && (status.state === "thinking" || status.state === "streaming");
 
   useEffect(() => {
     if (!isBusy || !status.runStartedAt) return;
@@ -424,6 +540,10 @@ export function ChatColumn() {
 
   function handleModeChange(next: ChatMode) {
     setMode(next);
+    if (viewingDraft) {
+      updateDraftMode(next);
+      return;
+    }
     if (activeChat) {
       patchChat(activeChat.id, { mode: next }).catch((err) => {
         console.error("[rama] failed to persist mode", err);
@@ -432,9 +552,28 @@ export function ChatColumn() {
   }
 
   function submit() {
-    if (!activeChat || isBusy) return;
+    if (isBusy) return;
     const text = typed;
     if (!text.trim()) return;
+
+    // The draft only becomes a real chat now, on its first message — this is the one and only
+    // place that happens. promoteDraft creates it, registers it as this window's tab, and
+    // selects it; sendUserTurnTo (not sendUserTurn) targets that new chat id directly rather
+    // than waiting for `activeChatId` to catch up on the next render.
+    if (viewingDraft) {
+      if (!draft) return;
+      void promoteDraft()
+        .then((chat) => {
+          if (chat) sendUserTurnTo(chat.id, text);
+        })
+        .catch((err) => {
+          console.error("[rama] failed to create chat from draft", err);
+        });
+      setTyped("");
+      return;
+    }
+
+    if (!activeChat) return;
     // docs/TOOL_LAYER_PLAN.md §5.2 — a client-side command, not a model turn: restores the
     // project's files rather than asking the model to do anything.
     if (text.trim() === "/undo") {
@@ -502,8 +641,8 @@ export function ChatColumn() {
     tiles[nextIndex]?.focus();
   }
 
-  const contextUsed = usage?.contextUsed ?? activeChat?.contextUsed ?? 0;
-  const contextMax = usage?.contextMax ?? activeChat?.contextMax ?? 200000;
+  const contextUsed = viewingDraft ? 0 : (usage?.contextUsed ?? activeChat?.contextUsed ?? 0);
+  const contextMax = viewingDraft ? 200000 : (usage?.contextMax ?? activeChat?.contextMax ?? 200000);
   const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
   const elapsedSeconds = status.runStartedAt ? Math.max(0, Math.round((now - status.runStartedAt) / 1000)) : 0;
 
@@ -525,15 +664,19 @@ export function ChatColumn() {
 
       <div className="rama-messages">
         <div className="rama-messages-inner">
-          {messages.length === 0 && !activeChat && (
+          {!viewingDraft && messages.length === 0 && !activeChat && (
             <div className="rama-msg-meta">select or create a chat to get started.</div>
           )}
 
           {/* docs/PROVIDERS_PLAN.md Phase P5 — "first run, which is currently broken: the app
               boots with no keys and a default provider that is not configured, into a chat that
               cannot send. First run routes to this flow instead." providersLoading guards against
-              flashing the wizard for one frame before the initial GET /providers resolves. */}
-          {messages.length === 0 && activeChat && !providersLoading && providers.length === 0 && (
+              flashing the wizard for one frame before the initial GET /providers resolves.
+              `viewingDraft` reaches this same welcome/wizard screen — an unsent draft renders
+              exactly like an empty real chat, it just isn't one yet. And it deliberately ignores
+              `messages`/`activeChat` while true: those still describe whatever real chat was
+              last open, not the blank screen the user is looking at. */}
+          {(viewingDraft || (activeChat && messages.length === 0)) && !providersLoading && providers.length === 0 && (
             <div className="rama-welcome rama-welcome-wizard">
               <Fluke className="rama-welcome-fluke rama-welcome-fluke-sm" />
               <div className="rama-welcome-wizard-title">connect a provider to start chatting</div>
@@ -541,13 +684,13 @@ export function ChatColumn() {
             </div>
           )}
 
-          {messages.length === 0 && activeChat && (providersLoading || providers.length > 0) && (
+          {(viewingDraft || (activeChat && messages.length === 0)) && (providersLoading || providers.length > 0) && (
             <div className="rama-welcome">
               <Fluke className="rama-welcome-fluke" />
             </div>
           )}
 
-          {messages.map((msg) => {
+          {!viewingDraft && messages.map((msg) => {
             if (msg.role === "system") {
               if (dismissedMetaIds.has(msg.id)) return null;
               return (
@@ -579,96 +722,107 @@ export function ChatColumn() {
                   <span className="rama-msg-user-text">{msg.content}</span>
                 </div>
               );
+            const isMessageStreaming = msg.id.startsWith("pending-");
+
+            if (msg.blocks && msg.blocks.length > 0) {
+              let lastThinkingIdx = -1;
+              for (let i = msg.blocks.length - 1; i >= 0; i--) {
+                if (msg.blocks[i].kind === "thinking") {
+                  lastThinkingIdx = i;
+                  break;
+                }
+              }
+
+              return (
+                <div key={msg.id}>
+                  {msg.blocks.map((block, bIdx) => {
+                    if (block.kind === "thinking") {
+                      return (
+                        <ThinkingBlock
+                          key={`th-${bIdx}`}
+                          text={block.text}
+                          durationMs={block.durationMs}
+                          autoExpand={isMessageStreaming && bIdx === lastThinkingIdx && block.durationMs == null}
+                        />
+                      );
+                    }
+                    if (block.kind === "tool") {
+                      const tc = toolCallsById[block.callId];
+                      if (!tc) return null;
+                      return renderToolCall(tc);
+                    }
+                    if (block.kind === "text") {
+                      return (
+                        <div key={`txt-${bIdx}`} className="rama-msg-assistant">
+                          <span className="rama-msg-assistant-glyph">◆</span>
+                          <div className="rama-msg-assistant-text">
+                            <Markdown content={block.text} />
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              );
+            }
+
             return (
               <div key={msg.id}>
-                {(toolCallsByMessage[msg.id] ?? []).map((tc) =>
-                  tc.name === "clarify" ? (
-                    <ClarifyCard key={tc.id} toolCall={tc} />
-                  ) : (
-                    <ToolCallCard
-                      key={tc.id}
-                      toolCall={tc}
-                      isExpanded={
-                        !!tc.artifactId &&
-                        (toolCallOverrides[tc.id] !== undefined
-                          ? toolCallOverrides[tc.id]!
-                          : tc.id === lastToolCallId)
-                      }
-                      onToggle={() => toggleToolCall(tc.id)}
-                      artifact={tc.artifactId ? artifactsById[tc.artifactId] : undefined}
-                      streamingBuffer={tc.artifactId ? artifactBuffers[tc.artifactId] : undefined}
-                    />
-                  ),
-                )}
+                {(toolCallsByMessage[msg.id] ?? []).map(renderToolCall)}
                 {msg.thinking && (
-                  <details
-                    className="rama-thinking-block"
-                    style={{
-                      marginBottom: 6,
-                      fontSize: "var(--fs-xs)",
-                      color: "rgba(var(--ink), 0.7)",
-                      background: "rgba(var(--ink), 0.03)",
-                      borderRadius: 4,
-                      padding: "4px 8px",
-                    }}
-                  >
-                    <summary style={{ cursor: "pointer", userSelect: "none", fontWeight: 500 }}>
-                      {msg.thinkingDurationMs != null ? formatThinkingDuration(msg.thinkingDurationMs) : "thinking"}
-                    </summary>
-                    <div
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        marginTop: 4,
-                        paddingLeft: 8,
-                        borderLeft: "2px solid rgba(var(--ink), 0.2)",
-                      }}
-                    >
-                      {msg.thinking}
-                    </div>
-                  </details>
+                  <ThinkingBlock
+                    text={msg.thinking}
+                    durationMs={msg.thinkingDurationMs ?? undefined}
+                    autoExpand={isMessageStreaming && msg.thinkingDurationMs == null}
+                  />
                 )}
                 {msg.content && (
                   <div className="rama-msg-assistant">
                     <span className="rama-msg-assistant-glyph">◆</span>
-                    <div className="rama-msg-assistant-text">{msg.content}</div>
+                    <div className="rama-msg-assistant-text">
+                      <Markdown content={msg.content} />
+                    </div>
                   </div>
                 )}
               </div>
             );
           })}
 
-          {errorMessage && (
+          {!viewingDraft && errorMessage && (
             <div className="rama-status-line">
               <span style={{ color: "#e5484d" }}>⚠ {errorMessage}</span>
             </div>
           )}
 
-          {pendingPermission && (
+          {!viewingDraft && pendingPermission && (
             <div
               className="rama-tool-call"
               style={{ background: "rgba(var(--warn-rgb),0.06)", border: "1px solid rgba(var(--warn-rgb),0.25)" }}
             >
               <div className="rama-tool-call-head">
-                <span style={{ color: "var(--warn)" }}>●</span>
-                <span className="rama-tool-call-name">permission needed</span>
-                <span className="rama-tool-call-target">
-                  {pendingPermission.tool} {formatToolTarget(pendingPermission.tool, pendingPermission.input)}
-                </span>
+                <span className="rama-tool-call-status" style={{ color: "var(--warn)" }}>●</span>
+                <div className="rama-tool-call-summary">
+                  <span className="rama-tool-call-name">permission needed</span>
+                  <span className="rama-tool-call-target">
+                    {pendingPermission.tool} {formatToolTarget(pendingPermission.tool, pendingPermission.input)}
+                  </span>
+                </div>
               </div>
               {/* docs/MISSION_CONTROL_PLAN.md §8 Phase M4 — "the gate's prompt copy must say the
                   process outlives the turn" (§7.1): approving a background bash call is a
                   materially different ask than a normal one. */}
               {pendingPermission.tool === "bash" && isBackgroundBash(pendingPermission.input) && (
-                <div style={{ fontSize: "var(--fs-xs)", color: "var(--warn)", padding: "2px 0 0 20px" }}>
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--warn)", padding: "2px 0 0 18px" }}>
                   this starts a process that keeps running after you approve — it won't stop when this turn ends.
                 </div>
               )}
               {pendingPermission.tool === "browser" && isBrowserOpen(pendingPermission.input) && (
-                <div style={{ fontSize: "var(--fs-xs)", color: "var(--warn)", padding: "2px 0 0 20px" }}>
+                <div style={{ fontSize: "var(--fs-xs)", color: "var(--warn)", padding: "2px 0 0 18px" }}>
                   this opens a page in the Web pane that stays open after you approve — it can load any URL the agent gives it.
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8, padding: "4px 0 2px 3px" }}>
+              <div style={{ display: "flex", gap: 8, padding: "4px 0 2px 18px" }}>
                 <Button size="sm" onClick={() => approvePermission(pendingPermission.reqId, true)}>
                   approve
                 </Button>
@@ -684,85 +838,98 @@ export function ChatColumn() {
       </div>
 
       <div className="rama-composer-wrap">
-        {searchOpen && (
-          <div className="rama-search-menu">
-            {searchResults.length === 0 ? (
-              <div className="rama-search-menu-empty">{slashTerm ? "no matches" : "type to search tools…"}</div>
-            ) : (
-              (() => {
-                let flatIndex = -1;
-                return groupedSearchResults.map(([domain, items]) => (
-                  <div key={domain}>
-                    <div className="rama-search-menu-group-label">{domain}</div>
-                    {items.map((r) => {
-                      flatIndex += 1;
-                      const i = flatIndex;
-                      return (
-                        <button
-                          key={r.id}
-                          className={`rama-search-menu-item${i === searchIndex ? " rama-search-menu-item-active" : ""}`}
-                          onMouseEnter={() => setSearchIndex(i)}
-                          onClick={() => selectSearchResult(r)}
-                        >
-                          <span className="rama-search-menu-item-title">{r.title}</span>
-                          <span className="rama-search-menu-item-subtitle">{r.subtitle}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ));
-              })()
-            )}
-          </div>
-        )}
-        <div className="rama-composer">
-          <div className="rama-composer-row">
-            <span className="rama-composer-glyph">❯</span>
-            <textarea
-              ref={textareaRef}
-              className="rama-composer-text"
-              style={{
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                resize: "none",
-                font: "inherit",
-                color: "inherit",
-                padding: 0,
-                width: "100%",
-              }}
-              rows={1}
-              placeholder="describe what you want…"
-              value={typed}
-              disabled={!activeChat}
-              onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={() => setComposerFocused(true)}
-              onBlur={() => setComposerFocused(false)}
-            />
-          </div>
-          <div className="rama-composer-rail" ref={railRef} onKeyDown={handleRailKeyDown}>
-            <button
-              type="button"
-              className="rama-tile rama-tile-mode"
-              disabled={!activeChat || isBusy}
-              onClick={() => handleModeChange(nextMode(mode))}
-              title="cycle mode — agent → plan → ask"
-            >
-              {mode}
-            </button>
-            <ModelPicker chat={activeChat} disabled={isBusy} />
-            <AgentPicker chat={activeChat} disabled={isBusy} />
-            <div className="rama-tile-status">
-              {isBusy ? (
-                <>
-                  <span className="rama-status-verb">✻ {status.verb ?? status.state}…</span>
-                  <span className="rama-status-meta">{elapsedSeconds}s · esc</span>
-                  <span className="rama-caret" />
-                </>
+        <div className="rama-composer-inner">
+          {searchOpen && (
+            <div className="rama-search-menu">
+              {searchResults.length === 0 ? (
+                <div className="rama-search-menu-empty">{slashTerm ? "no matches" : "type to search tools…"}</div>
               ) : (
-                <span className={`rama-tile-hint${composerFocused && !typed.trim() ? "" : " rama-tile-hint-hidden"}`}>⇧⏎ nl</span>
+                (() => {
+                  let flatIndex = -1;
+                  return groupedSearchResults.map(([domain, items]) => (
+                    <div key={domain}>
+                      <div className="rama-search-menu-group-label">{domain}</div>
+                      {items.map((r) => {
+                        flatIndex += 1;
+                        const i = flatIndex;
+                        return (
+                          <button
+                            key={r.id}
+                            className={`rama-search-menu-item${i === searchIndex ? " rama-search-menu-item-active" : ""}`}
+                            onMouseEnter={() => setSearchIndex(i)}
+                            onClick={() => selectSearchResult(r)}
+                          >
+                            <span className="rama-search-menu-item-title">{r.title}</span>
+                            <span className="rama-search-menu-item-subtitle">{r.subtitle}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()
               )}
+            </div>
+          )}
+          <div className="rama-composer">
+            <div className="rama-composer-row">
+              <span className="rama-composer-glyph">❯</span>
+              <textarea
+                ref={textareaRef}
+                className="rama-composer-text"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  resize: "none",
+                  font: "inherit",
+                  color: "inherit",
+                  padding: 0,
+                  width: "100%",
+                }}
+                rows={1}
+                placeholder="describe what you want…"
+                value={typed}
+                disabled={!activeChat && !viewingDraft}
+                onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setComposerFocused(false)}
+              />
+            </div>
+            <div className="rama-composer-rail" ref={railRef} onKeyDown={handleRailKeyDown}>
+              <button
+                type="button"
+                className="rama-tile rama-tile-mode"
+                disabled={(!displayChat && !viewingDraft) || isBusy}
+                onClick={() => handleModeChange(nextMode(mode))}
+                title="cycle mode — agent → plan → ask"
+              >
+                {mode}
+              </button>
+              <ModelPicker
+                chat={displayChat}
+                disabled={isBusy}
+                draftValue={viewingDraft ? { providerId: draft?.providerId ?? null, model: draft?.model ?? null } : undefined}
+                onDraftChange={updateDraftModel}
+              />
+              <AgentPicker
+                chat={displayChat}
+                disabled={isBusy}
+                draftProjectId={viewingDraft ? draft?.projectId : undefined}
+                draftAgentId={viewingDraft ? draft?.agentId : undefined}
+                onDraftChange={updateDraftAgent}
+              />
+              <div className="rama-tile-status">
+                {isBusy ? (
+                  <>
+                    <span className="rama-status-verb">✻ {status.verb ?? status.state}…</span>
+                    <span className="rama-status-meta">{elapsedSeconds}s · esc</span>
+                    <span className="rama-caret" />
+                  </>
+                ) : (
+                  <span className={`rama-tile-hint${composerFocused && !typed.trim() ? "" : " rama-tile-hint-hidden"}`}>⇧⏎ nl</span>
+                )}
+              </div>
             </div>
           </div>
         </div>

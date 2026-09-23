@@ -33,6 +33,8 @@ interface AccumulatedCall {
  */
 export class ToolCallAccumulator {
   private calls = new Map<number, AccumulatedCall>();
+  public currentBlockIndex = 0;
+  public lastChannel: "none" | "reasoning" | "text" | "tool" = "none";
 
   absorb(toolCallDeltas: RawToolCallDelta[]): void {
     for (const delta of toolCallDeltas) {
@@ -68,7 +70,7 @@ export class ToolCallAccumulator {
       }
       // Synthesise a call id when the provider omitted it (Ollama quirk)
       const id = call.id || `call_${call.index}`;
-      events.push({ type: "tool_call", id, name: call.name, input });
+      events.push({ type: "tool_call", id, name: call.name, input, blockIndex: this.currentBlockIndex });
     }
     this.calls.clear();
     return events;
@@ -154,7 +156,9 @@ function decodeUsage(raw: RawUsage): LlmUsage {
   return {
     inputTokens,
     outputTokens,
-    totalTokens: raw.total_tokens ?? inputTokens + outputTokens,
+    // CB1 — OpenAI's prompt_tokens is already cache-inclusive, so it doubles directly as the
+    // occupancy number (the same one Anthropic's promptTokens computes by adding cache back in).
+    promptTokens: inputTokens,
     cacheReadTokens,
     cacheWriteTokens: 0,
     noCacheTokens: inputTokens - cacheReadTokens,
@@ -193,21 +197,33 @@ export function decodeFrame(data: string, acc: ToolCallAccumulator): LlmEvent[] 
     const delta = choice.delta;
     if (!delta) continue;
 
-    // Text delta
-    if (delta.content) {
-      events.push({ type: "text.delta", text: delta.content });
-    }
-
     // Reasoning / thinking delta (LM6)
     // Accept both field names: reasoning_content (Together/OpenAI) and reasoning (OpenRouter)
     // docs/LOOP_MIGRATION_PLAN.md §4.6
     const reasoning = delta.reasoning_content ?? delta.reasoning;
     if (reasoning) {
-      events.push({ type: "reasoning.delta", text: reasoning });
+      if (acc.lastChannel !== "reasoning" && acc.lastChannel !== "none") {
+        acc.currentBlockIndex++;
+      }
+      acc.lastChannel = "reasoning";
+      events.push({ type: "reasoning.delta", text: reasoning, blockIndex: acc.currentBlockIndex });
+    }
+
+    // Text delta
+    if (delta.content) {
+      if (acc.lastChannel !== "text" && acc.lastChannel !== "none") {
+        acc.currentBlockIndex++;
+      }
+      acc.lastChannel = "text";
+      events.push({ type: "text.delta", text: delta.content, blockIndex: acc.currentBlockIndex });
     }
 
     // Tool call fragments — absorbed into the accumulator
     if (delta.tool_calls && delta.tool_calls.length > 0) {
+      if (acc.lastChannel !== "tool" && acc.lastChannel !== "none") {
+        acc.currentBlockIndex++;
+      }
+      acc.lastChannel = "tool";
       acc.absorb(delta.tool_calls);
     }
 

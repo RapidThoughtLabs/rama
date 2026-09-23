@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSyn
 import { isAbsolute, relative } from "node:path";
 import type { FileContentDTO, FileEntryDTO } from "@rama/protocol";
 import { resolveInProject } from "../tools/paths";
-import { EXCLUDE_DIRS, listIgnoredDirs } from "../tools/projectFiles";
+import { EXCLUDE_DIRS, listIgnoredDirs, listProjectFiles } from "../tools/projectFiles";
 
 // docs/WORKSPACE_PANES_PLAN.md §6.5 — Files browse & read API (Phase W5).
 
@@ -85,6 +85,34 @@ export async function listDirectory(
   return { entries };
 }
 
+function normalizeRelPath(relPath: string): string {
+  return relPath.replace(/^(\.\/)+/, "").replace(/^\/+/, "");
+}
+
+// A file reference surfaced in the UI (a tool call's raw `path` input, or a path-shaped span in
+// chat prose) is frequently not the exact project-root-relative path our own file tools store —
+// a bare filename, a "./"-prefixed shorthand, or a path relative to whatever directory the model
+// had in mind when it wrote it. Resolve it the same way read.ts's tool-call "did you mean"
+// (suggestNearestPaths) does, but silently when there's exactly one unambiguous match — this is a
+// click-to-open UX, not an error message, so guessing wrong (multiple/no matches) must still fall
+// through to the caller's existing not-found handling rather than silently opening the wrong file.
+async function resolveRelPath(projectPath: string, relPath: string): Promise<string> {
+  const cleaned = normalizeRelPath(relPath);
+  if (existsSync(resolveInProject(projectPath, cleaned))) return cleaned;
+
+  const files = await listProjectFiles(projectPath);
+  const suffixMatches = files.filter((f) => f === cleaned || f.endsWith(`/${cleaned}`));
+  if (suffixMatches.length === 1) return suffixMatches[0]!;
+
+  const base = cleaned.split("/").pop();
+  if (base) {
+    const baseMatches = files.filter((f) => f.split("/").pop() === base);
+    if (baseMatches.length === 1) return baseMatches[0]!;
+  }
+
+  return cleaned;
+}
+
 function isBinaryBuffer(buf: Buffer): boolean {
   const checkLen = Math.min(buf.length, SNIFF_BYTES);
   for (let i = 0; i < checkLen; i++) {
@@ -95,8 +123,9 @@ function isBinaryBuffer(buf: Buffer): boolean {
 
 export async function readFileContent(
   projectPath: string,
-  relPath: string,
+  rawRelPath: string,
 ): Promise<FileContentDTO> {
+  const relPath = await resolveRelPath(projectPath, rawRelPath);
   const absPath = resolveInProject(projectPath, relPath);
 
   // Symlink check: verify symlink target stays inside project

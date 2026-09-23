@@ -5,6 +5,7 @@ import { fetchChanges, fetchProjectFileContent, fetchProjectFiles } from "../../
 import { onProjectEvent } from "../../../engine/ws";
 import { WINDOW_LABEL } from "../../../engine/window";
 import { useProjectsData } from "../../data/ProjectsProvider";
+import { takePendingOpenFile } from "./openFileBridge";
 
 // docs/WORKSPACE_PANES_PLAN.md Phase W6 — Files pane state layer.
 
@@ -368,8 +369,19 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
         expandToPath(ce.detail.path);
         openFile(ce.detail.path, true);
       }
+      takePendingOpenFile();
     }
     window.addEventListener("rama:open-file", handleOpenFile);
+
+    // This provider only mounts while the Files pane is active. A click while some other
+    // pane is showing dispatched its event before we existed to hear it — pick up whatever
+    // AppShell's global listener stashed when it switched the active pane to "files".
+    const pending = takePendingOpenFile();
+    if (pending) {
+      expandToPath(pending);
+      openFile(pending, true);
+    }
+
     return () => window.removeEventListener("rama:open-file", handleOpenFile);
   }, [expandToPath, openFile]);
 
@@ -393,7 +405,22 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
     fetchProjectFileContent(activeProjectId, activeTabPath)
       .then((data) => {
         if (!cancelled) {
-          contentCache.current.set(activeTabPath, data);
+          // The server resolves shorthand/partial references (a tool call's raw path, a
+          // "./"-prefixed link from chat) to the real project-relative path — see
+          // engine/src/files/browse.ts resolveRelPath. Swap the tab over to it so the tab
+          // label, "copy path", and "open externally" all point at a file that actually exists.
+          if (data.path && data.path !== activeTabPath) {
+            const resolvedPath = data.path;
+            contentCache.current.set(resolvedPath, data);
+            const nextTabs = openTabs.map((t) =>
+              t.path === activeTabPath ? { path: resolvedPath, pinned: t.pinned } : t,
+            );
+            setOpenTabs(nextTabs);
+            setActiveTabPath(resolvedPath);
+            saveTabs(nextTabs, resolvedPath);
+          } else {
+            contentCache.current.set(activeTabPath, data);
+          }
           setActiveContent(data);
           setContentLoading(false);
         }

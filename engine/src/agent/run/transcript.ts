@@ -5,8 +5,10 @@
 // and prepareStep.
 // docs/LOOP_MIGRATION_PLAN.md §5, Decision 4.
 
+import type { MessageDTO } from "@rama/protocol";
+import { getLatestCompaction, type CompactionRow } from "../../db/compactions";
 import { getMessageReasoningSignature, listMessages } from "../../db/messages";
-import { listToolCallsForHistory } from "../../db/toolCalls";
+import { listToolCallsForHistory, type ToolCallHistoryEntry } from "../../db/toolCalls";
 import type { CacheStyle } from "../catalog";
 import type { ContentPart, WireMessage } from "../../llm/types";
 import { buildEphemeralMessage } from "../prompt/ephemeral";
@@ -44,7 +46,20 @@ export type TranscriptEntry =
       reasoningSignature?: string;
       calls: { id: string; name: string; input: unknown }[];
     }
-  | { kind: "tool"; callId: string; name: string; ok: boolean; content: string }
+  | {
+      kind: "tool";
+      callId: string;
+      name: string;
+      ok: boolean;
+      content: string;
+      /**
+       * CB3 — the tool's own short human summary (e.g. "snapshot of https://x — 47 interactive
+       * elements"), carried alongside `content` so decay (live, compact.ts) and the DB projection
+       * (buildTranscriptFromDb) can both build the same named placeholder from it instead of a
+       * generic string. Not sent on the wire — `project()` only reads `content`.
+       */
+      summary?: string;
+    }
   | { kind: "summary"; id: string; covers: string[]; fields: CompactionFields }
   | {
       kind: "injected";
@@ -96,20 +111,51 @@ export interface ProjectionPolicy {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a fresh Transcript from the database for a chat.
- * Replaces the toModelMessages() DB query logic.
- * docs/LOOP_MIGRATION_PLAN.md §5
+ * CB2/CB3 — placeholder text for a durably-decayed tool result. D1: `result_content` in the DB
+ * is never touched; this is generated fresh at projection time from the flag (plus whatever
+ * summary the tool itself produced), so the human transcript (which reads `result_content`
+ * directly, not through this function) keeps showing the real result. Named after what was
+ * dropped whenever a summary is available — "[Decayed: snapshot of https://x — 47 interactive
+ * elements]" — not a generic string, so a model that reads it knows a snapshot *was* there and
+ * re-snapshots instead of assuming nothing was. Shares the "[Decayed:"/"[Superseded" prefix
+ * convention compact.ts's decayTranscript uses, so a second decay pass over already-decayed
+ * content is a no-op rather than double-counting it.
  */
-export function buildTranscriptFromDb(chatId: string): Transcript {
-  const callsByMessage = new Map<string, ReturnType<typeof listToolCallsForHistory>>();
-  for (const call of listToolCallsForHistory(chatId)) {
-    const list = callsByMessage.get(call.messageId) ?? [];
-    list.push(call);
-    callsByMessage.set(call.messageId, list);
-  }
+export function decayedPlaceholder(name: string, summary?: string | null): string {
+  return summary ? `[Decayed: ${summary}]` : `[Decayed: ${name} result cleared]`;
+}
 
+/**
+ * Pure: already-loaded DB rows -> transcript entries. This is the actual projection seam (D2) —
+ * `buildTranscriptFromDb` below is just its DB-reading shell, kept separate so the projection
+ * logic is testable without a database. Handles both durable flags CB2 introduces:
+ *
+ * - A message with `seq <= compaction.boundarySeq` (and everything it covers) collapses into a
+ *   single "summary" entry the first time the boundary is crossed, per D2/D1 — the compaction
+ *   decision is honoured on every load, not just the run that made it.
+ * - A tool call with `decayedAt` set (and not itself covered by a compaction) projects a
+ *   placeholder instead of its real content, per D1 — the bytes are never touched, only this
+ *   projection substitutes.
+ *
+ * docs/CONTEXT_BUDGET_PLAN.md CB2.
+ */
+export function projectTranscriptEntries(
+  messages: readonly MessageDTO[],
+  callsByMessage: ReadonlyMap<string, readonly ToolCallHistoryEntry[]>,
+  compaction: CompactionRow | null,
+): TranscriptEntry[] {
   const entries: TranscriptEntry[] = [];
-  for (const m of listMessages(chatId)) {
+  let summaryInserted = false;
+
+  for (const m of messages) {
+    if (compaction && m.seq <= compaction.boundarySeq) {
+      if (!summaryInserted) {
+        entries.push({ kind: "summary", id: compaction.id, covers: compaction.coveredIds, fields: compaction.fields });
+        summaryInserted = true;
+      }
+      continue;
+    }
+
     if (m.role === "user") {
       entries.push({ kind: "user", id: m.id, text: m.content ?? "" });
       continue;
@@ -150,17 +196,41 @@ export function buildTranscriptFromDb(chatId: string): Transcript {
       calls: calls.map((c) => ({ id: c.id, name: c.name, input: c.input })),
     });
 
-    // Each tool call has its own result entry
+    // Each tool call has its own result entry — a decayed call (CB2) projects a placeholder
+    // instead of its real content; the call itself is never dropped, so it stays paired with the
+    // assistant entry above (no orphan tool_result risk).
     for (const call of calls) {
       entries.push({
         kind: "tool",
         callId: call.id,
         name: call.name,
         ok: !!call.ok,
-        content: call.resultContent ?? call.resultSummary ?? (call.ok ? "" : "tool call failed"),
+        content: call.decayedAt
+          ? decayedPlaceholder(call.name, call.resultSummary)
+          : (call.resultContent ?? call.resultSummary ?? (call.ok ? "" : "tool call failed")),
+        summary: call.resultSummary ?? undefined,
       });
     }
   }
+
+  return entries;
+}
+
+/**
+ * Build a fresh Transcript from the database for a chat.
+ * Replaces the toModelMessages() DB query logic.
+ * docs/LOOP_MIGRATION_PLAN.md §5; docs/CONTEXT_BUDGET_PLAN.md CB2.
+ */
+export function buildTranscriptFromDb(chatId: string): Transcript {
+  const callsByMessage = new Map<string, ToolCallHistoryEntry[]>();
+  for (const call of listToolCallsForHistory(chatId)) {
+    const list = callsByMessage.get(call.messageId) ?? [];
+    list.push(call);
+    callsByMessage.set(call.messageId, list);
+  }
+
+  const compaction = getLatestCompaction(chatId);
+  const entries = projectTranscriptEntries(listMessages(chatId), callsByMessage, compaction);
 
   return {
     entries,
@@ -234,26 +304,39 @@ export function formatSummary(fields: CompactionFields): string {
  * Absorbs in a fixed order:
  * 1. Entry-to-message expansion (assistant with calls + tool result messages)
  * 2. Summary entries rendering in place of what they cover
- * 3. Injected entries landing at their defined positions (todo reminder after last user message)
- * 4. Cache breakpoint on the last durable message
- * 5. Ephemeral block trailing everything
+ * 3. Injected entries landing at their defined positions
+ * 4. Two cache breakpoints on the conversation side: the last durable message, and the previous
+ *    turn's last durable message (CB5/D5) — see below.
+ * 5. The todo reminder, pinned at a fixed position (after the two anchors, uncached) instead of
+ *    spliced into the middle of the durable entries (CB5)
+ * 6. Ephemeral block trailing everything
  *
  * docs/LOOP_MIGRATION_PLAN.md §5
  */
 export function project(t: Transcript, policy: ProjectionPolicy): WireMessage[] {
   const wire: WireMessage[] = [];
 
-  // The assembled system stack (kernel+tools, agent+mode, project+env) always leads, verbatim,
+  // The assembled system stack (kernel+tools, agent+mode+project+env) always leads, verbatim,
   // annotations intact. docs/LOOP_MENDING_PLAN.md MD0 — this is what D1 discarded.
   if (policy.system) {
     wire.push(...policy.system);
   }
+  const systemCount = wire.length;
 
   let todoInjected: Extract<TranscriptEntry, { kind: "injected" }> | null = null;
+  // CB5/D5 — the second cache anchor: the wire index of the last durable message of the *previous*
+  // turn, captured the instant before a new "user" entry is pushed. Fixed for the rest of this
+  // turn (unlike the ever-advancing "last message" anchor below), so every step of the current
+  // turn re-marks the exact same position the previous turn's own last step wrote a cache entry
+  // at — the mechanism that makes step 2+ of a turn a cache hit instead of a cold prefix.
+  let previousTurnBoundaryWireIndex: number | null = null;
 
   for (const entry of t.entries) {
     switch (entry.kind) {
       case "user": {
+        if (wire.length > systemCount) {
+          previousTurnBoundaryWireIndex = wire.length - 1;
+        }
         wire.push({ role: "user", content: entry.text });
         break;
       }
@@ -299,7 +382,7 @@ export function project(t: Transcript, policy: ProjectionPolicy): WireMessage[] 
       }
       case "injected": {
         if (entry.tag === "todo") {
-          // Handled below — positioned specifically after the last user message
+          // Handled below — pinned at a fixed position (CB5), not rendered inline here.
           todoInjected = entry;
           break;
         }
@@ -311,38 +394,32 @@ export function project(t: Transcript, policy: ProjectionPolicy): WireMessage[] 
     }
   }
 
-  // Position todo reminder after the last user message (same position withTodoReminder used)
-  if (todoInjected) {
-    let lastUserIdx = -1;
-    for (let i = wire.length - 1; i >= 0; i--) {
-      if (wire[i].role === "user") {
-        lastUserIdx = i;
-        break;
-      }
-    }
-    const todoMsg: WireMessage = { role: "user", content: todoInjected.text };
-    if (lastUserIdx !== -1) {
-      wire.splice(lastUserIdx + 1, 0, todoMsg);
-    } else {
-      wire.push(todoMsg);
+  // Explicit cache breakpoints (CB5/D5): the last durable message, and the previous turn's last
+  // durable message. `systemCount` excludes the leading system stack — an empty transcript (system
+  // blocks only) must not re-mark a system block that buildPrompt already annotated. Computed
+  // *before* the todo reminder is appended below so a reminder that changes every step never
+  // perturbs either anchor's position or content — it sits entirely outside the cached prefix,
+  // the same treatment the ephemeral block already gets.
+  // docs/PROMPT_STACK_PLAN.md §4.2 PS1/PS2, docs/LOOP_MIGRATION_PLAN.md §4.3
+  function markCacheBreakpoint(idx: number): void {
+    const msg = wire[idx];
+    wire[idx] = { ...msg, annotations: { ...msg.annotations, cacheBreakpoint: true } };
+  }
+  if (policy.cacheStyle === "explicit" && wire.length > systemCount) {
+    markCacheBreakpoint(wire.length - 1);
+    if (previousTurnBoundaryWireIndex != null) {
+      markCacheBreakpoint(previousTurnBoundaryWireIndex);
     }
   }
 
-  // Explicit cache breakpoint: mark the LAST durable message before the ephemeral block.
-  // `systemCount` excludes the leading system stack — an empty transcript (system blocks only)
-  // must not re-mark a system block that buildPrompt already annotated.
-  // docs/PROMPT_STACK_PLAN.md §4.2 PS1/PS2, docs/LOOP_MIGRATION_PLAN.md §4.3
-  const systemCount = policy.system?.length ?? 0;
-  if (policy.cacheStyle === "explicit" && wire.length > systemCount) {
-    const lastIdx = wire.length - 1;
-    const last = wire[lastIdx];
-    wire[lastIdx] = {
-      ...last,
-      annotations: {
-        ...last.annotations,
-        cacheBreakpoint: true,
-      },
-    };
+  // CB5 — the todo reminder is pinned at a fixed position (the end of the durable transcript,
+  // uncached) instead of spliced in right after the last user message. Splicing into the middle
+  // shifted every entry between there and the tail on every step the reminder's presence or
+  // content changed, perturbing what would otherwise be a stable, cacheable prefix; appending it
+  // here keeps it outside the cached region entirely; same reasoning as the ephemeral block below.
+  if (todoInjected) {
+    const role = todoInjected.role === "system" && !policy.supportsMidConversationSystem ? "user" : todoInjected.role;
+    wire.push({ role, content: todoInjected.text });
   }
 
   // Trailing ephemeral block (layer 7) — always last, uncached, never carries cacheBreakpoint.

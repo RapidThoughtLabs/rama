@@ -11,7 +11,7 @@ import { createArtifact } from "../../db/artifacts";
 import { getChat, recordUsage, stubTitleFromFirstMessage } from "../../db/chats";
 import { appendMessage, finalizeMessage } from "../../db/messages";
 import { getProject } from "../../db/projects";
-import { finalizeOrphanedToolCalls } from "../../db/toolCalls";
+import { finalizeOrphanedToolCalls, markToolCallDecayed } from "../../db/toolCalls";
 import { getProvider, providerRequiresKey, type ProviderRow } from "../../db/providers";
 import { getSetting } from "../../db/settings";
 import { createDiagnosticRunner } from "../../diagnostics";
@@ -59,7 +59,7 @@ import {
   type Transcript,
 } from "./transcript";
 import { clearSteeringQueue, enqueueSteeringMessage, runStepHooks } from "./hooks";
-import { compactTranscript } from "./compact";
+import { compactTranscript, decayTranscript } from "./compact";
 
 const DEFAULT_TITLE = "New Chat";
 
@@ -214,20 +214,12 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
     return;
   }
 
-  const assistantMessage = appendMessage(chatId, { role: "assistant", content: null });
-
   const model = chat.model ?? chatRole.model;
   const controller = new AbortController();
   activeRuns.set(chatId, controller);
   const runId = newId();
 
   let toolCtx: ToolCtx | undefined;
-  let fullText = "";
-  let fullThinking = "";
-  // D6/MD4 — the run's single DB message row collapses every step's reasoning into one string
-  // (same as fullThinking); last-write-wins matches that same collapse for the signature that
-  // must ride with it.
-  let fullReasoningSignature: string | undefined;
   let terminalState: TerminalState = "completed";
   let blockedOnQuestion = false;
   let overflowRetried = false;
@@ -241,14 +233,22 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
   const stepsHistory: StepLike[] = [];
   const unverifiedWrites = new Set<string>();
 
+  // D3/CB1 — billing counters, additive across steps: each step is a real, separately-billed
+  // request. Never used for occupancy — see lastPromptTokens below.
   const usageTotals = {
     inputTokens: 0,
     outputTokens: 0,
     noCacheTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
-    totalTokens: 0,
   };
+  // D3/CB1 — occupancy is a last-value, never a sum: successive steps re-send a growing overlap
+  // of the same history, so summing per-step prompt sizes counts the same bytes once per round
+  // trip. This is CB1's fix for defect 5 (the context meter reading ~5x the real final size) and,
+  // via lastStepInputTokens below, defect 3 (the compaction watermark never firing on Anthropic).
+  let lastPromptTokens = 0;
+
+  let doneEmitted = false;
 
   try {
     const client = resolveClient(providerRow, model, apiKey);
@@ -329,7 +329,24 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
         unverifiedWrites: formatUnverifiedWrites(unverifiedWrites),
       });
 
-      // 3. Execute step
+      // 3. Decay (D4/CB3) — pure, local, free; runs every step, unlike compaction which stays
+      // rare. Persists what it decides (CB2's decayed_at) so the projection survives a reload
+      // instead of dying with this run like the rest of the working-copy transcript.
+      const decayResult = decayTranscript(transcript);
+      const decayedAt = Date.now();
+      for (const callId of decayResult.decayedCallIds) {
+        markToolCallDecayed(callId, decayedAt);
+      }
+
+      // 4. CB6 — this step's own durable assistant row. Created before executeStep (not after)
+      // because step.ts's createToolCall needs a message_id to attach tool calls to while the
+      // step is still streaming. Replaces the one-row-per-turn model: every step gets its own
+      // row with an ascending seq, its own text/thinking/blocks, and its own tool calls —
+      // buildTranscriptFromDb (already written per-row, see transcript.ts) reproduces this
+      // directly instead of collapsing a whole turn into one row on reload.
+      const stepMessage = appendMessage(chatId, { role: "assistant", content: null });
+
+      // 5. Execute step
       const isCompactionRetryStep = pendingCompactionRetryStep;
       pendingCompactionRetryStep = false;
       let stepResult: ReturnType<typeof executeStep> extends Promise<infer R> ? R : never;
@@ -337,7 +354,8 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
         stepResult = await executeStep({
           chatId,
           runId,
-          assistantMessageId: assistantMessage.id,
+          stepIndex: stepsHistory.length,
+          assistantMessageId: stepMessage.id,
           client,
           model,
           transcript,
@@ -369,28 +387,43 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
             tokensSaved: compactionResult.tokensSaved,
           });
           broadcast(chatId, { type: "status", state: "thinking", verb: "thinking" });
+          // stepMessage never got a result (the request failed before streaming started) — it
+          // stays content: null forever, which projectTranscriptEntries already treats as "an
+          // interrupted turn with nothing to replay" and skips on the next reload.
           continue; // retry the same step with compacted transcript!
         }
         throw reclassifyCompactionRetryError(err, isCompactionRetryStep);
       }
 
-      if (stepResult.text) {
-        fullText += stepResult.text;
-      }
-      if (stepResult.reasoning) {
-        fullThinking += stepResult.reasoning;
-      }
-      if (stepResult.reasoningSignature) {
-        fullReasoningSignature = stepResult.reasoningSignature;
-      }
+      // Persists stepMessage with this step's own content — called once eagerly right here (so a
+      // later throw in hooks/compaction never loses it, same durability the old single-row model
+      // only got at the very end of the whole run) and again, overwriting, if a branch below has
+      // an extra note (a stop reason or truncation notice) to append.
+      const finalizeStep = (extraNote?: string): void => {
+        let text = stepResult.text;
+        const blocks = stepResult.blocks.slice();
+        if (extraNote) {
+          text += (text ? "\n\n" : "") + extraNote;
+          blocks.push({ kind: "text", text: extraNote, stepIndex: stepsHistory.length, blockIndex: blocks.length });
+          broadcast(chatId, {
+            type: "message.delta",
+            runId,
+            text: extraNote,
+            stepIndex: stepsHistory.length,
+            blockIndex: blocks.length - 1,
+          });
+        }
+        finalizeMessage(stepMessage.id, text || null, stepResult.reasoning || null, stepResult.reasoningSignature, blocks.length > 0 ? blocks : undefined);
+      };
+      finalizeStep(); // eager save
 
-      // Accumulate usage
+      // Accumulate usage (billing — additive) and record occupancy (last-value, per D3/CB1)
       usageTotals.inputTokens += stepResult.usage.inputTokens;
       usageTotals.outputTokens += stepResult.usage.outputTokens;
       usageTotals.noCacheTokens += stepResult.usage.noCacheTokens;
       usageTotals.cacheReadTokens += stepResult.usage.cacheReadTokens;
       usageTotals.cacheWriteTokens += stepResult.usage.cacheWriteTokens;
-      usageTotals.totalTokens += stepResult.usage.totalTokens;
+      lastPromptTokens = stepResult.usage.promptTokens;
 
       // Track step for loop guard
       stepsHistory.push({
@@ -411,7 +444,9 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
         unverifiedWrites,
         checkAvailable,
         usageTotals,
-        lastStepInputTokens: stepResult.usage.inputTokens,
+        // CB1 — promptTokens, not the raw provider field: on Anthropic inputTokens excludes cache
+        // read/write, so the watermark could never be reached once caching was live (defect 3).
+        lastStepInputTokens: stepResult.usage.promptTokens,
         compactionGuard: { entryCountAtLastCompaction: lastCompactionEntryCount, currentEntryCount: transcript.entries.length },
         contextMax: chat.contextMax,
       });
@@ -422,8 +457,7 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
           blockedOnQuestion = true;
         }
         if (verdict.note) {
-          fullText += (fullText ? "\n\n" : "") + verdict.note;
-          broadcast(chatId, { type: "message.delta", runId, text: verdict.note });
+          finalizeStep(verdict.note);
         }
         break;
       }
@@ -468,9 +502,7 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
       // D8: a `length` finish means the model hit its output token cap mid-answer — it did not
       // choose to stop, so this is not "completed". docs/LOOP_MENDING_PLAN.md D8/MD1.
       if (stepResult.finishReason === "length") {
-        const note = "\n\n[Response cut off: the model hit its output token limit.]";
-        fullText += note;
-        broadcast(chatId, { type: "message.delta", runId, text: note });
+        finalizeStep("\n\n[Response cut off: the model hit its output token limit.]");
         terminalState = "stopped-output-truncated";
         break;
       }
@@ -483,26 +515,32 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
       terminalState = "stopped-by-budget";
     }
 
-    // Finalize assistant message
-    finalizeMessage(assistantMessage.id, fullText || null, fullThinking || null, fullReasoningSignature);
-    broadcast(chatId, { type: "message.done", runId });
+    // CB6 — every step already persisted its own row via finalizeStep above (eagerly, and again
+    // with any stop/truncation note); nothing left to finalize here. message.done is still a
+    // once-per-run signal for the frontend's live-streaming "pending" bubble (SessionProvider.tsx),
+    // which is built entirely from broadcast events and never reads DB row boundaries.
+    if (!doneEmitted) {
+      broadcast(chatId, { type: "message.done", runId });
+      doneEmitted = true;
+    }
 
     // Cost & usage accounting
-    const { inputTokens, outputTokens, noCacheTokens, cacheReadTokens, cacheWriteTokens, totalTokens: contextUsed } = usageTotals;
+    const { inputTokens, outputTokens, noCacheTokens, cacheReadTokens, cacheWriteTokens } = usageTotals;
     const { usd: costUsd } = estimateCostUsdDetailed(
       providerId,
       model,
       { noCacheTokens, cacheReadTokens, cacheWriteTokens },
       outputTokens
     );
-    recordUsage(chatId, { contextUsed, costUsd });
+    // CB1 — occupancy is the last step's promptTokens, never the turn's summed input (defect 5).
+    recordUsage(chatId, { contextUsed: lastPromptTokens, costUsd });
     clearModelError(providerId, model);
 
     broadcast(chatId, {
       type: "usage.update",
       inputTokens,
       outputTokens,
-      contextUsed,
+      contextUsed: lastPromptTokens,
       contextMax: chat.contextMax,
       cacheReadTokens,
       cacheWriteTokens,
@@ -530,8 +568,15 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
     }
   } catch (err) {
     const aborted = controller.signal.aborted;
-    finalizeMessage(assistantMessage.id, fullText || null, fullThinking || null, fullReasoningSignature);
-    broadcast(chatId, { type: "message.done", runId });
+    // CB6 — whatever step was in flight when this was thrown already had its row eagerly
+    // finalized (finalizeStep, called right after executeStep returns) or, if executeStep itself
+    // threw, was never given content in the first place — content: null, skipped on reload the
+    // same way an interrupted turn with nothing to replay always has been. Nothing to finalize
+    // here; message.done still needs to fire once so the frontend's pending bubble resolves.
+    if (!doneEmitted) {
+      broadcast(chatId, { type: "message.done", runId });
+      doneEmitted = true;
+    }
 
     if (aborted) {
       terminalState = "interrupted-by-user";
@@ -576,8 +621,11 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
     // D11/MD3 — the terminal state is known by now regardless of exit path (normal completion,
     // interrupt, or error), so this is the one place that can finalize every tool_calls row this
     // run left unfinalized, naming the real cause instead of letting it replay as "tool call
-    // failed" on the next turn.
-    finalizeOrphanedToolCalls(assistantMessage.id, describeOrphanedToolCallCause(terminalState));
+    // failed" on the next turn. CB6 — scoped to the whole chat, not one message id: a run now
+    // spans several assistant rows (one per step), and activeRuns' one-run-per-chat invariant
+    // means any tool_calls row still `ok IS NULL` for this chat belongs to this run, regardless
+    // of which step's row it's attached to.
+    finalizeOrphanedToolCalls(chatId, describeOrphanedToolCallCause(terminalState));
   }
 }
 

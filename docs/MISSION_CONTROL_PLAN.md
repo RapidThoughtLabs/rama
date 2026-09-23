@@ -597,6 +597,15 @@ this model" rather than failing.
 Gated by the existing `web` `PermissionTool`, which is already in the protocol
 and settings UI and has had no corresponding tool until now.
 
+**Amended 2026-09-14 — `docs/AGENT_BROWSER_PLAN.md` (AB0–AB7) supersedes this
+phase's tool surface.** M6 shipped `browser` read-only, and the paragraph above
+describing `snapshot` as a screenshot is now wrong: `snapshot` is renamed to mean
+the accessibility/ref tree (AB2) and screenshots move to `screenshot` (AB6). The
+`web` permission rule stated here still governs read ops, but action ops
+(`click`/`type`/`press`/`scroll`, AB4) split off it — loopback auto-allows,
+everything else asks. §9 Risk 1 (`unstable` API churn) and §9 Risk 3's
+"first response wins" rule both grow in that document's §9.
+
 ---
 
 ## 9. Risk register

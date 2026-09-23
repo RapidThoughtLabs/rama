@@ -184,6 +184,10 @@ const deleteChatTx = db.transaction((id: string) => {
   db.query("DELETE FROM artifacts WHERE chat_id = ?").run(id);
   db.query("DELETE FROM tool_calls WHERE chat_id = ?").run(id);
   db.query("DELETE FROM file_reads WHERE chat_id = ?").run(id);
+  // docs/CONTEXT_BUDGET_PLAN.md CB4 — compactions rows exist for real once compactTranscript
+  // persists them; with `PRAGMA foreign_keys = ON` (db/index.ts) the DELETE FROM chats below would
+  // otherwise throw a foreign key violation the first time a compacted chat is deleted.
+  db.query("DELETE FROM compactions WHERE chat_id = ?").run(id);
   db.query("DELETE FROM messages WHERE chat_id = ?").run(id);
   db.query("DELETE FROM chats WHERE id = ?").run(id);
 });

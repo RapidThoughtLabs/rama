@@ -30,6 +30,37 @@ function resolvePermissionRule(projectId: string, tool: PermissionTool): Permiss
   return projectOverride[tool] ?? global[tool] ?? "ask";
 }
 
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"]);
+
+export function isLoopbackOrigin(origin: string | undefined): boolean {
+  if (!origin) return false;
+  try {
+    const hostname = new URL(origin).hostname;
+    return LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
+
+// The DB-free half of resolveBrowserActionRule below, split out so it's testable without a real
+// settings/project store — see permissions.test.ts.
+export function decideBrowserActionRule(explicit: PermissionRule | undefined, origin: string | undefined): PermissionRule {
+  if (explicit) return explicit;
+  return isLoopbackOrigin(origin) ? "allow" : "ask";
+}
+
+// AGENT_BROWSER_PLAN.md AB4 §"Permissions, in this phase" — action ops (click/type/press/scroll)
+// are not `web`-read: loopback origins auto-allow, everything else resolves `ask` regardless of
+// the `web` rule, unless a project or global setting explicitly names a `browser_action` rule
+// (checked first, same override precedence every other tool already has). `origin` comes from
+// browserBridge.ts's `getPageOrigin`, which is best-effort (built from response traffic, not a
+// live read of the page) — see that file's own comment on the approximation.
+export function resolveBrowserActionRule(projectId: string, origin: string | undefined): PermissionRule {
+  const global: PermissionSettings = { ...DEFAULT_PERMISSIONS, ...(getSetting<PermissionSettings>("permissions") ?? {}) };
+  const projectOverride = getProjectPermissions(projectId) ?? {};
+  return decideBrowserActionRule(projectOverride.browser_action ?? global.browser_action, origin);
+}
+
 // Pending `ask`-mode approvals, keyed by reqId — resolved from server.ts's approvePermission
 // WS handler, or auto-denied if the run's AbortController fires while we're waiting.
 const pending = new Map<string, (approve: boolean) => void>();
@@ -107,15 +138,21 @@ async function runSafely(run: () => Promise<ToolResult>): Promise<ToolResult> {
 // model can see it and adapt, and `run()`'s own errors are caught here too for the same reason.
 export async function gate(
   ctx: ToolCtx,
-  opts: { name: string; input: unknown; risk: ToolRisk },
+  // `rule`, when passed, replaces the `permissionToolFor`/`resolvePermissionRule` lookup this
+  // function would otherwise do — AGENT_BROWSER_PLAN.md AB4's action ops compute their rule from
+  // the target page's origin (resolveBrowserActionRule), not from a static per-tool setting, and
+  // there's no clean way to express "look it up, but with different logic" through `name` alone.
+  opts: { name: string; input: unknown; risk: ToolRisk; rule?: PermissionRule },
   run: () => Promise<ToolResult>,
 ): Promise<ToolResult> {
   if (opts.risk === "high") {
     if (ctx.mode === "plan") {
       return { ok: false, summary: "blocked: plan mode is read-only" };
     }
-    const tool = permissionToolFor(opts.name);
-    const rule = tool ? resolvePermissionRule(ctx.projectId, tool) : null;
+    const rule = opts.rule ?? (() => {
+      const tool = permissionToolFor(opts.name);
+      return tool ? resolvePermissionRule(ctx.projectId, tool) : null;
+    })();
     if (rule === "deny") {
       return { ok: false, summary: `blocked: ${opts.name} is disabled in permission settings` };
     }

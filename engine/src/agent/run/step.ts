@@ -3,6 +3,7 @@
 // Single step execution: project -> stream -> accumulate -> execute tools.
 // docs/LOOP_MIGRATION_PLAN.md §6.3
 
+import type { ChatBlock } from "@rama/protocol";
 import { createToolCall, finalizeToolCall } from "../../db/toolCalls";
 import type { LlmClient, LlmUsage, WireFinishReason, WireTool } from "../../llm/types";
 import type { RamaToolSet } from "../../tools/define";
@@ -28,6 +29,7 @@ export const PARALLEL_TOOL_ALLOWLIST = new Set([
 export interface StepContext {
   chatId: string;
   runId: string;
+  stepIndex: number;
   assistantMessageId: string;
   client: LlmClient;
   model: string;
@@ -48,6 +50,7 @@ export interface StepResult {
   toolCalls: { id: string; name: string; input: unknown }[];
   usage: LlmUsage;
   blockedOnQuestion: boolean;
+  blocks: ChatBlock[];
 }
 
 interface QueuedToolCall {
@@ -139,23 +142,35 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
   let stepReasoningSignature: string | undefined;
   let thinkingStartTime: number | null = null;
   let thinkingDone = false;
+  let thinkingBlockIndex = 0;
   let finishReason: WireFinishReason = "unknown";
   let sawFirstChunk = false;
   let blockedOnQuestion = false;
   const queuedCalls: QueuedToolCall[] = [];
+  const stepBlocks: ChatBlock[] = [];
+  let activeThinkingBlock: (ChatBlock & { kind: "thinking" }) | null = null;
 
   const maybeFinishThinking = () => {
     if (thinkingStartTime !== null && !thinkingDone) {
       thinkingDone = true;
       const durationMs = Date.now() - thinkingStartTime;
-      broadcast(ctx.chatId, { type: "thinking.done", runId: ctx.runId, durationMs });
+      if (activeThinkingBlock) {
+        activeThinkingBlock.durationMs = durationMs;
+      }
+      broadcast(ctx.chatId, {
+        type: "thinking.done",
+        runId: ctx.runId,
+        durationMs,
+        stepIndex: ctx.stepIndex,
+        blockIndex: thinkingBlockIndex,
+      });
     }
   };
 
   let stepUsage: LlmUsage = {
     inputTokens: 0,
     outputTokens: 0,
-    totalTokens: 0,
+    promptTokens: 0,
     noCacheTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
@@ -175,7 +190,20 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
           broadcast(ctx.chatId, { type: "status", state: "streaming", verb: "responding" });
         }
         stepText += event.text;
-        broadcast(ctx.chatId, { type: "message.delta", runId: ctx.runId, text: event.text });
+        const bIdx = event.blockIndex ?? 0;
+        let lastBlock = stepBlocks[stepBlocks.length - 1];
+        if (!lastBlock || lastBlock.kind !== "text" || lastBlock.blockIndex !== bIdx) {
+          lastBlock = { kind: "text", text: "", stepIndex: ctx.stepIndex, blockIndex: bIdx };
+          stepBlocks.push(lastBlock);
+        }
+        lastBlock.text += event.text;
+        broadcast(ctx.chatId, {
+          type: "message.delta",
+          runId: ctx.runId,
+          text: event.text,
+          stepIndex: ctx.stepIndex,
+          blockIndex: bIdx,
+        });
         break;
       }
       case "reasoning.delta": {
@@ -183,7 +211,25 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
           thinkingStartTime = Date.now();
         }
         stepReasoning += event.text;
-        broadcast(ctx.chatId, { type: "thinking.delta", runId: ctx.runId, text: event.text });
+        const bIdx = event.blockIndex ?? 0;
+        thinkingBlockIndex = bIdx;
+        if (!activeThinkingBlock || activeThinkingBlock.blockIndex !== bIdx) {
+          activeThinkingBlock = {
+            kind: "thinking",
+            text: "",
+            stepIndex: ctx.stepIndex,
+            blockIndex: bIdx,
+          };
+          stepBlocks.push(activeThinkingBlock);
+        }
+        activeThinkingBlock.text += event.text;
+        broadcast(ctx.chatId, {
+          type: "thinking.delta",
+          runId: ctx.runId,
+          text: event.text,
+          stepIndex: ctx.stepIndex,
+          blockIndex: bIdx,
+        });
         break;
       }
       case "reasoning.done": {
@@ -195,6 +241,14 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
         if (event.name === "clarify") {
           blockedOnQuestion = true;
         }
+        const bIdx = event.blockIndex ?? stepBlocks.length;
+        const toolBlock: ChatBlock = {
+          kind: "tool",
+          callId: event.id,
+          stepIndex: ctx.stepIndex,
+          blockIndex: bIdx,
+        };
+        stepBlocks.push(toolBlock);
         createToolCall({
           id: event.id,
           messageId: ctx.assistantMessageId,
@@ -209,6 +263,8 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
           name: event.name,
           input: event.input,
           ts: Date.now(),
+          stepIndex: ctx.stepIndex,
+          blockIndex: bIdx,
         });
         broadcast(ctx.chatId, { type: "status", state: "tool", verb: `running ${event.name}` });
         queuedCalls.push({ id: event.id, name: event.name, input: event.input });
@@ -257,6 +313,7 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
           name: call.name,
           ok: out?.ok ?? false,
           content: out?.content ?? out?.summary ?? "",
+          summary: out?.summary,
         });
       }
     } else {
@@ -271,6 +328,7 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
           name: call.name,
           ok: out?.ok ?? false,
           content: out?.content ?? out?.summary ?? "",
+          summary: out?.summary,
         });
       }
     }
@@ -286,5 +344,6 @@ export async function executeStep(ctx: StepContext): Promise<StepResult> {
     toolCalls: queuedCalls,
     usage: stepUsage,
     blockedOnQuestion,
+    blocks: stepBlocks,
   };
 }

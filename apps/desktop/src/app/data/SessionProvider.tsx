@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ArtifactDTO, MessageDTO, SessionStatusState, ToolCallDTO } from "@rama/protocol";
+import type { ArtifactDTO, ChatBlock, MessageDTO, SessionStatusState, ToolCallDTO } from "@rama/protocol";
 import { fetchArtifacts, fetchMessages, fetchToolCalls, undoLastRun } from "../../engine/client";
 import { onEvent, send } from "../../engine/ws";
 import { useProjectsData } from "./ProjectsProvider";
@@ -46,6 +46,11 @@ interface SessionDataValue {
   artifactBuffers: Record<string, string>;
   pendingPermission: PendingPermission | null;
   sendUserTurn: (text: string) => void;
+  /** Same as `sendUserTurn`, but for a chat that isn't `activeChatId` yet — a chat this render
+   *  just created from a draft, before the `selectChat` that made it active has re-rendered.
+   *  Subscribes first so the run's events aren't missed (engine/src/server.ts's `broadcast`
+   *  only reaches sockets that called `subscribeChat` for that chat id). */
+  sendUserTurnTo: (chatId: string, text: string) => void;
   interrupt: () => void;
   approvePermission: (reqId: string, approve: boolean) => void;
   /** docs/TOOL_LAYER_PLAN.md §5.2 — `/undo`: restores the project's files to the state before
@@ -63,6 +68,7 @@ interface PendingAssistantMessage {
   thinking?: string;
   /** Set once `thinking.done` arrives — docs/LOOP_MENDING_PLAN.md D9/MD6. */
   thinkingDurationMs?: number;
+  blocks: ChatBlock[];
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -99,6 +105,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // mid-loop) must still leave its tool-call cards visible — see message.done below.
   const hadToolCallsByRunIdRef = useRef<Record<string, boolean>>({});
 
+  // Mirror of pending assistant message buffer per chat outside React state.
+  // docs/CHAT_VIEW_PLAN.md CV0 — reading pending message from a ref at `message.done` lets
+  // appendLocalMessage be called as an ordinary sequential action rather than inside the
+  // setPendingByChat updater, preventing React.StrictMode from appending the message twice.
+  const pendingByChatRef = useRef<Record<string, PendingAssistantMessage | undefined>>({});
+
   // Single global listener for the whole app-lifetime WS connection; every event carries its
   // own chatId (see engine/src/ws.ts's broadcast envelope), so this doesn't need to know which
   // chat is "active" — it just files events under the chat they belong to.
@@ -116,15 +128,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             createdAt: event.ts,
           }));
           break;
-        case "run.started":
+        case "run.started": {
           activeRunIdByChatRef.current = { ...activeRunIdByChatRef.current, [chatId]: event.runId };
           setStatusByChat((prev) => ({ ...prev, [chatId]: { state: "thinking", runStartedAt: event.ts } }));
           setErrorByChat((prev) => ({ ...prev, [chatId]: undefined }));
           // Seeded empty (not on first text delta) so a stable `pending-${runId}` message id
           // exists from the start of the run for tool-call cards to attach to, even if the
           // run's first step is a tool call with no text before it.
-          setPendingByChat((prev) => ({ ...prev, [chatId]: { runId: event.runId, text: "" } }));
+          const initialPending: PendingAssistantMessage = { runId: event.runId, text: "", blocks: [] };
+          pendingByChatRef.current[chatId] = initialPending;
+          setPendingByChat((prev) => ({ ...prev, [chatId]: initialPending }));
           break;
+        }
         case "status":
           setStatusByChat((prev) => ({
             ...prev,
@@ -139,59 +154,149 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             setPendingPermissionByChat((prev) => (prev[chatId] ? { ...prev, [chatId]: undefined } : prev));
           }
           break;
-        case "thinking.delta":
-          setPendingByChat((prev) => {
-            const existing = prev[chatId];
-            const thinking =
-              existing && existing.runId === event.runId
-                ? (existing.thinking ?? "") + event.text
-                : event.text;
-            return {
-              ...prev,
-              [chatId]: { runId: event.runId, text: existing?.text ?? "", thinking },
+        case "thinking.delta": {
+          const existing = pendingByChatRef.current[chatId];
+          const thinking =
+            existing && existing.runId === event.runId
+              ? (existing.thinking ?? "") + event.text
+              : event.text;
+
+          const stepIndex = event.stepIndex ?? 0;
+          const blockIndex = event.blockIndex ?? 0;
+          const nextBlocks: ChatBlock[] = existing && existing.runId === event.runId ? [...existing.blocks] : [];
+          const matchIdx = nextBlocks.findIndex(
+            (b) => b.kind === "thinking" && b.stepIndex === stepIndex && b.blockIndex === blockIndex,
+          );
+
+          if (matchIdx !== -1) {
+            const current = nextBlocks[matchIdx] as ChatBlock & { kind: "thinking" };
+            nextBlocks[matchIdx] = {
+              ...current,
+              text: current.text + event.text,
             };
-          });
+          } else {
+            nextBlocks.push({
+              kind: "thinking",
+              text: event.text,
+              stepIndex,
+              blockIndex,
+            });
+          }
+
+          const nextPending: PendingAssistantMessage = {
+            runId: event.runId,
+            text: existing?.text ?? "",
+            thinking,
+            thinkingDurationMs: existing?.thinkingDurationMs,
+            blocks: nextBlocks,
+          };
+          pendingByChatRef.current[chatId] = nextPending;
+          setPendingByChat((prev) => ({
+            ...prev,
+            [chatId]: nextPending,
+          }));
           break;
-        case "message.delta":
-          setPendingByChat((prev) => {
-            const existing = prev[chatId];
-            const text = existing && existing.runId === event.runId ? existing.text + event.text : event.text;
-            return {
-              ...prev,
-              [chatId]: { runId: event.runId, text, thinking: existing?.thinking, thinkingDurationMs: existing?.thinkingDurationMs },
+        }
+        case "message.delta": {
+          const existing = pendingByChatRef.current[chatId];
+          const text = existing && existing.runId === event.runId ? existing.text + event.text : event.text;
+
+          const stepIndex = event.stepIndex ?? 0;
+          const blockIndex = event.blockIndex ?? 0;
+          const nextBlocks: ChatBlock[] = existing && existing.runId === event.runId ? [...existing.blocks] : [];
+          const matchIdx = nextBlocks.findIndex(
+            (b) => b.kind === "text" && b.stepIndex === stepIndex && b.blockIndex === blockIndex,
+          );
+
+          if (matchIdx !== -1) {
+            const current = nextBlocks[matchIdx] as ChatBlock & { kind: "text" };
+            nextBlocks[matchIdx] = {
+              ...current,
+              text: current.text + event.text,
             };
-          });
+          } else {
+            nextBlocks.push({
+              kind: "text",
+              text: event.text,
+              stepIndex,
+              blockIndex,
+            });
+          }
+
+          const nextPending: PendingAssistantMessage = {
+            runId: event.runId,
+            text,
+            thinking: existing?.thinking,
+            thinkingDurationMs: existing?.thinkingDurationMs,
+            blocks: nextBlocks,
+          };
+          pendingByChatRef.current[chatId] = nextPending;
+          setPendingByChat((prev) => ({
+            ...prev,
+            [chatId]: nextPending,
+          }));
           break;
+        }
         // docs/LOOP_MENDING_PLAN.md D9/MD6 — was previously falling into `default: break`, so the
         // reasoning phase never had a visible end: the collapsible block stayed labeled "thinking"
         // forever, live or after reload alike, with no sign the model had actually finished.
-        case "thinking.done":
-          setPendingByChat((prev) => {
-            const existing = prev[chatId];
-            if (!existing || existing.runId !== event.runId) return prev;
-            return { ...prev, [chatId]: { ...existing, thinkingDurationMs: event.durationMs } };
-          });
+        case "thinking.done": {
+          const existing = pendingByChatRef.current[chatId];
+          if (existing && existing.runId === event.runId) {
+            const nextBlocks: ChatBlock[] = [...existing.blocks];
+            const stepIndex = event.stepIndex;
+            const blockIndex = event.blockIndex;
+            let matchIdx = -1;
+            if (stepIndex != null && blockIndex != null) {
+              matchIdx = nextBlocks.findIndex(
+                (b) => b.kind === "thinking" && b.stepIndex === stepIndex && b.blockIndex === blockIndex,
+              );
+            }
+            if (matchIdx === -1) {
+              for (let i = nextBlocks.length - 1; i >= 0; i--) {
+                if (nextBlocks[i].kind === "thinking") {
+                  matchIdx = i;
+                  break;
+                }
+              }
+            }
+            if (matchIdx !== -1) {
+              const current = nextBlocks[matchIdx] as ChatBlock & { kind: "thinking" };
+              nextBlocks[matchIdx] = { ...current, durationMs: event.durationMs };
+            }
+            const nextPending: PendingAssistantMessage = {
+              ...existing,
+              thinkingDurationMs: event.durationMs,
+              blocks: nextBlocks,
+            };
+            pendingByChatRef.current[chatId] = nextPending;
+            setPendingByChat((prev) => ({ ...prev, [chatId]: nextPending }));
+          }
           break;
+        }
         case "message.done": {
           const hadToolCalls = hadToolCallsByRunIdRef.current[event.runId] ?? false;
           delete hadToolCallsByRunIdRef.current[event.runId];
+          const pending = pendingByChatRef.current[chatId];
+          delete pendingByChatRef.current[chatId];
+
+          // A turn that ended on a tool call with no closing text still needs its message row
+          // materialized — otherwise the re-tag below points tool-call cards at a message id
+          // that was never created, and they vanish the instant the run finishes.
+          if (pending && (pending.text || hadToolCalls || pending.thinking || (pending.blocks && pending.blocks.length > 0))) {
+            appendLocalMessage(chatId, (seq) => ({
+              id: `local-${event.runId}`,
+              chatId,
+              seq,
+              role: "assistant",
+              content: pending.text,
+              thinking: pending.thinking ?? null,
+              thinkingDurationMs: pending.thinkingDurationMs,
+              blocks: pending.blocks,
+              createdAt: Date.now(),
+            }));
+          }
           setPendingByChat((prev) => {
-            const pending = prev[chatId];
-            // A turn that ended on a tool call with no closing text still needs its message row
-            // materialized — otherwise the re-tag below points tool-call cards at a message id
-            // that was never created, and they vanish the instant the run finishes.
-            if (pending && (pending.text || hadToolCalls || pending.thinking)) {
-              appendLocalMessage(chatId, (seq) => ({
-                id: `local-${event.runId}`,
-                chatId,
-                seq,
-                role: "assistant",
-                content: pending.text,
-                thinking: pending.thinking ?? null,
-                thinkingDurationMs: pending.thinkingDurationMs,
-                createdAt: Date.now(),
-              }));
-            }
             if (!(chatId in prev)) return prev;
             const next = { ...prev };
             delete next[chatId];
@@ -250,6 +355,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           const runId = activeRunIdByChatRef.current[chatId];
           const messageId = runId ? `pending-${runId}` : `pending-unknown`;
           if (runId) hadToolCallsByRunIdRef.current[runId] = true;
+
+          const existing = pendingByChatRef.current[chatId];
+          if (existing) {
+            const nextBlocks = [...existing.blocks];
+            const alreadyHas = nextBlocks.some((b) => b.kind === "tool" && b.callId === event.callId);
+            if (!alreadyHas) {
+              nextBlocks.push({
+                kind: "tool",
+                callId: event.callId,
+                stepIndex: event.stepIndex,
+                blockIndex: event.blockIndex,
+              });
+            }
+            const nextPending: PendingAssistantMessage = {
+              ...existing,
+              blocks: nextBlocks,
+            };
+            pendingByChatRef.current[chatId] = nextPending;
+            setPendingByChat((prev) => ({ ...prev, [chatId]: nextPending }));
+          }
+
           setToolCallsByChat((prev) => {
             const list = prev[chatId] ?? [];
             const entry: ToolCallDTO = {
@@ -383,6 +509,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [activeChatId],
   );
 
+  const sendUserTurnTo = useCallback((chatId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    void send({ type: "subscribeChat", chatId });
+    void send({ type: "sendUserTurn", chatId, text: trimmed });
+  }, []);
+
   const interrupt = useCallback(() => {
     if (!activeChatId) return;
     void send({ type: "interrupt", chatId: activeChatId });
@@ -433,6 +566,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       content: pending.text,
       thinking: pending.thinking ?? null,
       thinkingDurationMs: pending.thinkingDurationMs,
+      blocks: pending.blocks,
       createdAt: Date.now(),
     };
     return [...base, pendingMessage];
@@ -450,6 +584,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       artifactBuffers,
       pendingPermission: (activeChatId && pendingPermissionByChat[activeChatId]) || null,
       sendUserTurn,
+      sendUserTurnTo,
       interrupt,
       approvePermission,
       restoreLastRun,
@@ -466,6 +601,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       artifactBuffers,
       pendingPermissionByChat,
       sendUserTurn,
+      sendUserTurnTo,
       interrupt,
       approvePermission,
       restoreLastRun,

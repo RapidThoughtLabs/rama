@@ -10,6 +10,7 @@ import {
   deleteProject as deleteProjectApi,
   fetchChats,
   fetchGeneralSettings,
+  fetchModelRoles,
   fetchProjects,
   patchChat,
   updateProject as updateProjectApi,
@@ -25,6 +26,19 @@ import { WINDOW_LABEL } from "../../engine/window";
 // active chat.
 const ACTIVE_CHAT_STORAGE_KEY = `rama.activeChatId.${WINDOW_LABEL}`;
 
+// A chat that doesn't exist on the engine yet — "New chat" opens this instead of creating a
+// real ChatDTO up front, so clicking it repeatedly (or with nothing typed) never litters the
+// sidebar with empty chats. It's promoted into a real chat (see WindowTabsProvider.promoteDraft)
+// only once the user actually sends a first message.
+export interface DraftChat {
+  projectId: string;
+  text: string;
+  mode: ChatMode;
+  providerId: string | null;
+  model: string | null;
+  agentId: string;
+}
+
 export interface ProjectsDataValue {
   loading: boolean;
   error: string | null;
@@ -33,11 +47,23 @@ export interface ProjectsDataValue {
   allChats: ChatDTO[];
   activeChatId: string | null;
   activeProjectId: string | null;
+  draft: DraftChat | null;
+  viewingDraft: boolean;
   selectChat: (chatId: string) => void;
+  openDraft: (projectId: string) => void;
+  updateDraftText: (text: string) => void;
+  updateDraftMode: (mode: ChatMode) => void;
+  updateDraftModel: (providerId: string, model: string) => void;
+  updateDraftAgent: (agentId: string) => void;
+  clearDraft: () => void;
   addProject: (input: { name: string; path: string }) => Promise<ProjectDTO>;
   updateProject: (projectId: string, patch: UpdateProjectInput) => Promise<ProjectDTO>;
   removeProject: (projectId: string) => Promise<void>;
-  addChat: (projectId: string, backend?: BackendConfig) => Promise<ChatDTO>;
+  addChat: (
+    projectId: string,
+    backend?: BackendConfig,
+    options?: { select?: boolean; mode?: ChatMode; providerId?: string; model?: string; agentId?: string },
+  ) => Promise<ChatDTO>;
   removeChat: (chatId: string) => Promise<void>;
   applyChatPatch: (chat: ChatDTO) => void;
 }
@@ -52,6 +78,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // At most one draft at a time (docs/CHATVIEW — "New chat" no longer creates a real chat up
+  // front). `draft` survives navigating away to a real chat so the composer text comes back
+  // intact; `viewingDraft` is just "is the draft the thing on screen right now."
+  const [draft, setDraft] = useState<DraftChat | null>(null);
+  const [viewingDraft, setViewingDraft] = useState(false);
+
   // docs/REDESIGN_PLAN.md Phase R4 — General pane's "default chat mode", applied to chats created
   // via addChat below. Loaded once; the Settings modal writes straight through the engine, so a
   // change only takes effect for chats created after this provider next mounts (a fresh window).
@@ -60,6 +92,20 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     fetchGeneralSettings()
       .then((s) => setDefaultMode(s.defaultMode))
       .catch((err) => console.error("[rama] failed to load default chat mode", err));
+  }, []);
+
+  // The same "chat" model role the engine falls back to when a chat is created without an
+  // explicit providerId/model (engine/src/db/chats.ts's createChat) — loaded here purely so a
+  // fresh draft's model tile has something real to show instead of sitting on "no model" until
+  // the first message is sent and a real ChatDTO exists to read it from.
+  const [defaultChatRole, setDefaultChatRole] = useState<{ providerId: string; model: string } | null>(null);
+  useEffect(() => {
+    fetchModelRoles()
+      .then((roles) => {
+        const chatRole = roles.chat;
+        if (chatRole) setDefaultChatRole({ providerId: chatRole.providerId, model: chatRole.modelId });
+      })
+      .catch((err) => console.error("[rama] failed to load default chat model", err));
   }, []);
 
   // Tracks the theme values we last pushed onto the chrome (from selecting a chat or from
@@ -82,14 +128,18 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   );
 
   const activeProjectId = useMemo(() => {
+    if (viewingDraft && draft) return draft.projectId;
     const chat = allChats.find((c) => c.id === activeChatId);
     if (chat) return chat.projectId;
     return projects[0]?.id ?? null;
-  }, [activeChatId, allChats, projects]);
+  }, [activeChatId, allChats, projects, viewingDraft, draft]);
 
   const selectChat = useCallback(
     (chatId: string) => {
       setActiveChatId(chatId);
+      // Selecting a real chat always leaves the draft screen — but keeps the draft itself (and
+      // whatever the user had typed into it) around so "New chat" can hand it right back.
+      setViewingDraft(false);
       window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, chatId);
       const chat = allChats.find((c) => c.id === chatId);
       if (chat) {
@@ -99,6 +149,54 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     },
     [allChats, applyTheme],
   );
+
+  // "New chat": resumes the existing draft rather than starting a second one, and is a no-op if
+  // the draft is already the thing on screen. Never touches the engine — nothing is persisted,
+  // and nothing shows up in the sidebar's chat history, until promoteDraft runs.
+  //
+  // The existing draft is resumed as long as it's for the same project, or has unsent text worth
+  // not throwing away — an empty draft left over from a different project (e.g. "new chat here"
+  // on another project, never typed into) is safe to just replace with a fresh one instead.
+  const openDraft = useCallback(
+    (projectId: string) => {
+      if (viewingDraft) return;
+      setDraft((prev) =>
+        prev && (prev.projectId === projectId || prev.text.trim())
+          ? prev
+          : {
+              projectId,
+              text: "",
+              mode: defaultMode,
+              providerId: defaultChatRole?.providerId ?? null,
+              model: defaultChatRole?.model ?? null,
+              agentId: "default",
+            },
+      );
+      setViewingDraft(true);
+    },
+    [viewingDraft, defaultMode, defaultChatRole],
+  );
+
+  const updateDraftText = useCallback((text: string) => {
+    setDraft((prev) => (prev ? { ...prev, text } : prev));
+  }, []);
+
+  const updateDraftMode = useCallback((mode: ChatMode) => {
+    setDraft((prev) => (prev ? { ...prev, mode } : prev));
+  }, []);
+
+  const updateDraftModel = useCallback((providerId: string, model: string) => {
+    setDraft((prev) => (prev ? { ...prev, providerId, model } : prev));
+  }, []);
+
+  const updateDraftAgent = useCallback((agentId: string) => {
+    setDraft((prev) => (prev ? { ...prev, agentId } : prev));
+  }, []);
+
+  const clearDraft = useCallback(() => {
+    setDraft(null);
+    setViewingDraft(false);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,10 +308,22 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addChat = useCallback(
-    async (projectId: string, backend?: BackendConfig) => {
-      const chat = await createChatApi(projectId, { title: "new chat", themeId, mode: defaultMode, backend });
+    async (
+      projectId: string,
+      backend?: BackendConfig,
+      options?: { select?: boolean; mode?: ChatMode; providerId?: string; model?: string; agentId?: string },
+    ) => {
+      const chat = await createChatApi(projectId, {
+        title: "new chat",
+        themeId,
+        mode: options?.mode ?? defaultMode,
+        backend,
+        providerId: options?.providerId,
+        model: options?.model,
+        agentId: options?.agentId,
+      });
       setChatsByProject((prev) => ({ ...prev, [projectId]: [chat, ...(prev[projectId] ?? [])] }));
-      selectChat(chat.id);
+      if (options?.select !== false) selectChat(chat.id);
       return chat;
     },
     [themeId, defaultMode, selectChat],
@@ -251,7 +361,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       allChats,
       activeChatId,
       activeProjectId,
+      draft,
+      viewingDraft,
       selectChat,
+      openDraft,
+      updateDraftText,
+      updateDraftMode,
+      updateDraftModel,
+      updateDraftAgent,
+      clearDraft,
       addProject,
       updateProject,
       removeProject,
@@ -267,7 +385,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       allChats,
       activeChatId,
       activeProjectId,
+      draft,
+      viewingDraft,
       selectChat,
+      openDraft,
+      updateDraftText,
+      updateDraftMode,
+      updateDraftModel,
+      updateDraftAgent,
+      clearDraft,
       addProject,
       updateProject,
       removeProject,

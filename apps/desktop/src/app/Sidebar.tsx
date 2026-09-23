@@ -44,14 +44,16 @@ export function Sidebar({
     chatsByProject,
     activeChatId,
     activeProjectId,
+    viewingDraft,
     selectChat,
+    openDraft,
     addProject,
     updateProject,
     removeProject,
     removeChat,
     loading,
   } = useProjectsData();
-  const { tabs, windowLabel, openNewTab, adoptChat } = useWindowTabsData();
+  const { tabs, windowLabel, adoptChat } = useWindowTabsData();
   const { cycleTheme } = useTheme();
   const { push: pushToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
@@ -310,7 +312,7 @@ export function Sidebar({
       <div
         key={chat.id}
         role="option"
-        aria-selected={chat.id === activeChatId}
+        aria-selected={!viewingDraft && chat.id === activeChatId}
         className="rama-chat-row"
         onClick={() => handleChatClick(chat.id)}
         onContextMenu={(e) => {
@@ -362,7 +364,7 @@ export function Sidebar({
           className="rama-project-menu-item"
           onClick={() => {
             setOpenMenuProjectId(null);
-            openNewTab(project.id);
+            openDraft(project.id);
           }}
         >
           new chat here
@@ -430,9 +432,9 @@ export function Sidebar({
 
         <div className="rama-sidebar-nav">
           <button
-            className="rama-sidebar-nav-row"
+            className={`rama-sidebar-nav-row ${viewingDraft ? "rama-sidebar-nav-row-active" : ""}`}
             disabled={!activeProjectId}
-            onClick={() => activeProjectId && openNewTab(activeProjectId)}
+            onClick={() => activeProjectId && openDraft(activeProjectId)}
           >
             <span className="rama-sidebar-nav-row-glyph">
               <IconPlus />

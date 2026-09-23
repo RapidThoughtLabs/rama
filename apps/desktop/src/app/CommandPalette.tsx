@@ -56,8 +56,8 @@ export function CommandPalette({
   }, [open]);
 
   const { cycleTheme } = useTheme();
-  const { allChats, activeProjectId } = useProjectsData();
-  const { tabs, activeTabId, selectTab, openNewTab, adoptChat, popOutTab } = useWindowTabsData();
+  const { allChats, activeProjectId, openDraft } = useProjectsData();
+  const { tabs, activeTabId, selectTab, adoptChat, popOutTab } = useWindowTabsData();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -101,7 +101,7 @@ export function CommandPalette({
       }
       if (meta && key === "n") {
         e.preventDefault();
-        if (activeProjectId) void openNewTab(activeProjectId);
+        if (activeProjectId) openDraft(activeProjectId);
         return;
       }
       if (meta && e.shiftKey && key === "o") {
@@ -137,7 +137,7 @@ export function CommandPalette({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("rama:toggle-palette", onToggle);
     };
-  }, [activeProjectId, activeTabId, tabs, openNewTab, popOutTab, selectTab, onOpenSettings, onSelectPane, onToggleRail]);
+  }, [activeProjectId, activeTabId, tabs, openDraft, popOutTab, selectTab, onOpenSettings, onSelectPane, onToggleRail]);
 
   useEffect(() => {
     if (!open) return;
@@ -188,7 +188,7 @@ export function CommandPalette({
         title: "new chat",
         subtitle: "start a new chat in the active project",
         run: () => {
-          if (activeProjectId) void openNewTab(activeProjectId);
+          if (activeProjectId) openDraft(activeProjectId);
         },
       },
       { id: "act:theme", title: "cycle theme", run: cycleTheme },
@@ -226,7 +226,7 @@ export function CommandPalette({
   }, [
     allChats,
     activeProjectId,
-    openNewTab,
+    openDraft,
     cycleTheme,
     onTogglePanel,
     onOpenSettings,

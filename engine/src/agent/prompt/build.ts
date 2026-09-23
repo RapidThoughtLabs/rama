@@ -15,11 +15,14 @@ import { generateToolInventory } from "./toolInventory";
 // docs/PROMPT_STACK_PLAN.md Phase PS0/PS1/PS2/PS3/PS4 — the assembly seam. Pure and synchronous:
 // every input is already fetched by the caller (loop.ts), nothing here does I/O or touches the
 // DB, and the same inputs always produce the same bytes (asserted by build.test.ts). §4.2's
-// breakpoint layout is now real: block 1 is bp1 (tools+kernel — deliberately NOT narrowed by
-// agent/mode; loop.ts narrows the separate `tools` object it hands to streamText, so switching
-// agent never touches this block), block 2 is bp2 (agent + mode together, per §4.1's layer table:
-// "system block 2 (with agent)"), block 3 is bp3 (project + static env). bp4 is the conversation
-// tail, marked separately by prompt/cache.ts.
+// breakpoint layout: block 1 is bp1 (tools+kernel — deliberately NOT narrowed by agent/mode;
+// loop.ts narrows the separate `tools` object it hands to streamText, so switching agent never
+// touches this block), block 2 is bp2 (agent + mode + project + static env, merged into one block
+// per docs/CONTEXT_BUDGET_PLAN.md CB5/D5 — these all change at the same frequency (per chat, per
+// project), so splitting them into separate breakpoints was never buying a partial hit, only
+// spending two of Anthropic's 4-breakpoint budget. CB5 spends the freed slot on a second
+// conversation-tail cache anchor instead). bp3/bp4 are the two conversation-tail anchors, marked
+// by transcript.ts's project().
 export interface PromptInputs {
   /** Already sorted by name (toolInventory.ts's sortTools) — every tool the harness has, NOT
    *  narrowed by mode/agent. bp1's inventory is a stable build-level capability list on purpose
@@ -57,15 +60,19 @@ export function buildPrompt(inputs: PromptInputs): PromptBlocks {
 
   const kernelContent = [KERNEL_PROMPT, generateToolInventory(inputs.tools), inputs.hekuManifest].filter(Boolean).join("\n\n");
   const toolsNote = formatEffectiveToolsNote(inputs.effectiveToolNames, Object.keys(inputs.tools));
-  const agentModeContent = [buildAgentBlock(inputs.agent), buildModeBlock(inputs.mode), toolsNote].filter(Boolean).join("\n\n");
-  const projectContent = [formatStaticEnv(inputs.staticEnv), formatProjectKnowledge(inputs.projectKnowledge)]
+  const agentModeProjectContent = [
+    buildAgentBlock(inputs.agent),
+    buildModeBlock(inputs.mode),
+    toolsNote,
+    formatStaticEnv(inputs.staticEnv),
+    formatProjectKnowledge(inputs.projectKnowledge),
+  ]
     .filter(Boolean)
     .join("\n\n");
 
   const blocks: PromptBlock[] = [
     { label: "kernel+tools", content: kernelContent, cached },
-    { label: "agent+mode", content: agentModeContent, cached },
-    { label: "project+env", content: projectContent, cached },
+    { label: "agent+mode+project+env", content: agentModeProjectContent, cached },
   ];
 
   const system: WireMessage[] = blocks.map((b) => ({

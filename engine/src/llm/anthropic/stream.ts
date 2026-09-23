@@ -3,6 +3,7 @@
 // Anthropic Messages API streaming transport: fetch + wire SSE reader + decoder.
 // docs/LOOP_MIGRATION_PLAN.md §4.1, §4.5, LM7
 
+import { logContextBudgetStep } from "../contextBudgetLog";
 import { readSSE } from "../sse";
 import { LlmError } from "../types";
 import type { LlmClient, LlmEvent, LlmRequest } from "../types";
@@ -62,6 +63,7 @@ export class AnthropicStreamClient implements LlmClient {
     }
 
     const body = encodeRequest(req);
+    const bodyJson = JSON.stringify(body);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
@@ -77,7 +79,7 @@ export class AnthropicStreamClient implements LlmClient {
       response = await fetch(`${this.baseUrl}/v1/messages`, {
         method: "POST",
         headers,
-        body: JSON.stringify(body),
+        body: bodyJson,
         signal: req.signal,
       });
     } catch (err) {
@@ -127,5 +129,17 @@ export class AnthropicStreamClient implements LlmClient {
         { cause: err }
       );
     }
+
+    logContextBudgetStep({
+      provider: "anthropic",
+      model: req.model,
+      messageCount: body.messages.length,
+      requestBytes: bodyJson.length,
+      inputTokens: acc.usage.inputTokens,
+      promptTokens: acc.usage.promptTokens,
+      cacheReadTokens: acc.usage.cacheReadTokens,
+      cacheWriteTokens: acc.usage.cacheWriteTokens,
+      outputTokens: acc.usage.outputTokens,
+    });
   }
 }

@@ -74,11 +74,11 @@ function encodeTool(tool: WireTool): AnthropicTool {
   };
 }
 
-// Anthropic accepts at most 4 `cache_control` breakpoints per request. Rama's layout (3 buildPrompt
-// system blocks + 1 conversation tail, docs/LOOP_MENDING_PLAN.md G2) sits exactly at that limit by
-// design, which means it has no slack: a fifth breakpoint from some future block is a silent
-// caching regression (or a live 400) unless something catches it here, at the one place that sees
-// the whole request.
+// Anthropic accepts at most 4 `cache_control` breakpoints per request. Rama's layout (2 buildPrompt
+// system blocks + 2 conversation-tail anchors, docs/LOOP_MENDING_PLAN.md G2, docs/
+// CONTEXT_BUDGET_PLAN.md CB5/D5) sits exactly at that limit by design, which means it has no
+// slack: a fifth breakpoint from some future block is a silent caching regression (or a live 400)
+// unless something catches it here, at the one place that sees the whole request.
 const MAX_CACHE_BREAKPOINTS = 4;
 
 function countCacheBreakpoints(body: AnthropicRequestBody): number {
@@ -227,7 +227,7 @@ export function encodeRequest(req: LlmRequest): AnthropicRequestBody {
   const breakpoints = countCacheBreakpoints(body);
   if (breakpoints > MAX_CACHE_BREAKPOINTS) {
     throw new Error(
-      `Anthropic request would set ${breakpoints} cache_control breakpoints; the API accepts at most ${MAX_CACHE_BREAKPOINTS}. docs/LOOP_MENDING_PLAN.md G2 — Rama's layout (3 buildPrompt system blocks + 1 conversation tail) is already at the limit, so this means a block was added without removing one.`,
+      `Anthropic request would set ${breakpoints} cache_control breakpoints; the API accepts at most ${MAX_CACHE_BREAKPOINTS}. docs/LOOP_MENDING_PLAN.md G2 — Rama's layout (2 buildPrompt system blocks + 2 conversation-tail anchors) is already at the limit, so this means a block was added without removing one.`,
     );
   }
 

@@ -270,9 +270,31 @@ export function webviewGoForward(pageId: string): Promise<void> {
 
 // `expr` is a JS expression's *body* (evaluated as `(function(){ ${expr} })()`) — always one of a
 // small set of hardcoded strings this app supplies (see WebPaneContext.tsx), never agent- or
-// page-controlled text.
-export function webviewEval(pageId: string, expr: string): Promise<string> {
-  return invoke<string>("webview_eval", { pageId, expr });
+// page-controlled text. `timeoutMs` (AGENT_BROWSER_PLAN.md AB0) defaults to 8s in Rust; AB5's
+// `settle()` needs up to 30s, which the old hard-coded constant made unreachable.
+export function webviewEval(pageId: string, expr: string, timeoutMs?: number): Promise<string> {
+  return invoke<string>("webview_eval", { pageId, expr, timeoutMs });
+}
+
+// AGENT_BROWSER_PLAN.md AB2 — `browser snapshot`'s native leg. Returns the JSON string
+// `dom.ts`'s `window.__ramaSnapshot` produces (`{text, gen, refCount}`) — see webview.rs's
+// `webview_snapshot` for why it always (cheaply) re-sends the DOM bundle rather than tracking
+// "is it loaded" on this side.
+export function webviewSnapshot(pageId: string, depth?: "outline" | "full"): Promise<string> {
+  return invoke<string>("webview_snapshot", { pageId, depth });
+}
+
+// AGENT_BROWSER_PLAN.md AB3 — `read` v2's native leg. Returns the JSON `read.ts`'s
+// `extractArticle` produces (`{markdown, mode, fallbackReason?}`).
+export function webviewRead(pageId: string): Promise<string> {
+  return invoke<string>("webview_read", { pageId });
+}
+
+// AGENT_BROWSER_PLAN.md AB4 — the four action ops' native leg. `actionJson` is a pre-serialized
+// `{op, ref?, text?, submit?, key?, to?}` object (AgentWebBridge.tsx builds it from the
+// `BrowserRequest`); the response is `dom.ts`'s `__ramaAction` JSON (`{ok, error?, warning?}`).
+export function webviewAction(pageId: string, actionJson: string): Promise<string> {
+  return invoke<string>("webview_action", { pageId, actionJson });
 }
 
 // docs/MISSION_CONTROL_PLAN.md §8 Phase M6 — the `browser` tool's response leg
@@ -280,7 +302,33 @@ export function webviewEval(pageId: string, expr: string): Promise<string> {
 // second window — see that file's own comment on why.
 export function postBrowserResponse(
   requestId: string,
-  body: { ok: boolean; pageId?: string; title?: string; url?: string; text?: string; consoleLogs?: string[]; error?: string },
+  body: {
+    ok: boolean;
+    pageId?: string;
+    title?: string;
+    url?: string;
+    text?: string;
+    consoleLogs?: string[];
+    error?: string;
+    // AGENT_BROWSER_PLAN.md AB2 — `snapshot`'s payload.
+    snapshot?: string;
+    gen?: number;
+    refCount?: number;
+    // AGENT_BROWSER_PLAN.md AB3 — `read`'s extraction path, and `console`'s newest seq.
+    readMode?: "readability" | "innerText";
+    readFallbackReason?: string;
+    lastSeq?: number;
+    // AGENT_BROWSER_PLAN.md AB5 — an action op's settle+diff payload (or, with `full`, the whole
+    // new snapshot via the `snapshot`/`gen`/`refCount` fields above instead of `diff`).
+    settleReason?: string;
+    settleMs?: number;
+    genFrom?: number;
+    diff?: string[];
+    full?: boolean;
+    // AGENT_BROWSER_PLAN.md AB0 Decision 11 — which window answered; browserBridge.ts remembers
+    // it to address this project's next request straight at this window.
+    windowLabel?: string;
+  },
 ): Promise<{ ok: true }> {
   return engineJson(`/browser/${requestId}/response`, { method: "POST", body: JSON.stringify(body) });
 }

@@ -11,15 +11,32 @@ import { useProjectsData } from "./data/ProjectsProvider";
 //
 // A control with exactly one possible value is noise, not a control — so this renders nothing
 // until a project actually has more than one agent to switch between.
-export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; disabled: boolean }) {
+export function AgentPicker({
+  chat,
+  disabled,
+  draftProjectId,
+  draftAgentId,
+  onDraftChange,
+}: {
+  chat: ChatDTO | undefined;
+  disabled: boolean;
+  // A draft has no ChatDTO yet (ProjectsProvider.DraftChat), so there's no `chat.id` to PATCH —
+  // these three carry the same picker through that case, writing into the draft instead.
+  draftProjectId?: string;
+  draftAgentId?: string;
+  onDraftChange?: (agentId: string) => void;
+}) {
   const [agents, setAgents] = useState<AgentSummaryDTO[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { applyChatPatch } = useProjectsData();
+  const isDraft = !chat && draftProjectId !== undefined;
+  const projectId = chat?.projectId ?? draftProjectId;
+  const currentAgentId = chat?.agentId ?? draftAgentId;
 
   useEffect(() => {
     let cancelled = false;
-    fetchAgents(chat?.projectId)
+    fetchAgents(projectId)
       .then((list) => {
         if (!cancelled) setAgents(list);
       })
@@ -27,7 +44,7 @@ export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
     return () => {
       cancelled = true;
     };
-  }, [chat?.projectId]);
+  }, [projectId]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -40,7 +57,12 @@ export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
 
   function choose(name: string) {
     setMenuOpen(false);
-    if (!chat || name === chat.agentId) return;
+    if (name === currentAgentId) return;
+    if (isDraft) {
+      onDraftChange?.(name);
+      return;
+    }
+    if (!chat) return;
     patchChat(chat.id, { agentId: name })
       .then(applyChatPatch)
       .catch((err) => {
@@ -57,7 +79,7 @@ export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
     }
   }
 
-  const active = agents.find((a) => a.name === chat?.agentId);
+  const active = agents.find((a) => a.name === currentAgentId);
 
   if (agents.length <= 1) return null;
 
@@ -66,11 +88,11 @@ export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
       <button
         type="button"
         className={`rama-tile rama-tile-agent${menuOpen ? " rama-tile-open" : ""}`}
-        disabled={!chat || disabled}
+        disabled={(!chat && !isDraft) || disabled}
         onClick={() => setMenuOpen((v) => !v)}
         onKeyDown={onTriggerKeyDown}
       >
-        <span>{active?.name ?? chat?.agentId ?? "default"}</span>
+        <span>{active?.name ?? currentAgentId ?? "default"}</span>
       </button>
       {menuOpen && (
         <div className="rama-model-menu">
@@ -79,7 +101,7 @@ export function AgentPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
             <button
               type="button"
               key={agent.name}
-              className={"rama-model-menu-item" + (chat?.agentId === agent.name ? " rama-model-menu-item-active" : "")}
+              className={"rama-model-menu-item" + (currentAgentId === agent.name ? " rama-model-menu-item-active" : "")}
               onClick={() => choose(agent.name)}
               title={agent.description}
             >

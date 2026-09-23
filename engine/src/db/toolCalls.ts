@@ -74,12 +74,17 @@ export function finalizeToolCall(
 // wire-invalid), but buildTranscriptFromDb's old fallback path used to replay it as "tool call
 // failed" on the next turn — persistent noise for a call that never got a chance to run. Called
 // from runTurn's `finally`, where the terminal state (the real cause) is already known.
-export function finalizeOrphanedToolCalls(messageId: string, causeSummary: string): number {
+//
+// docs/CONTEXT_BUDGET_PLAN.md CB6 — scoped to chatId, not a single message id: a run now spans
+// several assistant rows (one per step), and run.ts's activeRuns map (one active run per chat)
+// guarantees any row still `ok IS NULL` for this chat when the run ends belongs to this run,
+// regardless of which step's message it's attached to.
+export function finalizeOrphanedToolCalls(chatId: string, causeSummary: string): number {
   const result = db
     .query(
-      "UPDATE tool_calls SET ok = 0, result_summary = ?, ended_at = ? WHERE message_id = ? AND ok IS NULL",
+      "UPDATE tool_calls SET ok = 0, result_summary = ?, ended_at = ? WHERE chat_id = ? AND ok IS NULL",
     )
-    .run(causeSummary, Date.now(), messageId);
+    .run(causeSummary, Date.now(), chatId);
   return result.changes;
 }
 
@@ -91,6 +96,9 @@ export interface ToolCallHistoryEntry {
   ok: boolean;
   resultContent: string | null;
   resultSummary: string | null;
+  /** CB2 — set once decay has durably dropped this call's content; buildTranscriptFromDb projects
+   * a placeholder for it instead. D1: resultContent above is never touched, only this flag. */
+  decayedAt: number | null;
 }
 
 interface ToolCallHistoryRow {
@@ -101,18 +109,23 @@ interface ToolCallHistoryRow {
   ok: number;
   result_content: string | null;
   result_summary: string | null;
+  decayed_at: number | null;
 }
 
 // Feeds the model-message reconstruction in agent/loop.ts, not the wire DTO — only finalized
 // calls (ok IS NOT NULL) are eligible: a call still in flight when its run got interrupted has no
 // result to pair with its tool-call part, and replaying it unpaired would violate every
 // provider's tool_use/tool_result matching requirement on the next turn.
+//
+// CB2 — returns decayed_at; it does NOT filter on it. Whether a decayed row's content is
+// replaced with a placeholder is buildTranscriptFromDb's call (the projection seam, D2), not
+// this query's.
 export function listToolCallsForHistory(chatId: string): ToolCallHistoryEntry[] {
   const rows = db
     .query<
       ToolCallHistoryRow,
       [string]
-    >(`SELECT id, message_id, name, input_json, ok, result_content, result_summary
+    >(`SELECT id, message_id, name, input_json, ok, result_content, result_summary, decayed_at
        FROM tool_calls WHERE chat_id = ? AND ok IS NOT NULL ORDER BY started_at ASC`)
     .all(chatId);
   return rows.map((row) => ({
@@ -123,7 +136,15 @@ export function listToolCallsForHistory(chatId: string): ToolCallHistoryEntry[] 
     ok: row.ok === 1,
     resultContent: row.result_content,
     resultSummary: row.result_summary,
+    decayedAt: row.decayed_at,
   }));
+}
+
+// CB2/CB3 — marks a tool_calls row as decayed. D1: never touches result_content; this is purely
+// the durable flag buildTranscriptFromDb's projection reads. Idempotent — decaying an
+// already-decayed row just refreshes the timestamp.
+export function markToolCallDecayed(id: string, decayedAt: number): void {
+  db.query("UPDATE tool_calls SET decayed_at = ? WHERE id = ?").run(decayedAt, id);
 }
 
 const SELECT_WITH_ARTIFACT = `

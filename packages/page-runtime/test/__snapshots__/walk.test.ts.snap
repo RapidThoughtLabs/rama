@@ -1,0 +1,46 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`AB2 walk.ts — snapshot golden files app-shell.html outline serializes to the expected snapshot 1`] = `
+"page test — "Todo App" — https://example.com/  (gen 1)
+
+[1]  link      "Home"  → /
+[2]  link      "About"  → /about
+[3]  link      "Settings"  → /settings
+[4]  searchbox ""  (empty)
+[5]  button    "Search"
+     heading  "My Todos"
+[6]  button    "Count: 0"
+[7]  button    "Archive all"  (disabled)
+
+7 interactive elements"
+`;
+
+exports[`AB2 walk.ts — snapshot golden files docs-site.html outline serializes to the expected snapshot 1`] = `
+"page test — "Rama Docs — Getting Started" — https://example.com/  (gen 1)
+
+[1]  link      "Introduction"  → /docs/intro
+[2]  link      "Installation"  → /docs/install
+[3]  link      "Configuration"  → /docs/config
+[4]  link      "API Reference"  → /docs/api
+     heading  "Getting Started"
+     heading  "Installation"
+     heading  "Requirements"
+[5]  link      "Edit this page"  → https://github.com/rtllabs/rama/edit/main/docs/getting-started.md
+
+5 interactive elements"
+`;
+
+exports[`AB2 walk.ts — snapshot golden files heavy-feed.html outline serializes to the expected snapshot 1`] = `
+"page test — "Feed" — https://example.com/  (gen 1)
+
+     heading  "Latest Posts"
+[1]  link      "Post number 1: something happened today"  → /posts/1
+[2]  button    "Like"
+[3]  link      "Post number 2: something happened today"  → /posts/2
+[4]  button    "Like"
+[5]  link      "Post number 3: something happened today"  → /posts/3
+[6]  button    "Like"
+     … 47 similar items omitted (snapshot depth:full to expand)
+
+6 interactive elements"
+`;

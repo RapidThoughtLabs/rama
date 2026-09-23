@@ -1,0 +1,36 @@
+<!--
+AGENT_BROWSER_PLAN.md AB2 — fixture 1 of 3: a small Vite/React-shaped app shell. Synthetic, not
+scraped from a real app (this environment has no network access to a running dev server), but
+structured the way one actually looks: a nav, a search form with an empty controlled input, a
+stateful counter button, and a hidden (unrendered) modal that must never appear in the snapshot.
+Stands in for "start a dev server and check what's on the page" — the everyday AB2 use case.
+-->
+<!doctype html>
+<html>
+  <head><title>Todo App</title></head>
+  <body>
+    <header>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/about">About</a>
+        <a href="/settings">Settings</a>
+      </nav>
+      <form>
+        <input type="search" placeholder="Search todos" value="" />
+        <button type="submit">Search</button>
+      </form>
+    </header>
+    <main>
+      <h1>My Todos</h1>
+      <p>You have <span>3</span> tasks remaining.</p>
+      <button id="counter">Count: 0</button>
+      <div class="modal" style="display: none">
+        <p>This modal is hidden and must not appear in the snapshot.</p>
+        <button>Close</button>
+      </div>
+    </main>
+    <footer>
+      <button disabled>Archive all</button>
+    </footer>
+  </body>
+</html>

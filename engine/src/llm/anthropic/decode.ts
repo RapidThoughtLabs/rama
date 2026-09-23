@@ -12,7 +12,7 @@ export class AnthropicAccumulator {
   public usage: LlmUsage = {
     inputTokens: 0,
     outputTokens: 0,
-    totalTokens: 0,
+    promptTokens: 0,
     noCacheTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
@@ -45,7 +45,7 @@ export class AnthropicAccumulator {
       input = {};
     }
 
-    return [{ type: "tool_call", id: call.id, name: call.name, input }];
+    return [{ type: "tool_call", id: call.id, name: call.name, input, blockIndex: index }];
   }
 
   flushAllTools(): LlmEvent[] {
@@ -98,13 +98,16 @@ export function decodeFrame(data: string, acc: AnthropicAccumulator): LlmEvent[]
         const inputTokens = msg.usage.input_tokens ?? 0;
         const cacheReadTokens = msg.usage.cache_read_input_tokens ?? 0;
         const cacheWriteTokens = msg.usage.cache_creation_input_tokens ?? 0;
-        const noCacheTokens = Math.max(0, inputTokens - cacheReadTokens);
 
         acc.usage.inputTokens = inputTokens;
         acc.usage.cacheReadTokens = cacheReadTokens;
         acc.usage.cacheWriteTokens = cacheWriteTokens;
-        acc.usage.noCacheTokens = noCacheTokens;
-        acc.usage.totalTokens = inputTokens;
+        // CB1 — Anthropic's input_tokens already excludes cache read/write; subtracting
+        // cacheReadTokens again double-subtracted from an already-net field.
+        acc.usage.noCacheTokens = inputTokens;
+        // CB1 — the full request size, cache-inclusive: the one occupancy number that means
+        // the same thing on every provider.
+        acc.usage.promptTokens = inputTokens + cacheReadTokens + cacheWriteTokens;
       }
       break;
     }
@@ -130,9 +133,9 @@ export function decodeFrame(data: string, acc: AnthropicAccumulator): LlmEvent[]
 
       if (delta) {
         if (delta.type === "text_delta" && delta.text) {
-          events.push({ type: "text.delta", text: delta.text });
+          events.push({ type: "text.delta", text: delta.text, blockIndex: index });
         } else if (delta.type === "thinking_delta" && delta.thinking) {
-          events.push({ type: "reasoning.delta", text: delta.thinking });
+          events.push({ type: "reasoning.delta", text: delta.thinking, blockIndex: index });
         } else if (delta.type === "signature_delta" && delta.signature) {
           acc.reasoningSignature = delta.signature;
         } else if (delta.type === "input_json_delta" && delta.partial_json) {
@@ -157,7 +160,6 @@ export function decodeFrame(data: string, acc: AnthropicAccumulator): LlmEvent[]
       }
       if (usage?.output_tokens != null) {
         acc.usage.outputTokens = usage.output_tokens;
-        acc.usage.totalTokens = acc.usage.inputTokens + acc.usage.outputTokens;
       }
       break;
     }

@@ -21,14 +21,19 @@ export type TerminalState =
   // is not "completed": the model didn't choose to stop.
   | "stopped-output-truncated";
 
+export type ChatBlock =
+  | { kind: "thinking"; text: string; durationMs?: number; stepIndex?: number; blockIndex?: number }
+  | { kind: "text"; text: string; stepIndex?: number; blockIndex?: number }
+  | { kind: "tool"; callId: string; stepIndex?: number; blockIndex?: number };
+
 export type SessionEvent =
   | { type: "run.started"; runId: string; ts: number }
   | { type: "message.user"; id: string; text: string; ts: number }
-  | { type: "thinking.delta"; runId: string; text: string }
-  | { type: "thinking.done"; runId: string; durationMs: number }
-  | { type: "message.delta"; runId: string; text: string }
+  | { type: "thinking.delta"; runId: string; text: string; stepIndex?: number; blockIndex?: number }
+  | { type: "thinking.done"; runId: string; durationMs: number; stepIndex?: number; blockIndex?: number }
+  | { type: "message.delta"; runId: string; text: string; stepIndex?: number; blockIndex?: number }
   | { type: "message.done"; runId: string }
-  | { type: "tool.call"; callId: string; name: string; input: unknown; ts: number }
+  | { type: "tool.call"; callId: string; name: string; input: unknown; ts: number; stepIndex?: number; blockIndex?: number }
   | { type: "tool.result"; callId: string; ok: boolean; summary: string; artifactId?: string }
   | { type: "artifact.created"; artifactId: string; kind: ArtifactKind; name: string; meta: object }
   | { type: "artifact.updated"; artifactId: string; delta?: string; status: "streaming" | "done" }
@@ -82,17 +87,44 @@ export type SessionEvent =
   // WORKSPACE_PANES_PLAN.md §5.3 — project-scoped invalidation event for git status / working tree changes
   | { type: "changes.invalidated"; projectId: string };
 
-export type BrowserOp = "open" | "read" | "snapshot" | "console";
+// AB3 adds no new ops (read/console keep their names, just better implementations); AB4 adds the
+// four action ops, deliberately just these four — see AGENT_BROWSER_PLAN.md AB4's own note on why
+// hover/select/drag/upload aren't here.
+export type BrowserOp = "open" | "read" | "snapshot" | "console" | "click" | "type" | "press" | "scroll";
 
 export interface BrowserRequest {
   requestId: string;
   op: BrowserOp;
   /** `open` only. */
   url?: string;
-  /** `read` / `snapshot` / `console` — omit for "whichever page is active in this window". */
+  /** every op but `open` — omit for "whichever page is active in this window". For the action
+   *  ops this is usually filled in by tools/browser.ts itself (resolved from browserBridge.ts's
+   *  `getLastPageId`) rather than left for the frontend to guess, so the page the engine gated
+   *  the permission check against is the same one the action actually runs on. */
   pageId?: string;
   /** `open` only — tags a newly created page's `originChatId`, the same as `TerminalDTO`'s. */
   chatId?: string;
+  /** `snapshot` only — "outline" (default; interactive + headings) or "full" (adds prose text). */
+  depth?: "outline" | "full";
+  // AGENT_BROWSER_PLAN.md AB3 — `console` only. The AB1 `seq` to filter entries after; omitted
+  // means "everything in the ring buffer".
+  since?: number;
+  // AGENT_BROWSER_PLAN.md AB4 — action op fields. `ref` (click/type): ref?: number. `type`: text,
+  // submit?. `press`: key. `scroll`: to.
+  ref?: number;
+  text?: string;
+  submit?: boolean;
+  key?: string;
+  to?: "top" | "bottom" | number;
+  // AGENT_BROWSER_PLAN.md AB5 — action ops only. Skips the settle+diff response in favor of the
+  // whole new snapshot (same shape `snapshot` op returns) — for when the model wants the full
+  // picture rather than just what changed.
+  full?: boolean;
+  // AGENT_BROWSER_PLAN.md AB0 Decision 11 — when set, only the window whose WINDOW_LABEL matches
+  // should act; every other window ignores this request. Set from browserBridge.ts's memory of
+  // which window last answered for this project. Unset (the bootstrap case, and the 2s-no-answer
+  // fallback re-broadcast) means "first response wins", same as before this phase.
+  responderWindow?: string;
 }
 
 // Client → engine commands sent over the chat WS (docs/IMPLEMENTATION_PLAN.md §3).
@@ -223,6 +255,8 @@ export interface MessageDTO {
   // message from the `thinking.done` SessionEvent; never persisted, so a DB-sourced (post-reload)
   // message never carries it.
   thinkingDurationMs?: number;
+  /** docs/CHAT_VIEW_PLAN.md CV5/CV6 — ordered block timeline. */
+  blocks?: ChatBlock[];
 }
 
 // Phase 3 — tools + artifacts wire types.
@@ -481,7 +515,12 @@ export interface DocContentDTO {
 // gate (engine/src/agent/permissions.ts) — that gate is keyed on chat mode today, and "web" has no
 // corresponding tool yet, so wiring real enforcement is follow-up work, not this phase's.
 export type PermissionRule = "allow" | "ask" | "deny";
-export type PermissionTool = "bash" | "write" | "edit" | "web";
+// AGENT_BROWSER_PLAN.md AB4 — "browser_action" (click/type/press/scroll) is deliberately not in
+// DEFAULT_PERMISSIONS: its default isn't a static rule but "loopback origins auto-allow, ask
+// everywhere else" (engine/src/agent/permissions.ts's resolveBrowserActionRule). A project or
+// global override here, when explicitly set, takes precedence over that origin-based default —
+// same "unless a project explicitly sets otherwise" escape hatch every other tool already has.
+export type PermissionTool = "bash" | "write" | "edit" | "web" | "browser_action";
 export type PermissionSettings = Partial<Record<PermissionTool, PermissionRule>>;
 // A project override patch additionally allows `null` per tool, meaning "clear this override,
 // go back to inheriting the global default" — distinct from omitting the key (leave unchanged),

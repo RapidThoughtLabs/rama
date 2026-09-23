@@ -30,7 +30,9 @@ export interface WindowTabsDataValue {
   tabs: ChatDTO[];
   activeTabId: string | null;
   selectTab: (chatId: string) => void;
-  openNewTab: (projectId: string) => Promise<ChatDTO>;
+  /** Turns the current draft (ProjectsProvider.draft) into a real chat, registers it as this
+   *  window's tab, and selects it. Returns null if there's no draft to promote. */
+  promoteDraft: () => Promise<ChatDTO | null>;
   adoptChat: (chatId: string) => Promise<string | null>;
   popOutTab: (chatId: string) => Promise<void>;
 }
@@ -38,7 +40,7 @@ export interface WindowTabsDataValue {
 const WindowTabsContext = createContext<WindowTabsDataValue | null>(null);
 
 export function WindowTabsProvider({ children }: { children: ReactNode }) {
-  const { allChats, activeChatId, selectChat, addChat } = useProjectsData();
+  const { allChats, activeChatId, selectChat, addChat, draft, clearDraft } = useProjectsData();
   const [chatIds, setChatIds] = useState<string[] | null>(null);
   const seededRef = useRef(false);
 
@@ -120,14 +122,36 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
     [tabs, selectChat],
   );
 
-  const openNewTab = useCallback(
-    async (projectId: string) => {
-      const chat = await addChat(projectId);
-      await invoke("add_chat_to_window", { windowLabel: WINDOW_LABEL, chatId: chat.id });
-      return chat;
-    },
-    [addChat],
-  );
+  // Registers the new chat as this window's tab — and folds its id into `chatIds` locally —
+  // *before* selecting it. Selecting first (the old order) raced the `add_chat_to_window`
+  // round-trip: `activeChatId` would flip to the new chat while `tabs` still reflected the old
+  // registry snapshot, so the activeTabId/selectChat effect above saw an activeChatId that
+  // wasn't (yet) one of "my" tabs, fell back to `tabs[0]`, and immediately reselected whatever
+  // chat was previously active — the new chat would flash in and the old one would snap right
+  // back ("ghost of an old chat" not clearing). Updating `chatIds` in the same tick as
+  // `selectChat` keeps `tabs` and `activeChatId` consistent on the very next render, so that
+  // effect has nothing to correct.
+  //
+  // Only ever called with a real, freshly-created chat — the "New chat" button itself no longer
+  // creates one (see ProjectsProvider.openDraft); this only runs once the user actually sends
+  // the draft's first message (ChatColumn.submit), which is also the only thing allowed to
+  // create the chat that gets registered here.
+  const promoteDraft = useCallback(async () => {
+    if (!draft) return null;
+    const chat = await addChat(draft.projectId, undefined, {
+      select: false,
+      mode: draft.mode,
+      providerId: draft.providerId ?? undefined,
+      model: draft.model ?? undefined,
+      agentId: draft.agentId,
+    });
+    await invoke("add_chat_to_window", { windowLabel: WINDOW_LABEL, chatId: chat.id });
+    seededRef.current = true;
+    setChatIds((prev) => (prev ? [...prev, chat.id] : [chat.id]));
+    selectChat(chat.id);
+    clearDraft();
+    return chat;
+  }, [draft, addChat, selectChat, clearDraft]);
 
   // Adopts an existing chat into this window's tabs, or — if it's already owned by another
   // window — returns that window's label so the caller can focus it instead (a chat is a tab in
@@ -153,11 +177,11 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
       tabs,
       activeTabId,
       selectTab,
-      openNewTab,
+      promoteDraft,
       adoptChat,
       popOutTab,
     }),
-    [tabs, activeTabId, selectTab, openNewTab, adoptChat, popOutTab],
+    [tabs, activeTabId, selectTab, promoteDraft, adoptChat, popOutTab],
   );
 
   return <WindowTabsContext.Provider value={value}>{children}</WindowTabsContext.Provider>;

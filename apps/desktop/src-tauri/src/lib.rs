@@ -11,8 +11,8 @@ use pty::{pty_is_running, pty_kill, pty_list_running, pty_resize, pty_spawn, pty
 use secrets::{delete_provider_key, get_provider_key, set_provider_key};
 use tauri::Manager;
 use webview::{
-    webview_create, webview_destroy, webview_eval, webview_go_back, webview_go_forward, webview_navigate,
-    webview_reload, webview_set_bounds, webview_set_visible, EvalState,
+    handle_rama_ipc, webview_action, webview_create, webview_destroy, webview_eval, webview_go_back, webview_go_forward,
+    webview_navigate, webview_read, webview_reload, webview_set_bounds, webview_set_visible, webview_snapshot, EvalState,
 };
 use window_registry::{
     add_chat_to_window, attach_lifecycle_handlers, get_window_tabs, initialize_window_tabs, list_all_window_tabs,
@@ -29,6 +29,9 @@ fn greet(name: &str) -> String {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // AGENT_BROWSER_PLAN.md AB0 — the large-payload value-return channel; see webview.rs's
+        // module doc for why it exists alongside `rama-eval://`.
+        .register_asynchronous_uri_scheme_protocol("rama-ipc", handle_rama_ipc)
         .manage(EngineState::default())
         .manage(WindowRegistry::default())
         .manage(PtyState::default())
@@ -57,6 +60,9 @@ pub fn run() {
             webview_set_visible,
             webview_destroy,
             webview_eval,
+            webview_snapshot,
+            webview_read,
+            webview_action,
             webview_reload,
             webview_go_back,
             webview_go_forward

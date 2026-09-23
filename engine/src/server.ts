@@ -60,6 +60,7 @@ import {
 import { DEFAULT_PERMISSIONS, getSetting, setSetting } from "./db/settings";
 import { maybeDefaultChatRole, maybeDefaultUtilityRole } from "./agent/utility";
 import { maybeDefaultSubagentRole } from "./agent/subagentRole";
+import { maybeDefaultSummarizeRole } from "./agent/summarizeRole";
 import { discoverAgents } from "./agent/agents/discover";
 import type { AgentDef } from "./agent/agents/types";
 import { listToolCalls } from "./db/toolCalls";
@@ -147,6 +148,8 @@ export function createServer() {
   maybeDefaultUtilityRole();
   // docs/PROMPT_STACK_PLAN.md §6.1, Phase PS5 — same idempotency, for `subagent`.
   maybeDefaultSubagentRole();
+  // docs/CONTEXT_BUDGET_PLAN.md CB4 — same idempotency, for `summarize`.
+  maybeDefaultSummarizeRole();
   // Phase P5 — same idempotency, for `chat`. Covers an install that configured a provider via
   // fast-add or the wizard but never visited General settings to name a default explicitly.
   maybeDefaultChatRole();
@@ -531,6 +534,7 @@ export function createServer() {
           maybeDefaultChatRole();
           maybeDefaultUtilityRole();
           maybeDefaultSubagentRole();
+          maybeDefaultSummarizeRole();
           return json(getProviderDTO(body.providerId), { status: result.created ? 201 : 200 });
         }
 
@@ -561,6 +565,7 @@ export function createServer() {
           maybeDefaultChatRole();
           maybeDefaultUtilityRole();
           maybeDefaultSubagentRole();
+          maybeDefaultSummarizeRole();
           return json(getProviderDTO(row.id), { status: 201 });
         }
 
@@ -885,6 +890,7 @@ export function createServer() {
           // a role already exists, so this is safe to call on every key save.
           maybeDefaultUtilityRole();
           maybeDefaultSubagentRole();
+          maybeDefaultSummarizeRole();
           maybeDefaultChatRole();
           return json({ ok: true });
         }

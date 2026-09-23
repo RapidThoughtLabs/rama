@@ -3,9 +3,10 @@
 // OpenAI-compatible streaming transport: fetch + SSE reader + frame decoder.
 // docs/LOOP_MIGRATION_PLAN.md §4.1, §4.5, §4.6
 
+import { logContextBudgetStep } from "../contextBudgetLog";
 import { readSSE } from "../sse";
 import { LlmError } from "../types";
-import type { LlmClient, LlmEvent, LlmRequest } from "../types";
+import type { LlmClient, LlmEvent, LlmRequest, LlmUsage } from "../types";
 import { ToolCallAccumulator, decodeFrame } from "./decode";
 import { encodeRequest } from "./encode";
 
@@ -86,6 +87,7 @@ export class OpenAIStreamClient implements LlmClient {
     }
 
     const body = encodeRequest(req);
+    const bodyJson = JSON.stringify(body);
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...this.extraHeaders,
@@ -99,7 +101,7 @@ export class OpenAIStreamClient implements LlmClient {
       response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers,
-        body: JSON.stringify(body),
+        body: bodyJson,
         signal: req.signal,
       });
     } catch (err) {
@@ -126,6 +128,7 @@ export class OpenAIStreamClient implements LlmClient {
 
     const acc = new ToolCallAccumulator();
     let sawFinish = false;
+    let lastUsage: LlmUsage | undefined;
     try {
       for await (const data of readSSE(response.body)) {
         if (req.signal.aborted) {
@@ -134,6 +137,7 @@ export class OpenAIStreamClient implements LlmClient {
         const events = decodeFrame(data, acc);
         for (const event of events) {
           if (event.type === "finish") sawFinish = true;
+          if (event.type === "usage") lastUsage = event.usage;
           yield event;
         }
       }
@@ -156,6 +160,20 @@ export class OpenAIStreamClient implements LlmClient {
         yield event;
       }
       yield { type: "finish", reason: flushed.length > 0 ? "tool_calls" : "stop" };
+    }
+
+    if (lastUsage) {
+      logContextBudgetStep({
+        provider: "openai",
+        model: req.model,
+        messageCount: body.messages.length,
+        requestBytes: bodyJson.length,
+        inputTokens: lastUsage.inputTokens,
+        promptTokens: lastUsage.promptTokens,
+        cacheReadTokens: lastUsage.cacheReadTokens,
+        cacheWriteTokens: lastUsage.cacheWriteTokens,
+        outputTokens: lastUsage.outputTokens,
+      });
     }
   }
 }

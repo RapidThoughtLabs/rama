@@ -8,8 +8,9 @@
 //   F9  Methods come out for free — depth > 0 when inside a container
 //   F10 hasError → partial tree — callers receive whatever the parser produced
 
-import type { SyntaxNode } from "web-tree-sitter";
+import type { Node as SyntaxNode } from "web-tree-sitter";
 import { getParser, getQuery, type Family } from "./grammars";
+
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -159,6 +160,11 @@ export async function extractSymbols(
   ]);
 
   const tree = parser.parse(source);
+  if (!tree) {
+    // parse() can return null if parsing was cancelled (e.g., via setTimeoutMicros).
+    // We don't use cancellation, but handle defensively.
+    return { symbols: [], hasError: false };
+  }
   const lines = source.split("\n");
 
   // Collect matches. Each match has a set of captures keyed by name.
@@ -169,8 +175,8 @@ export async function extractSymbols(
 
   for (const match of matches) {
     // Find @definition.* capture and @name capture in this match.
-    let defNode: Parser.SyntaxNode | null = null;
-    let nameNode: Parser.SyntaxNode | null = null;
+    let defNode: SyntaxNode | null = null;
+    let nameNode: SyntaxNode | null = null;
     let defCaptureName = "";
 
     for (const capture of match.captures) {
@@ -238,3 +244,4 @@ export async function extractSymbols(
 
   return { symbols, hasError: tree.rootNode.hasError };
 }
+

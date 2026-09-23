@@ -1,0 +1,173 @@
+<!--
+AGENT_BROWSER_PLAN.md AB3 — the `read` v2 fixture: a real article buried in the chrome a real news/
+blog site actually ships (nav, sidebar link list, cookie banner, newsletter pitch, related-articles
+list, footer). The acceptance criterion is that Readability's extraction comes in under 40% of the
+raw innerText's token count — which only means something if the chrome is substantial, so this
+fixture leans into it rather than keeping the surrounding cruft token-cheap.
+-->
+<!doctype html>
+<html>
+  <head><title>Why Test Loops Need Real Refs — Rama Blog</title></head>
+  <body>
+    <div class="cookie-banner">
+      This site uses cookies to improve your experience. By continuing to browse you agree to our
+      use of cookies as described in our extensive cookie policy, privacy policy, and terms of
+      service, all three of which you are encouraged to read in full before proceeding.
+      <button>Accept all</button>
+      <button>Manage preferences</button>
+      <button>Reject non-essential</button>
+    </div>
+    <header class="site-header">
+      <nav class="primary-nav">
+        <a href="/">Home</a>
+        <a href="/blog">Blog</a>
+        <a href="/docs">Docs</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/about">About</a>
+        <a href="/careers">Careers</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </header>
+    <aside class="sidebar">
+      <div class="newsletter-pitch">
+        Subscribe to our newsletter for weekly updates on everything happening across the product,
+        the engineering blog, and the wider testing-tools ecosystem we follow closely. We send one
+        email a week, never sell your address, and cover releases, incident retrospectives, and
+        long-form engineering writeups from the whole team, not just the founders.
+        <input type="email" placeholder="you@example.com" />
+        <button>Subscribe</button>
+      </div>
+      <h3>Popular posts</h3>
+      <ul class="popular-posts">
+        <li><a href="/blog/one">Ten Things We Learned Shipping a Desktop Agent</a> — a retrospective on six months of building a native automation surface.</li>
+        <li><a href="/blog/two">Why We Rewrote Our Settings Modal Three Times</a> — and what finally made the fourth version stick.</li>
+        <li><a href="/blog/three">A Field Guide to Flaky End-to-End Tests</a> — the five causes we see over and over again.</li>
+        <li><a href="/blog/four">The Hidden Cost of Selector-Based Automation</a> — why "it worked yesterday" is not a test result.</li>
+        <li><a href="/blog/five">Designing a Sidebar That Doesn't Fight You</a> — notes from the redesign nobody asked for.</li>
+        <li><a href="/blog/six">Shipping a Native Webview Without a Second Browser Engine</a> — the platform constraints that shaped the whole plan.</li>
+        <li><a href="/blog/seven">Token Budgets as a Build-Time Test, Not a Comment</a> — how we keep snapshot sizes from rotting.</li>
+      </ul>
+      <div class="tag-cloud">
+        <a href="/tag/testing">testing</a>
+        <a href="/tag/automation">automation</a>
+        <a href="/tag/agents">agents</a>
+        <a href="/tag/dx">developer-experience</a>
+        <a href="/tag/reliability">reliability</a>
+        <a href="/tag/webview">webview</a>
+      </div>
+      <div class="ad-slot">Advertisement — sponsored content placeholder unit 300x250. Contact our sales team to advertise in this space and reach thousands of engineering readers every week.</div>
+      <div class="ad-slot">Advertisement — sponsored content placeholder unit 300x600. Premium inventory available for annual sponsors with priority placement across every article page.</div>
+    </aside>
+    <main>
+      <nav class="breadcrumbs">
+        <a href="/">Home</a> / <a href="/blog">Blog</a> / <a href="/blog/engineering">Engineering</a> / Why Test Loops Need Real Refs
+      </nav>
+      <article>
+        <h1>Why Test Loops Need Real Refs</h1>
+        <p class="byline">By the Rama team — published March 2026 — 6 minute read</p>
+        <div class="share-buttons">
+          <button>Share on X</button>
+          <button>Share on LinkedIn</button>
+          <button>Share on Mastodon</button>
+          <button>Copy link</button>
+        </div>
+        <p>
+          Every browser automation tool eventually asks a model to describe where to click, and
+          every one of them makes the same mistake: they ask for a CSS selector. A selector is a
+          guess dressed up as an address. It might match the element the model meant, it might
+          match a different element that happens to share a class name, or it might match nothing
+          at all after the next deploy renames a component. None of those three outcomes look
+          different from the model's side — the call either succeeds against the wrong target or
+          fails with an error that explains nothing about which element was intended.
+        </p>
+        <p>
+          The fix is not a smarter selector language. It is removing selectors from the loop
+          entirely. When a page hands out its own integer handles — assigned during a real walk of
+          its own DOM, stored in a page-side map the model never sees the internals of — a click
+          against ref twelve is either the element the page meant by twelve or it is an error. There
+          is no middle case where it silently lands somewhere plausible-looking but wrong. That
+          single property is what turns "the agent thinks it clicked something" into "the agent
+          clicked something," which is the entire difference between a testing tool and a liability.
+        </p>
+        <p>
+          This also changes what a stale reference means. A selector that stops matching after a
+          re-render just returns nothing, and most automation code treats "nothing found" as
+          identical to "not visible yet" — so it retries, silently, for a few seconds, and either
+          finds a different element that happens to match or times out with no memory of what it
+          was actually looking for. A ref, by contrast, is minted once, against one generation of
+          the page. When the page changes shape, old refs are not quietly reinterpreted against the
+          new one. They simply stop resolving, and the error says so by name: this ref belonged to
+          an earlier snapshot, take a new one. The agent never acts on a stale guess, because there
+          is no mechanism by which a stale ref could resolve to anything at all.
+        </p>
+        <p>
+          None of this eliminates the model's judgment about *what* to click — it still has to read
+          the snapshot and decide that ref twelve, labeled "Submit," is the right target for the
+          step it's on. What it removes is the second, silent failure mode sitting underneath that
+          judgment call: the one where the model's reasoning was correct and the click still landed
+          somewhere else. Getting rid of that failure mode is most of what makes a fully unattended
+          test loop trustworthy enough to run without a human reading every step.
+        </p>
+        <div class="author-bio">
+          Written by the Rama engineering team. We build a desktop app for running coding agents
+          against real projects, with a terminal, a web pane, and a changes view in one window.
+          Follow us for more writing on testing tools, agent reliability, and developer experience.
+        </div>
+      </article>
+      <section class="related-articles">
+        <h3>Related posts</h3>
+        <ul>
+          <li><a href="/blog/related-1">Snapshot Budgets: Keeping Token Costs Predictable</a> — how a fixture-backed budget test catches regressions before a real user does.</li>
+          <li><a href="/blog/related-2">Settling Before You Read: The Flake Nobody Names</a> — the exact failure mode of reading a page one render too early.</li>
+          <li><a href="/blog/related-3">Diffs Over Dumps: What a Test Step Should Return</a> — why twenty steps shouldn't cost twenty full page reads.</li>
+          <li><a href="/blog/related-4">Two Escape Hatches: Screenshots and Cross-Origin Frames</a> — what to do when the accessibility tree genuinely isn't enough.</li>
+        </ul>
+      </section>
+      <section class="comments">
+        <h3>Comments (0)</h3>
+        <p>No comments yet. Sign in to leave the first one. Comments are moderated and typically
+        approved within one business day. Please keep discussion on topic and respectful of other
+        readers; off-topic or promotional comments will be removed without notice.</p>
+        <button>Sign in to comment</button>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-columns">
+        <div class="footer-column">
+          <h4>Product</h4>
+          <a href="/features">Features</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/changelog">Changelog</a>
+          <a href="/roadmap">Roadmap</a>
+        </div>
+        <div class="footer-column">
+          <h4>Company</h4>
+          <a href="/about">About</a>
+          <a href="/careers">Careers</a>
+          <a href="/press">Press Kit</a>
+          <a href="/contact">Contact</a>
+        </div>
+        <div class="footer-column">
+          <h4>Resources</h4>
+          <a href="/docs">Documentation</a>
+          <a href="/blog">Blog</a>
+          <a href="/community">Community</a>
+          <a href="/support">Support</a>
+        </div>
+        <div class="footer-column">
+          <h4>Legal</h4>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="/security">Security</a>
+          <a href="/status">Status</a>
+          <a href="/rss">RSS</a>
+        </div>
+      </div>
+      <p>© 2026 Rapid Thought Labs. All rights reserved. This footer text exists purely to add
+      realistic boilerplate weight the way a real production site's footer legal text does — the
+      kind of paragraph nobody reads but every site ships anyway, repeated across every single page
+      on the site regardless of what that page is actually about, which is exactly why Readability
+      is supposed to strip it out rather than treating it as part of the article.</p>
+    </footer>
+  </body>
+</html>

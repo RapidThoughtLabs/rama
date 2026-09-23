@@ -233,4 +233,20 @@ CREATE TABLE IF NOT EXISTS instruction_proposals (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_instruction_proposals_dedupe ON instruction_proposals(project_id, dedupe_key);
 CREATE INDEX IF NOT EXISTS idx_instruction_proposals_project ON instruction_proposals(project_id, status);
+
+-- docs/CONTEXT_BUDGET_PLAN.md CB2 — persists a compaction's cut boundary and summary fields so
+-- the next turn's projection can honour it without re-summarizing (defect 1: compaction used to
+-- be discarded at the end of every turn). boundary_seq is the highest messages.seq this row
+-- covers (inclusive) — buildTranscriptFromDb replays every message with seq <= boundary_seq as
+-- this row's single summary entry instead of its raw content. D1: this table never touches
+-- messages/tool_calls content, only records the decision.
+CREATE TABLE IF NOT EXISTS compactions (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES chats(id),
+  boundary_seq INTEGER NOT NULL,
+  fields_json TEXT NOT NULL,
+  covered_ids_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_compactions_chat ON compactions(chat_id, boundary_seq);
 `;

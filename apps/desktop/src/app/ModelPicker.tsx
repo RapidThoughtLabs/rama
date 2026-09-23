@@ -40,12 +40,27 @@ function healthOf(health: Record<string, ProviderHealthDTO>, providerId: string)
   return health[providerId]?.status ?? "checking";
 }
 
-export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; disabled: boolean }) {
+export function ModelPicker({
+  chat,
+  disabled,
+  draftValue,
+  onDraftChange,
+}: {
+  chat: ChatDTO | undefined;
+  disabled: boolean;
+  // A draft has no ChatDTO yet (ProjectsProvider.DraftChat), so there's no `chat.id` to PATCH —
+  // these two carry the same picker through that case, writing into the draft instead.
+  draftValue?: { providerId: string | null; model: string | null };
+  onDraftChange?: (providerId: string, model: string) => void;
+}) {
   const { providers, health } = useProvidersData();
   const { applyChatPatch } = useProjectsData();
   const { open: openSettings } = useSettingsLink();
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const isDraft = !chat && !!draftValue;
+  const currentProviderId = chat?.providerId ?? draftValue?.providerId ?? null;
+  const currentModel = chat?.model ?? draftValue?.model ?? null;
 
   // Guard 2, second half — "the list never re-filters while the menu is open." Snapshotting
   // providers+health at the moment the menu opens means the live 30s poll (or a hysteresis flip)
@@ -79,16 +94,21 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
     }
   }
 
-  const activeProvider = providers.find((p) => p.id === chat?.providerId);
-  const activeModel = activeProvider?.models.find((m) => m.id === chat?.model);
+  const activeProvider = providers.find((p) => p.id === currentProviderId);
+  const activeModel = activeProvider?.models.find((m) => m.id === currentModel);
   // The pill is exempt from the filter entirely — it always reflects live health, not the
   // snapshot, since it's showing current state rather than making an offer.
-  const pillStatus: ProviderHealthStatus = chat ? healthOf(health, chat.providerId) : "checking";
-  const pillUnavailable = !!chat && !providerVisible(pillStatus);
+  const pillStatus: ProviderHealthStatus = currentProviderId ? healthOf(health, currentProviderId) : "checking";
+  const pillUnavailable = !!currentProviderId && !providerVisible(pillStatus);
 
   function choose(providerId: string, modelId: string) {
     setMenuOpen(false);
-    if (!chat || (providerId === chat.providerId && modelId === chat.model)) return;
+    if (providerId === currentProviderId && modelId === currentModel) return;
+    if (isDraft) {
+      onDraftChange?.(providerId, modelId);
+      return;
+    }
+    if (!chat) return;
     patchChat(chat.id, { providerId, model: modelId })
       .then(applyChatPatch)
       .catch((err) => {
@@ -98,16 +118,17 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
 
   const list = snapshot;
   const visibleProviders = list ? list.providers.filter((p) => providerVisible(healthOf(list.health, p.id))) : [];
-  // The current chat's own unhealthy provider isn't in the list (guard 3) — it's the banner.
-  const bannerProvider = chat && !providerVisible(pillStatus) ? activeProvider ?? { id: chat.providerId, label: chat.providerId } : null;
-  const bannerError = chat ? health[chat.providerId]?.error : null;
+  // The current selection's own unhealthy provider isn't in the list (guard 3) — it's the banner.
+  const bannerProvider =
+    currentProviderId && !providerVisible(pillStatus) ? (activeProvider ?? { id: currentProviderId, label: currentProviderId }) : null;
+  const bannerError = currentProviderId ? health[currentProviderId]?.error : null;
 
   return (
     <div className="rama-tile-wrap" ref={rootRef}>
       <button
         type="button"
         className={`rama-tile rama-tile-model${menuOpen ? " rama-tile-open" : ""}`}
-        disabled={!chat || disabled}
+        disabled={(!chat && !isDraft) || disabled}
         onClick={toggleMenu}
         onKeyDown={onTriggerKeyDown}
       >
@@ -115,7 +136,7 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
           className="rama-accent-dot"
           style={{ width: 6, height: 6, background: STATUS_COLOR[pillStatus], boxShadow: "none" }}
         />
-        <span>{activeModel?.label ?? chat?.model ?? "no model"}</span>
+        <span>{activeModel?.label ?? currentModel ?? "no model"}</span>
         {pillUnavailable && <span className="rama-tile-unavailable">unavailable</span>}
       </button>
       {menuOpen && (
@@ -135,7 +156,7 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
           )}
 
           {visibleProviders.map((p) => {
-            const models = p.models.filter((m) => modelVisible(m, chat?.providerId === p.id && chat?.model === m.id));
+            const models = p.models.filter((m) => modelVisible(m, currentProviderId === p.id && currentModel === m.id));
             if (models.length === 0) return null;
             return (
               <div key={p.id} className="rama-model-menu-group">
@@ -149,7 +170,7 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
                     key={m.id}
                     className={
                       "rama-model-menu-item" +
-                      (chat?.providerId === p.id && chat?.model === m.id ? " rama-model-menu-item-active" : "")
+                      (currentProviderId === p.id && currentModel === m.id ? " rama-model-menu-item-active" : "")
                     }
                     onClick={() => choose(p.id, m.id)}
                   >
@@ -164,7 +185,7 @@ export function ModelPicker({ chat, disabled }: { chat: ChatDTO | undefined; dis
             );
           })}
 
-          {visibleProviders.every((p) => p.models.every((m) => !modelVisible(m, chat?.providerId === p.id && chat?.model === m.id))) && (
+          {visibleProviders.every((p) => p.models.every((m) => !modelVisible(m, currentProviderId === p.id && currentModel === m.id))) && (
             <button
               type="button"
               className="rama-model-menu-empty"

@@ -32,7 +32,7 @@ function makeContext(overrides: Partial<StepHookContext> = {}): StepHookContext 
     usage: {
       inputTokens: 10,
       outputTokens: 10,
-      totalTokens: 20,
+      promptTokens: 20,
       noCacheTokens: 10,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
@@ -52,12 +52,11 @@ function makeContext(overrides: Partial<StepHookContext> = {}): StepHookContext 
     usageTotals: {
       inputTokens: 10,
       outputTokens: 10,
-      totalTokens: 20,
       noCacheTokens: 10,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
     },
-    lastStepInputTokens: stepResult.usage.inputTokens,
+    lastStepInputTokens: stepResult.usage.promptTokens,
     ...overrides,
   };
 }
@@ -134,22 +133,22 @@ describe("LM4 Between-Step Hooks", () => {
     clearSteeringQueue(chatId);
   });
 
-  test("5. completionGateHook: nudges when writes are unverified and finishing without tools", async () => {
+  test("5. completionGateHook: nudges when writes are unverified and finishing without tools or text", async () => {
     const ctxNoWrites = makeContext({ unverifiedWrites: new Set() });
     expect(await completionGateHook.after(ctxNoWrites)).toEqual({ action: "continue" });
 
-    const ctxWithWrites = makeContext({
+    const ctxWithWritesNoText = makeContext({
       unverifiedWrites: new Set(["src/auth.ts"]),
       checkAvailable: true,
       stepResult: {
-        text: "I finished the edits.",
+        text: "",
         finishReason: "stop",
         toolCalls: [],
-        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        usage: { inputTokens: 0, outputTokens: 0, promptTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
         blockedOnQuestion: false,
       },
     });
-    const verdict = await completionGateHook.after(ctxWithWrites);
+    const verdict = await completionGateHook.after(ctxWithWritesNoText);
     expect(verdict.action).toBe("inject");
     if (verdict.action === "inject") {
       expect(verdict.entry.kind).toBe("injected");
@@ -161,6 +160,20 @@ describe("LM4 Between-Step Hooks", () => {
       }
     }
 
+    // If prose was already written in this step, completionGate does not trigger (does not invite a second summary)
+    const ctxWithWritesAndText = makeContext({
+      unverifiedWrites: new Set(["src/auth.ts"]),
+      checkAvailable: true,
+      stepResult: {
+        text: "I finished the edits.",
+        finishReason: "stop",
+        toolCalls: [],
+        usage: { inputTokens: 0, outputTokens: 0, promptTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        blockedOnQuestion: false,
+      },
+    });
+    expect(await completionGateHook.after(ctxWithWritesAndText)).toEqual({ action: "continue" });
+
     // If tool calls were made in this step, completionGate does not trigger
     const ctxWithTools = makeContext({
       unverifiedWrites: new Set(["src/auth.ts"]),
@@ -169,7 +182,7 @@ describe("LM4 Between-Step Hooks", () => {
         text: "",
         finishReason: "tool_calls",
         toolCalls: [{ id: "c1", name: "read", input: {} }],
-        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        usage: { inputTokens: 0, outputTokens: 0, promptTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
         blockedOnQuestion: false,
       },
     });
@@ -193,7 +206,6 @@ describe("LM4 Between-Step Hooks", () => {
       usageTotals: {
         inputTokens: 160_000,
         outputTokens: 8_000,
-        totalTokens: 168_000,
         noCacheTokens: 160_000,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
@@ -225,7 +237,7 @@ describe("LM4 Between-Step Hooks", () => {
         text: "",
         finishReason: "tool_calls",
         toolCalls: [],
-        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        usage: { inputTokens: 0, outputTokens: 0, promptTokens: 0, noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
         blockedOnQuestion: true,
       },
     });
@@ -256,7 +268,7 @@ describe("LM4 Between-Step Hooks", () => {
         text: "",
         finishReason: "tool_calls",
         toolCalls: [],
-        usage: { inputTokens: 95_000, outputTokens: 0, totalTokens: 95_000, noCacheTokens: 95_000, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        usage: { inputTokens: 95_000, outputTokens: 0, promptTokens: 95_000, noCacheTokens: 95_000, cacheReadTokens: 0, cacheWriteTokens: 0 },
         blockedOnQuestion: true,
       },
     });

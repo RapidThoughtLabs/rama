@@ -21,10 +21,10 @@ describe("SL0: grammar loader", () => {
 
       const parser = await getParser(family);
       const tree = parser.parse(sample);
-      expect(tree).toBeTruthy();
-      expect(tree.rootNode).toBeTruthy();
+      expect(tree).not.toBeNull();
+      expect(tree!.rootNode).toBeTruthy();
       // The one-liner must not produce a parse error.
-      expect(tree.rootNode.hasError).toBe(false);
+      expect(tree!.rootNode.hasError).toBe(false);
     });
   }
 
@@ -32,6 +32,6 @@ describe("SL0: grammar loader", () => {
   it("js family actually parses TypeScript syntax (class with type annotation)", async () => {
     const parser = await getParser("js");
     const tree = parser.parse(`class Foo { bar: string = "x"; }`);
-    expect(tree.rootNode.hasError).toBe(false);
+    expect(tree!.rootNode.hasError).toBe(false);
   });
 });

@@ -202,27 +202,30 @@ describe("Anthropic Transport (LM7)", () => {
   });
 
   describe("cache breakpoint guard (G2)", () => {
-    test("Rama's real layout — 3 cached system blocks + 1 cached conversation tail — encodes at exactly the limit without throwing", () => {
+    test("Rama's real layout — 2 cached system blocks + 2 cached conversation-tail anchors (CB5) — encodes at exactly the limit without throwing", () => {
       const messages: WireMessage[] = [
         { role: "system", content: "kernel+tools", annotations: { cacheBreakpoint: true } },
-        { role: "system", content: "agent+mode", annotations: { cacheBreakpoint: true } },
-        { role: "system", content: "project+env", annotations: { cacheBreakpoint: true } },
+        { role: "system", content: "agent+mode+project+env", annotations: { cacheBreakpoint: true } },
+        { role: "user", content: "end of previous turn", annotations: { cacheBreakpoint: true } },
+        { role: "assistant", content: "reply" },
         { role: "user", content: "hello", annotations: { cacheBreakpoint: true } },
       ];
       const req: LlmRequest = { model: "claude-3-7-sonnet-20250219", messages, signal: new AbortController().signal };
       expect(() => encodeRequest(req)).not.toThrow();
       const body = encodeRequest(req);
-      expect(body.system).toHaveLength(3);
+      expect(body.system).toHaveLength(2);
       expect(body.system!.every((p) => p.cache_control)).toBe(true);
-      expect(body.messages[0].content[0].cache_control).toEqual({ type: "ephemeral" });
+      expect(body.messages[0].content[0].cache_control).toEqual({ type: "ephemeral" }); // previous-turn anchor
+      expect(body.messages[2].content[0].cache_control).toEqual({ type: "ephemeral" }); // last-message anchor
     });
 
     test("a fifth cache_control marker throws rather than silently exceeding Anthropic's max of 4", () => {
       const messages: WireMessage[] = [
         { role: "system", content: "kernel+tools", annotations: { cacheBreakpoint: true } },
-        { role: "system", content: "agent+mode", annotations: { cacheBreakpoint: true } },
-        { role: "system", content: "project+env", annotations: { cacheBreakpoint: true } },
+        { role: "system", content: "agent+mode+project+env", annotations: { cacheBreakpoint: true } },
         { role: "system", content: "one block too many", annotations: { cacheBreakpoint: true } },
+        { role: "user", content: "end of previous turn", annotations: { cacheBreakpoint: true } },
+        { role: "assistant", content: "reply" },
         { role: "user", content: "hello", annotations: { cacheBreakpoint: true } },
       ];
       const req: LlmRequest = { model: "claude-3-7-sonnet-20250219", messages, signal: new AbortController().signal };
@@ -255,7 +258,10 @@ describe("Anthropic Transport (LM7)", () => {
       expect(acc.usage.inputTokens).toBe(1000);
       expect(acc.usage.cacheReadTokens).toBe(750);
       expect(acc.usage.cacheWriteTokens).toBe(150);
-      expect(acc.usage.noCacheTokens).toBe(250);
+      // CB1 — Anthropic's input_tokens already excludes cache; noCacheTokens is input_tokens
+      // verbatim, no further subtraction.
+      expect(acc.usage.noCacheTokens).toBe(1000);
+      expect(acc.usage.promptTokens).toBe(1900);
 
       // 2. text content block delta
       const textEvents = decodeFrame(
@@ -266,7 +272,7 @@ describe("Anthropic Transport (LM7)", () => {
         }),
         acc
       );
-      expect(textEvents).toEqual([{ type: "text.delta", text: "Here is the result." }]);
+      expect(textEvents).toEqual([{ type: "text.delta", text: "Here is the result.", blockIndex: 0 }]);
 
       // 3. tool_use block start
       decodeFrame(
@@ -310,6 +316,7 @@ describe("Anthropic Transport (LM7)", () => {
           id: "toolu_123",
           name: "read",
           input: { path: "src/index.ts" },
+          blockIndex: 1,
         },
       ]);
 
@@ -337,8 +344,8 @@ describe("Anthropic Transport (LM7)", () => {
           usage: {
             inputTokens: 1000,
             outputTokens: 45,
-            totalTokens: 1045,
-            noCacheTokens: 250,
+            promptTokens: 1900,
+            noCacheTokens: 1000,
             cacheReadTokens: 750,
             cacheWriteTokens: 150,
           },
@@ -361,7 +368,7 @@ describe("Anthropic Transport (LM7)", () => {
         }),
         acc
       );
-      expect(events1).toEqual([{ type: "reasoning.delta", text: "Thinking through the logic..." }]);
+      expect(events1).toEqual([{ type: "reasoning.delta", text: "Thinking through the logic...", blockIndex: 0 }]);
 
       decodeFrame(
         JSON.stringify({

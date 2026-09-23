@@ -53,7 +53,7 @@ export async function complete(
   let usage: LlmUsage = {
     inputTokens: 0,
     outputTokens: 0,
-    totalTokens: 0,
+    promptTokens: 0,
     noCacheTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,

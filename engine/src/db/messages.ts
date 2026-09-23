@@ -1,4 +1,4 @@
-import type { MessageDTO, MessageRole } from "@rama/protocol";
+import type { ChatBlock, MessageDTO, MessageRole } from "@rama/protocol";
 import { db } from "./index";
 import { newId } from "./ids";
 
@@ -9,10 +9,34 @@ interface MessageRow {
   role: MessageRole;
   content: string | null;
   thinking: string | null;
+  meta_json: string;
   created_at: number;
 }
 
 function toDTO(row: MessageRow): MessageDTO {
+  let blocks: ChatBlock[] | undefined;
+  if (row.meta_json) {
+    try {
+      const meta = JSON.parse(row.meta_json) as { blocks?: ChatBlock[] };
+      if (Array.isArray(meta.blocks) && meta.blocks.length > 0) {
+        blocks = meta.blocks;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fallback if no blocks persisted: synthesize from thinking and content
+  if (!blocks && (row.content || row.thinking)) {
+    blocks = [];
+    if (row.thinking) {
+      blocks.push({ kind: "thinking", text: row.thinking });
+    }
+    if (row.content) {
+      blocks.push({ kind: "text", text: row.content });
+    }
+  }
+
   return {
     id: row.id,
     chatId: row.chat_id,
@@ -20,6 +44,7 @@ function toDTO(row: MessageRow): MessageDTO {
     role: row.role,
     content: row.content,
     thinking: row.thinking,
+    blocks,
     createdAt: row.created_at,
   };
 }
@@ -29,7 +54,7 @@ export function listMessages(chatId: string): MessageDTO[] {
     .query<
       MessageRow,
       [string]
-    >("SELECT id, chat_id, seq, role, content, thinking, created_at FROM messages WHERE chat_id = ? ORDER BY seq ASC")
+    >("SELECT id, chat_id, seq, role, content, thinking, meta_json, created_at FROM messages WHERE chat_id = ? ORDER BY seq ASC")
     .all(chatId);
   return rows.map(toDTO);
 }
@@ -55,26 +80,42 @@ export function appendMessage(
 
 // Finalizes an assistant row created empty at run start (before any tool calls, which need
 // its id as their message_id FK) once the run has fully streamed, errored, or been interrupted.
-// `reasoningSignature` (docs/LOOP_MENDING_PLAN.md D6/MD4) — Anthropic's opaque thinking-block
-// signature — has no dedicated column; it rides the existing, otherwise-unused `meta_json`
-// rather than adding a migration for one nullable string.
+// `reasoningSignature` (docs/LOOP_MENDING_PLAN.md D6/MD4) and `blocks` (docs/CHAT_VIEW_PLAN.md CV6)
+// ride `meta_json`, merging with existing content rather than overwriting.
 export function finalizeMessage(
   id: string,
   content: string | null,
   thinking?: string | null,
   reasoningSignature?: string,
+  blocks?: ChatBlock[],
 ): void {
-  if (reasoningSignature) {
+  const existingRow = db.query<{ meta_json: string }, [string]>("SELECT meta_json FROM messages WHERE id = ?").get(id);
+  let meta: Record<string, unknown> = {};
+  if (existingRow?.meta_json) {
+    try {
+      meta = JSON.parse(existingRow.meta_json);
+    } catch {
+      meta = {};
+    }
+  }
+
+  if (reasoningSignature !== undefined) {
+    meta.reasoningSignature = reasoningSignature;
+  }
+  if (blocks !== undefined) {
+    meta.blocks = blocks;
+  }
+
+  const metaJson = JSON.stringify(meta);
+  if (thinking !== undefined) {
     db.query("UPDATE messages SET content = ?, thinking = ?, meta_json = ? WHERE id = ?").run(
       content,
-      thinking ?? null,
-      JSON.stringify({ reasoningSignature }),
+      thinking,
+      metaJson,
       id,
     );
-  } else if (thinking !== undefined) {
-    db.query("UPDATE messages SET content = ?, thinking = ? WHERE id = ?").run(content, thinking, id);
   } else {
-    db.query("UPDATE messages SET content = ? WHERE id = ?").run(content, id);
+    db.query("UPDATE messages SET content = ?, meta_json = ? WHERE id = ?").run(content, metaJson, id);
   }
 }
 

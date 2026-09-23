@@ -71,24 +71,25 @@ export function normalizeUrl(input: string): string {
 // Best-effort title pickup: webviewCreate/navigate resolve once the child webview exists, not
 // once the page has actually loaded, and Rust deliberately doesn't emit a load-finished event
 // (webview.rs keeps its surface to create/navigate/bounds/visible/destroy/eval — see its module
-// doc). A few spaced polls of the same `webview_eval` M6 already needs is simpler than adding a
-// Tauri event just for this.
+// doc).
+//
+// AGENT_BROWSER_PLAN.md AB5 — replaces the old five-poll ~4s guess (400ms, then four more 900ms
+// spaced polls) with one real `__ramaSettle()` wait (hook.ts's always-on init script, so it's
+// already present the instant the webview exists) followed by a single title/url read, instead
+// of guessing how many polls a page needs.
 async function refreshPageMeta(id: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 400 : 900));
-    if (!pages.some((p) => p.id === id)) return; // closed while we were polling
-    try {
-      const title = await webviewEval(id, "return (document.title || '').slice(0, 200);");
-      const url = await webviewEval(id, "return String(location.href || '');").catch(() => undefined);
-      if (title || url) {
-        patchPage(id, { ...(title ? { title } : {}), ...(url ? { url } : {}), loading: false });
-        return;
-      }
-    } catch {
-      // still loading (or the eval timed out) — retry
-    }
+  if (!pages.some((p) => p.id === id)) return; // closed already
+  await webviewEval(id, "return window.__ramaSettle ? window.__ramaSettle(5000) : Promise.resolve('');").catch(() => {
+    // still loading (or the eval timed out) — read whatever title/url is there now regardless
+  });
+  if (!pages.some((p) => p.id === id)) return; // closed while settling
+  try {
+    const title = await webviewEval(id, "return (document.title || '').slice(0, 200);");
+    const url = await webviewEval(id, "return String(location.href || '');").catch(() => undefined);
+    patchPage(id, { ...(title ? { title } : {}), ...(url ? { url } : {}), loading: false });
+  } catch {
+    patchPage(id, { loading: false });
   }
-  patchPage(id, { loading: false });
 }
 
 // Exported standalone, not just through the context, so AgentWebBridge.tsx (mounted outside any
@@ -118,10 +119,16 @@ export async function createWebPage(
   try {
     await webviewCreate(WINDOW_LABEL, id, url);
   } catch (err) {
+    // Rethrown (not swallowed): AgentWebBridge's `browser open` handler needs to see this to
+    // report a real failure back through the tool instead of a false "opened" success — see its
+    // outer try/catch. openPage below is the only UI caller and already catches for itself.
     console.error("[rama] failed to create web page", err);
-    pages = [...pages, { ...page, loading: false }];
+    const failedPage: WebPageState = { ...page, loading: false };
+    pages = [...pages, failedPage];
     notify();
-    return page;
+    // Carries the (still-added, now failed) page so openPage below can focus it without
+    // guessing at the store's contents; AgentWebBridge just wants err.message.
+    throw Object.assign(err instanceof Error ? err : new Error(String(err)), { page: failedPage });
   }
   pages = [...pages, page];
   notify();
@@ -135,8 +142,11 @@ export async function navigateWebPage(id: string, url: string): Promise<void> {
     await webviewNavigate(id, url);
     void refreshPageMeta(id);
   } catch (err) {
+    // Rethrown for the same reason as createWebPage above — callers that don't care (the
+    // omnibox's `navigate` below) already catch for themselves.
     console.error("[rama] failed to navigate web page", err);
     patchPage(id, { loading: false });
+    throw err;
   }
 }
 
@@ -192,8 +202,12 @@ export function WebPaneProvider({ children }: { children: ReactNode }) {
   const openPage = useCallback(
     async (url: string) => {
       if (!activeProjectId) return;
-      const page = await createWebPage(activeProjectId, normalizeUrl(url));
-      setActiveId(page.id);
+      // createWebPage now rethrows on failure (see its own comment) — this UI entry point still
+      // just wants the page added in its failed state and focused, same as before.
+      const page = await createWebPage(activeProjectId, normalizeUrl(url)).catch(
+        (err: Error & { page?: WebPageState }) => err.page,
+      );
+      if (page) setActiveId(page.id);
     },
     [activeProjectId],
   );
@@ -201,7 +215,7 @@ export function WebPaneProvider({ children }: { children: ReactNode }) {
   const navigate = useCallback(
     async (url: string) => {
       if (!active) return;
-      await navigateWebPage(active.id, normalizeUrl(url));
+      await navigateWebPage(active.id, normalizeUrl(url)).catch(() => {});
     },
     [active],
   );
