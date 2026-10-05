@@ -66,6 +66,8 @@ export interface CompactOptions {
    * the shared DB), or a specific target to pin it. Never read in production code, only by tests.
    */
   summarizeTarget?: SummarizeTarget | null;
+  /** Opt-in gate for decay's pass 2 (age/budget eviction) — see `decayTranscript`'s doc comment. */
+  pruneOldToolOutputs?: boolean;
 }
 
 export interface CompactResult {
@@ -108,8 +110,14 @@ export interface DecayResult {
  *    entry for no measurable effect.
  *
  * `todo`/`clarify` output is exempt from both passes. docs/CONTEXT_BUDGET_PLAN.md CB3.
+ *
+ * Pass 2 only runs when `pruneOldToolOutputs` is true (default off — see `GeneralSettingsDTO`).
+ * Mirrors opencode's own `compaction.prune`, which ships "default: false" for the identical
+ * reason: it's a lossy trade that can evict output a long single-turn multi-file task still
+ * needs, well before the model is anywhere near its real context limit. Pass 1 (supersession) is
+ * correctness-driven and always runs regardless of this flag.
  */
-export function decayTranscript(transcript: Transcript): DecayResult {
+export function decayTranscript(transcript: Transcript, opts?: { pruneOldToolOutputs?: boolean }): DecayResult {
   const entries = transcript.entries;
   let initialChars = 0;
   for (const e of entries) {
@@ -172,7 +180,16 @@ export function decayTranscript(transcript: Transcript): DecayResult {
     }
   }
 
-  // ---- Pass 2: age/budget eviction ----
+  // ---- Pass 2: age/budget eviction (opt-in — see doc comment above) ----
+
+  if (!opts?.pruneOldToolOutputs) {
+    let finalCharsNoPass2 = 0;
+    for (const e of entries) {
+      if (e.kind === "tool") finalCharsNoPass2 += e.content.length;
+    }
+    const approxTokensSavedNoPass2 = Math.max(0, Math.ceil((initialChars - finalCharsNoPass2) / CHARS_PER_TOKEN));
+    return { decayedCount: decayedCallIds.length, approxTokensSaved: approxTokensSavedNoPass2, decayedCallIds };
+  }
 
   const turnStartIndices: number[] = [];
   entries.forEach((e, i) => {
@@ -290,7 +307,7 @@ export async function compactTranscript(opts: CompactOptions): Promise<CompactRe
   }
 
   // 1. Run cheap decay first (C7)
-  const decayRes = decayTranscript(transcript);
+  const decayRes = decayTranscript(transcript, { pruneOldToolOutputs: opts.pruneOldToolOutputs });
 
   // If there are fewer than 3 entries, compaction has little to summarize
   if (transcript.entries.length < 3) {

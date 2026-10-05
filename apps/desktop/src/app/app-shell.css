@@ -661,12 +661,91 @@
 .rama-composer-text { min-width: 0; font-size: var(--fs-lg); color: var(--ink-hi); line-height: 1.5; }
 .rama-composer-placeholder { font-style: italic; color: rgba(var(--ink), 0.3); }
 
+/* docs/COMPOSER_CONTEXT_PLAN.md CC0 — the folder/branch/extra-context pill row. Deliberately a
+   different visual language than the .rama-tile rail below it (rounded, gapped pills vs. square
+   hairline-separated cells) — this row is about *what the agent can see*, the rail is about
+   *how it runs*, and the concept mock this was built from draws them as two different things. */
+.rama-composer-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px 0 14px;
+}
+.rama-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--ink), 0.12);
+  border-radius: 999px;
+  background: rgba(var(--ink), 0.05);
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: rgba(var(--ink), 0.7);
+  white-space: nowrap;
+}
+.rama-pill svg { width: 12px; height: 12px; flex-shrink: 0; }
+button.rama-pill { cursor: pointer; }
+button.rama-pill:hover { background: rgba(var(--ink), 0.09); color: var(--ink-hi); }
+.rama-pill-branch { color: rgba(var(--ink), 0.55); }
+.rama-pill-worktree {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  padding-left: 7px;
+  border-left: 1px solid rgba(var(--ink), 0.12);
+  cursor: pointer;
+}
+.rama-pill-worktree input { width: 11px; height: 11px; accent-color: var(--accent); cursor: pointer; }
+.rama-pill-chip { color: rgba(var(--ink), 0.6); }
+.rama-pill-chip-remove {
+  display: inline-flex;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: 1px;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.rama-pill-chip-remove:hover { opacity: 1; }
+.rama-pill-chip-remove svg { width: 10px; height: 10px; }
+.rama-pill-add-folder { width: 24px; padding: 0; justify-content: center; }
+.rama-pill-add-wrap { position: relative; display: flex; }
+.rama-pill-add-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  padding: 6px;
+  border: 1px solid rgba(var(--ink), 0.14);
+  border-radius: 6px;
+  background: rgba(var(--sf-hi), 0.98);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-composer);
+}
+.rama-pill-add-input {
+  width: 220px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid rgba(var(--ink), 0.15);
+  border-radius: 4px;
+  background: rgba(var(--ink), 0.04);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink-hi);
+}
+.rama-pill-add-input:focus { outline: none; border-color: var(--accent); }
+
 /* Row 2 — a status rail of terminal-style tiles, not a toolbar of floating buttons. Tiles are
    cells in a grid: separated by hairlines (not gaps), square (not pill), and a hover/open state
-   fills the whole tile rect edge-to-edge rather than glowing or lifting. The rightmost cell
-   (.rama-tile-status) doubles as the run-status readout, replacing the old standalone status
-   line above the composer — same rail, two states, so the row carries information instead of
-   just being decoration. */
+   fills the whole tile rect edge-to-edge rather than glowing or lifting. docs/COMPOSER_CONTEXT_
+   PLAN.md CC0 — the run-status readout (verb/elapsed/tokens) moved back out of the rightmost
+   cell and into the message stream (.rama-status-line, above); .rama-tile-status is back to
+   being just the ⇧⏎/esc hint. */
 .rama-composer-rail { display: flex; align-items: stretch; height: 30px; border-top: 1px solid rgba(var(--ink), 0.07); }
 .rama-tile-wrap { position: relative; display: flex; }
 .rama-composer-rail > .rama-tile-wrap:not(:first-child),
@@ -707,9 +786,6 @@
   white-space: nowrap;
   overflow: hidden;
 }
-.rama-tile-status .rama-status-verb { font-size: var(--fs-sm); font-style: normal; }
-.rama-tile-status .rama-status-meta { font-size: var(--fs-xs); }
-.rama-tile-status .rama-caret { width: 5px; height: 11px; }
 .rama-tile-hint { transition: opacity 0.15s ease; }
 .rama-tile-hint-hidden { opacity: 0; }
 .rama-model-menu-banner {

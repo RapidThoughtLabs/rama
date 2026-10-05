@@ -22,6 +22,7 @@ export const toolsSearchProvider: SearchProvider = {
       chatId,
       projectId: ctx.projectId ?? "",
       projectPath,
+      extraRoots: [] as string[],
       mode: "ask" as const,
       abortSignal: new AbortController().signal,
       runId: "",

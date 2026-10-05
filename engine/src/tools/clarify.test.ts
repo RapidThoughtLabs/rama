@@ -17,6 +17,7 @@ function fakeCtx(mode: ToolCtx["mode"] = "agent"): ToolCtx {
     chatId,
     projectId: "proj-1",
     projectPath: "/tmp/x",
+    extraRoots: [],
     mode,
     abortSignal: new AbortController().signal,
     runId: "run-1",

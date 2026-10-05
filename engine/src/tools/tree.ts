@@ -4,7 +4,7 @@ import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
-import { resolveInProject } from "./paths";
+import { resolveReadPath } from "./paths";
 import { EXCLUDE_DIRS, listIgnoredDirs } from "./projectFiles";
 import type { ToolCtx, ToolResult } from "./types";
 
@@ -37,7 +37,10 @@ export function createTreeTool(ctx: ToolCtx) {
     description:
       "Show a directory as an indented tree, scoped to the project directory. Gitignored " +
       "directories are collapsed to an entry count rather than expanded. Use for orientation, " +
-      "not enumeration — prefer `glob` when you know the name shape you're looking for.",
+      "not enumeration — prefer `glob` when you know the name shape you're looking for." +
+      (ctx.extraRoots.length
+        ? ` \`path\` also accepts an absolute path under one of this chat's extra context folders: ${ctx.extraRoots.join(", ")}.`
+        : ""),
     inputSchema: z.object({
       path: z.string().optional().describe("Path relative to the project root; defaults to the project root"),
       depth: z.number().int().positive().optional().describe(`Max depth to expand; defaults to ${DEFAULT_DEPTH}`),
@@ -46,7 +49,7 @@ export function createTreeTool(ctx: ToolCtx) {
     execute: async (input, options): Promise<ToolResult> =>
       gate(ctx, { name: "tree", input, risk: "low" }, async () => {
         const relRoot = input.path ?? ".";
-        const rootAbs = resolveInProject(ctx.projectPath, relRoot);
+        const rootAbs = resolveReadPath(ctx.projectPath, ctx.extraRoots, relRoot);
         const maxDepth = input.depth ?? DEFAULT_DEPTH;
         const limit = input.limit ?? DEFAULT_LIMIT;
         const ignoredDirs = await listIgnoredDirs(rootAbs);

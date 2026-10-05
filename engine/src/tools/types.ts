@@ -57,6 +57,10 @@ export interface ToolCtx {
   chatId: string;
   projectId: string;
   projectPath: string;
+  // docs/COMPOSER_CONTEXT_PLAN.md Phase CC1 — absolute paths the chat has pointed the agent at
+  // for extra (read-only) context; see tools/paths.ts's resolveReadPath. Empty unless the chat
+  // has any "+folder" chips.
+  extraRoots: string[];
   mode: ChatMode;
   abortSignal: AbortSignal;
 

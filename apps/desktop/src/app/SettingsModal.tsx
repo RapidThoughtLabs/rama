@@ -166,6 +166,20 @@ function GeneralPane() {
         </div>
       </div>
       <div className="rama-settings-field">
+        <label className="rama-settings-label">prune old tool output</label>
+        <Toggle
+          checked={settings.pruneOldToolOutputs}
+          onChange={(v) => save({ pruneOldToolOutputs: v })}
+          label={settings.pruneOldToolOutputs ? "on" : "off"}
+        />
+        <div className="rama-settings-hint">
+          during a long turn, replaces old tool output (old file reads, command output) with a placeholder once it
+          falls outside a recent budget — frees context space, but the agent can no longer see what it already read.
+          off by default: most tasks never need it, and it can force the agent to re-read files that were still
+          relevant.
+        </div>
+      </div>
+      <div className="rama-settings-field">
         <label className="rama-settings-label">telemetry</label>
         <div className="rama-settings-hint">
           rama runs entirely on your machine — chats, projects, and settings all live in ~/.rama. no usage data is

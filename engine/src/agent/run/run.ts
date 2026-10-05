@@ -8,7 +8,7 @@ import type { ChatMode, GeneralSettingsDTO, TerminalState } from "@rama/protocol
 import { createCheckpointer } from "../../checkpoints";
 import { clearModelError, recordModelError } from "../../db/providerModels";
 import { createArtifact } from "../../db/artifacts";
-import { getChat, recordUsage, stubTitleFromFirstMessage } from "../../db/chats";
+import { getChat, getChatSettings, recordUsage, stubTitleFromFirstMessage } from "../../db/chats";
 import { appendMessage, finalizeMessage } from "../../db/messages";
 import { getProject } from "../../db/projects";
 import { finalizeOrphanedToolCalls, markToolCallDecayed } from "../../db/toolCalls";
@@ -77,11 +77,22 @@ export function interrupt(chatId: string): boolean {
   return true;
 }
 
-function readProjectKnowledge(projectPath: string): ProjectKnowledgeInputs {
+function readProjectKnowledge(projectPath: string, extraRoots: string[]): ProjectKnowledgeInputs {
   return {
     global: getGlobalInstructions()?.content ?? null,
     project: getProjectInstructions(projectPath)?.content ?? null,
+    extraRoots,
   };
+}
+
+// docs/COMPOSER_CONTEXT_PLAN.md Phase CC2 — the one place a chat's worktree state turns into an
+// actual filesystem path. Everything downstream (ToolCtx.projectPath and the reads/checkpoints/
+// shell/diagnostics factories built from it, plus getVolatileEnv's live branch/dirty read) sees
+// this instead of the project's own path whenever the chat's worktree is enabled — see run.ts's
+// module doc and COMPOSER_CONTEXT_PLAN.md §3.3 for what deliberately stays on the primary project
+// path instead (RAMA.md discovery, agent discovery, complexity classification, titling, curator).
+function effectiveProjectPath(projectPath: string, settings: { worktreeEnabled: boolean; worktreePath: string | null }): string {
+  return settings.worktreeEnabled && settings.worktreePath ? settings.worktreePath : projectPath;
 }
 
 /**
@@ -121,6 +132,7 @@ export function buildProjectionContext(params: {
   agent: AgentDef;
   effectiveToolNames: string[];
   projectPath: string;
+  extraRoots: string[];
 }): { promptBlocks: PromptBlocks; policy: ProjectionPolicy } {
   const cachePolicy = getCachePolicy(params.providerId, params.model);
   const promptBlocks = buildPrompt({
@@ -131,7 +143,7 @@ export function buildProjectionContext(params: {
     mode: params.mode,
     agent: params.agent,
     effectiveToolNames: params.effectiveToolNames,
-    projectKnowledge: readProjectKnowledge(params.projectPath),
+    projectKnowledge: readProjectKnowledge(params.projectPath, params.extraRoots),
   });
   return {
     promptBlocks,
@@ -255,17 +267,21 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
     const subagent = resolveSubagent(providerRow, model, apiKey, client);
     const agent: AgentDef = resolveAgent({ projectId: projectRow.id, projectPath: projectRow.path }, chat.agentId);
 
+    const chatSettings = getChatSettings(chatId) ?? { extraRoots: [], worktreeEnabled: false, worktreePath: null, worktreeBranch: null };
+    const effectivePath = effectiveProjectPath(projectRow.path, chatSettings);
+
     toolCtx = {
       chatId,
       projectId: projectRow.id,
-      projectPath: projectRow.path,
+      projectPath: effectivePath,
+      extraRoots: chatSettings.extraRoots,
       mode: chat.mode,
       abortSignal: controller.signal,
       runId,
-      reads: createReadTracker(chatId, projectRow.path),
-      checkpoints: createCheckpointer(projectRow.path),
-      shell: createShellSession(projectRow.path),
-      diagnostics: createDiagnosticRunner(projectRow.path),
+      reads: createReadTracker(chatId, effectivePath),
+      checkpoints: createCheckpointer(effectivePath),
+      shell: createShellSession(effectivePath),
+      diagnostics: createDiagnosticRunner(effectivePath),
       llmClient: client,
       subagentClient: subagent.client,
       subagentModel: subagent.model,
@@ -288,12 +304,15 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
       agent,
       effectiveToolNames: Object.keys(effectiveTools),
       projectPath: projectRow.path,
+      extraRoots: chatSettings.extraRoots,
     });
 
-    const volatileEnv = await getVolatileEnv(projectRow.path);
+    const volatileEnv = await getVolatileEnv(effectivePath);
 
     const transcript: Transcript = buildTranscriptFromDb(chatId);
     const budget = new BudgetController(chat.mode);
+    // Opt-in, off by default — see GeneralSettingsDTO.pruneOldToolOutputs' doc comment.
+    const pruneOldToolOutputs = getSetting<GeneralSettingsDTO>("general")?.pruneOldToolOutputs ?? false;
 
     broadcast(chatId, { type: "run.started", runId, ts: Date.now() });
     broadcast(chatId, { type: "status", state: "thinking", verb: "thinking" });
@@ -332,7 +351,7 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
       // 3. Decay (D4/CB3) — pure, local, free; runs every step, unlike compaction which stays
       // rare. Persists what it decides (CB2's decayed_at) so the projection survives a reload
       // instead of dying with this run like the rest of the working-copy transcript.
-      const decayResult = decayTranscript(transcript);
+      const decayResult = decayTranscript(transcript, { pruneOldToolOutputs });
       const decayedAt = Date.now();
       for (const callId of decayResult.decayedCallIds) {
         markToolCallDecayed(callId, decayedAt);
@@ -378,6 +397,7 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
             apiKey,
             signal: controller.signal,
             unverifiedWrites,
+            pruneOldToolOutputs,
           });
           lastCompactionEntryCount = transcript.entries.length;
           pendingCompactionRetryStep = true;
@@ -482,6 +502,7 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
           apiKey,
           signal: controller.signal,
           unverifiedWrites,
+          pruneOldToolOutputs,
         });
         lastCompactionEntryCount = transcript.entries.length;
         pendingCompactionRetryStep = true;
@@ -669,17 +690,21 @@ export async function getPromptPreview(chatId: string): Promise<PromptPreview | 
   const subagent = resolveSubagent(providerRow, model, apiKey, client);
   const agent: AgentDef = resolveAgent({ projectId: projectRow.id, projectPath: projectRow.path }, chat.agentId);
 
+  const chatSettings = getChatSettings(chatId) ?? { extraRoots: [], worktreeEnabled: false, worktreePath: null, worktreeBranch: null };
+  const effectivePath = effectiveProjectPath(projectRow.path, chatSettings);
+
   const toolCtx: ToolCtx = {
     chatId,
     projectId: projectRow.id,
-    projectPath: projectRow.path,
+    projectPath: effectivePath,
+    extraRoots: chatSettings.extraRoots,
     mode: chat.mode,
     abortSignal: new AbortController().signal,
     runId: newId(),
-    reads: createReadTracker(chatId, projectRow.path),
-    checkpoints: createCheckpointer(projectRow.path),
-    shell: createShellSession(projectRow.path),
-    diagnostics: createDiagnosticRunner(projectRow.path),
+    reads: createReadTracker(chatId, effectivePath),
+    checkpoints: createCheckpointer(effectivePath),
+    shell: createShellSession(effectivePath),
+    diagnostics: createDiagnosticRunner(effectivePath),
     llmClient: client,
     subagentClient: subagent.client,
     subagentModel: subagent.model,
@@ -701,10 +726,11 @@ export async function getPromptPreview(chatId: string): Promise<PromptPreview | 
     agent,
     effectiveToolNames: Object.keys(effectiveTools),
     projectPath: projectRow.path,
+    extraRoots: chatSettings.extraRoots,
   });
   const cachePolicy = getCachePolicy(providerId, model);
 
-  const volatileEnv = await getVolatileEnv(projectRow.path);
+  const volatileEnv = await getVolatileEnv(effectivePath);
   const ephemeralText = buildEphemeralText({ volatileEnv });
 
   const transcript = buildTranscriptFromDb(chatId);

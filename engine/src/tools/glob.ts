@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
-import { resolveInProject } from "./paths";
+import { resolveReadPath } from "./paths";
 import { EXCLUDE_DIRS, listProjectFiles } from "./projectFiles";
 import type { ToolCtx, ToolResult } from "./types";
 
@@ -13,7 +13,10 @@ export function createGlobTool(ctx: ToolCtx) {
   return defineTool({
     description:
       'Find files by glob pattern (e.g. "**/*.ts", "src/**/*.test.*"), scoped to the project ' +
-      "directory and respecting .gitignore. Results are sorted most-recently-modified first.",
+      "directory and respecting .gitignore. Results are sorted most-recently-modified first." +
+      (ctx.extraRoots.length
+        ? ` \`path\` also accepts an absolute path under one of this chat's extra context folders: ${ctx.extraRoots.join(", ")}.`
+        : ""),
     inputSchema: z.object({
       pattern: z.string().describe('Glob pattern, e.g. "**/*.ts"'),
       path: z.string().optional().describe("Path relative to the project root to search within; defaults to the whole project"),
@@ -22,7 +25,7 @@ export function createGlobTool(ctx: ToolCtx) {
     execute: async (input): Promise<ToolResult> =>
       gate(ctx, { name: "glob", input, risk: "low" }, async () => {
         const searchRel = input.path ?? ".";
-        const searchAbs = resolveInProject(ctx.projectPath, searchRel);
+        const searchAbs = resolveReadPath(ctx.projectPath, ctx.extraRoots, searchRel);
         const limit = input.limit ?? DEFAULT_LIMIT;
         const matcher = new Bun.Glob(input.pattern);
 

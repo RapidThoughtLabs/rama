@@ -47,6 +47,7 @@ function baseParams() {
     agent: AGENT,
     effectiveToolNames: Object.keys(tools),
     projectPath: process.cwd(),
+    extraRoots: [] as string[],
   };
 }
 

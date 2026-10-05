@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import { Button, Fluke } from "@rama/ui";
-import type { ArtifactDTO, ChatMode, SearchResultDTO, ToolCallDTO } from "@rama/protocol";
-import { fetchArtifactContent, patchChat, ramaSearch } from "../engine/client";
+import { Button, Fluke, IconClose, IconFolder, IconPlus } from "@rama/ui";
+import type { ArtifactDTO, ChatBlock, ChatMode, SearchResultDTO, ToolCallDTO } from "@rama/protocol";
+import {
+  fetchArtifactContent,
+  fetchChanges,
+  fetchChatChanges,
+  fetchChatSettings,
+  patchChat,
+  ramaSearch,
+  saveChatExtraRoots,
+  setChatWorktree,
+} from "../engine/client";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useProvidersData } from "./data/ProvidersProvider";
 import { useSessionData } from "./data/SessionProvider";
@@ -43,6 +52,72 @@ function formatTokens(n: number): string {
 function formatThinkingDuration(durationMs: number): string {
   const seconds = durationMs / 1000;
   return seconds < 1 ? "Thought for <1s" : `Thought for ${Math.round(seconds)}s`;
+}
+
+// docs/COMPOSER_CONTEXT_PLAN.md CC0 — Claude Code's "Clauding…" idea, renamed for Rama. Only
+// ever stands in for the generic "thinking" verb (engine/src/agent/run/run.ts's literal
+// `verb: "thinking"`); a real verb — "compacting", "running <tool>", "responding", "waiting for
+// approval: <tool>" — always renders as itself, never swapped for one of these.
+const THINKING_VERBS = [
+  "Ramaing",
+  "Hullaballooing",
+  "Tinkering",
+  "Percolating",
+  "Noodling",
+  "Ruminating",
+  "Marinating",
+  "Puzzling",
+  "Combobulating",
+  "Cogitating",
+  "Spelunking",
+  "Wrangling",
+  "Mulling",
+  "Contemplating",
+  "Pondering",
+  "Synthesizing",
+  "Deliberating",
+  "Brewing",
+  "Concocting",
+  "Untangling",
+  "Sussing it out",
+  "Thinking longer",
+];
+
+// Cycles off overall run elapsed time rather than its own timer — cheap, and a phase re-entering
+// "thinking" after a tool call just picks up wherever the cycle already was instead of resetting.
+function pickThinkingVerb(elapsedSeconds: number): string {
+  const idx = Math.floor(elapsedSeconds / 2) % THINKING_VERBS.length;
+  return THINKING_VERBS[idx]!;
+}
+
+// Rough client-side estimate (chars/4) for the status line's live "↓ N tokens" — usage.update
+// only arrives once, at run end (engine/src/agent/run/run.ts:540), so there is no real live count
+// to read during streaming.
+function estimateStreamedTokens(blocks: ChatBlock[] | undefined): number {
+  if (!blocks) return 0;
+  let chars = 0;
+  for (const b of blocks) {
+    if (b.kind === "text" || b.kind === "thinking") chars += b.text.length;
+  }
+  return Math.round(chars / 4);
+}
+
+// Cumulative "thought for Xs": completed thinking blocks already carry their own durationMs
+// (stamped by thinking.done); the one still streaming has none yet, so its live elapsed is read
+// from `liveStarts` (populated the moment each block first appears — see the effect below).
+function sumThinkingMs(blocks: ChatBlock[] | undefined, liveStarts: Record<string, number>, now: number): number {
+  if (!blocks) return 0;
+  let total = 0;
+  for (const b of blocks) {
+    if (b.kind !== "thinking") continue;
+    if (b.durationMs != null) {
+      total += b.durationMs;
+    } else {
+      const start = liveStarts[`${b.stepIndex ?? 0}-${b.blockIndex ?? 0}`];
+      if (start) total += now - start;
+    }
+  }
+  return total;
 }
 
 function formatToolTarget(name: string, input: unknown): string {
@@ -394,6 +469,133 @@ export function ChatColumn() {
   // that's fine, these are transient run notices (compaction, /undo), not durable history.
   const [dismissedMetaIds, setDismissedMetaIds] = useState<Set<string>>(new Set());
 
+  // docs/COMPOSER_CONTEXT_PLAN.md CC0/CC1/CC2 — the composer's pill row. `branch` is real (chat-
+  // scoped: the worktree's own branch once one is active, the project's otherwise).
+  // `worktreeOn`/`extraFolders` are real too, backed by the chat's `settings_json` — but while
+  // viewing an unsent draft there is no chat id yet to persist against, so both stay purely local
+  // until submit() carries them over onto the chat promoteDraft creates.
+  const [branch, setBranch] = useState<string | null>(null);
+  const [worktreeOn, setWorktreeOn] = useState(false);
+  const [extraFolders, setExtraFolders] = useState<string[]>([]);
+  const [addFolderOpen, setAddFolderOpen] = useState(false);
+  const [addFolderValue, setAddFolderValue] = useState("");
+
+  // A draft's pending extraFolders/worktreeOn choices are carried onto the new chat by submit()
+  // the instant promoteDraft resolves — which is also the instant `displayChat?.id` below flips
+  // from undefined to that chat's id and fires the settings fetch. Without this, the fetch's GET
+  // routinely wins the race against submit()'s PUT/POST (the brand-new chat has empty defaults
+  // until that persist call lands) and silently reverts the pills/checkbox to empty/off, with
+  // nothing to correct it afterward since this effect only re-fires on chat-id change. Set by
+  // submit() right before it starts persisting; consumed (and cleared) below at most once.
+  const skipNextSettingsFetchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setAddFolderOpen(false);
+    setAddFolderValue("");
+
+    if (!activeProject) {
+      setBranch(null);
+      setWorktreeOn(false);
+      setExtraFolders([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    if (displayChat) {
+      const chatId = displayChat.id;
+      fetchChatChanges(chatId)
+        .then((changes) => {
+          if (!cancelled) setBranch(changes.detached ? "(detached)" : changes.branch);
+        })
+        .catch(() => {
+          if (!cancelled) setBranch(activeProject.defaultBranch ?? null);
+        });
+      if (skipNextSettingsFetchRef.current === chatId) {
+        skipNextSettingsFetchRef.current = null;
+      } else {
+        fetchChatSettings(chatId)
+          .then((settings) => {
+            if (cancelled) return;
+            setExtraFolders(settings.extraRoots);
+            setWorktreeOn(settings.worktreeEnabled);
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setExtraFolders([]);
+              setWorktreeOn(false);
+            }
+          });
+      }
+    } else {
+      // Viewing the draft — no chat id to load/persist against yet.
+      setWorktreeOn(false);
+      setExtraFolders([]);
+      fetchChanges(activeProject.id)
+        .then((changes) => {
+          if (!cancelled) setBranch(changes.detached ? "(detached)" : changes.branch);
+        })
+        .catch(() => {
+          if (!cancelled) setBranch(activeProject.defaultBranch ?? null);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject, displayChat?.id]);
+
+  function addExtraFolder() {
+    const trimmed = addFolderValue.trim();
+    setAddFolderValue("");
+    setAddFolderOpen(false);
+    if (!trimmed || extraFolders.includes(trimmed)) return;
+    const next = [...extraFolders, trimmed];
+    setExtraFolders(next);
+    if (displayChat) {
+      saveChatExtraRoots(displayChat.id, next).catch((err) => {
+        console.error("[rama] failed to save extra context folder", err);
+        setExtraFolders((prev) => prev.filter((f) => f !== trimmed));
+      });
+    }
+  }
+
+  function removeExtraFolder(folder: string) {
+    const next = extraFolders.filter((f) => f !== folder);
+    setExtraFolders(next);
+    if (displayChat) {
+      saveChatExtraRoots(displayChat.id, next).catch((err) => {
+        console.error("[rama] failed to remove extra context folder", err);
+        setExtraFolders((prev) => (prev.includes(folder) ? prev : [...prev, folder]));
+      });
+    }
+  }
+
+  // CC2 — the worktree checkbox's real backend. Toggling mid-chat only affects tool calls from
+  // the next turn on (run.ts computes effectiveProjectPath fresh per run); it does not carry any
+  // uncommitted changes made before the toggle into the worktree, since `git worktree add` only
+  // ever checks out committed state — see docs/COMPOSER_CONTEXT_PLAN.md CC2's open questions.
+  function toggleWorktree(next: boolean) {
+    if (!displayChat) {
+      // No chat yet — remember the choice locally, submit() applies it once promoteDraft runs.
+      setWorktreeOn(next);
+      return;
+    }
+    const chatId = displayChat.id;
+    setWorktreeOn(next);
+    setChatWorktree(chatId, next)
+      .then((settings) => {
+        setWorktreeOn(settings.worktreeEnabled);
+        return fetchChatChanges(chatId).then((changes) => {
+          setBranch(changes.detached ? "(detached)" : changes.branch);
+        });
+      })
+      .catch((err) => {
+        console.error("[rama] failed to toggle worktree", err);
+        setWorktreeOn(!next);
+      });
+  }
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
   const [searchIndex, setSearchIndex] = useState(0);
@@ -538,6 +740,14 @@ export function ChatColumn() {
     return () => clearInterval(id);
   }, [isBusy, status.runStartedAt]);
 
+  // docs/COMPOSER_CONTEXT_PLAN.md CC0 — the folder pill opens the existing add/switch-project
+  // modal that already lives in Sidebar.tsx, via the same window-CustomEvent bridge
+  // rama:composer-insert/rama:run-command already use, rather than forking a second project-add
+  // flow here.
+  function openProjectSwitcher() {
+    window.dispatchEvent(new CustomEvent("rama:open-add-project"));
+  }
+
   function handleModeChange(next: ChatMode) {
     setMode(next);
     if (viewingDraft) {
@@ -562,9 +772,36 @@ export function ChatColumn() {
     // than waiting for `activeChatId` to catch up on the next render.
     if (viewingDraft) {
       if (!draft) return;
+      // CC1/CC2 — extra folders and a worktree choice made before the first message are held
+      // locally (no chat id existed yet to persist them against); carry them onto the chat
+      // promoteDraft is about to create.
+      const pendingExtraFolders = extraFolders;
+      const pendingWorktreeOn = worktreeOn;
       void promoteDraft()
         .then((chat) => {
-          if (chat) sendUserTurnTo(chat.id, text);
+          if (!chat) return;
+          sendUserTurnTo(chat.id, text);
+          // Local state already shows pendingExtraFolders/pendingWorktreeOn correctly (that's
+          // where they came from) — tell the pill-row effect not to clobber it with a fetch that
+          // can race ahead of the persist calls below. See the ref's own comment for why.
+          skipNextSettingsFetchRef.current = chat.id;
+          if (pendingExtraFolders.length) {
+            saveChatExtraRoots(chat.id, pendingExtraFolders).catch((err) => {
+              console.error("[rama] failed to carry extra context folders into new chat", err);
+            });
+          }
+          if (pendingWorktreeOn) {
+            setChatWorktree(chat.id, true)
+              .then((settings) => {
+                setWorktreeOn(settings.worktreeEnabled);
+                return fetchChatChanges(chat.id).then((changes) => {
+                  setBranch(changes.detached ? "(detached)" : changes.branch);
+                });
+              })
+              .catch((err) => {
+                console.error("[rama] failed to enable worktree for new chat", err);
+              });
+          }
         })
         .catch((err) => {
           console.error("[rama] failed to create chat from draft", err);
@@ -645,6 +882,31 @@ export function ChatColumn() {
   const contextMax = viewingDraft ? 200000 : (usage?.contextMax ?? activeChat?.contextMax ?? 200000);
   const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
   const elapsedSeconds = status.runStartedAt ? Math.max(0, Math.round((now - status.runStartedAt) / 1000)) : 0;
+
+  // docs/COMPOSER_CONTEXT_PLAN.md CC0 — the still-streaming assistant bubble, i.e. the same
+  // pending message the loop above already renders live; the status line below just summarizes
+  // it. Keyed by block (stepIndex, blockIndex) rather than message id since that's what
+  // thinking.delta/thinking.done already key on (SessionProvider.tsx).
+  const pendingMessage = isBusy ? messages.find((m) => m.id.startsWith("pending-")) : undefined;
+
+  const thinkingStartsRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    thinkingStartsRef.current = {};
+  }, [status.runStartedAt]);
+  useEffect(() => {
+    if (!pendingMessage?.blocks) return;
+    for (const b of pendingMessage.blocks) {
+      if (b.kind === "thinking" && b.durationMs == null) {
+        const key = `${b.stepIndex ?? 0}-${b.blockIndex ?? 0}`;
+        if (!(key in thinkingStartsRef.current)) thinkingStartsRef.current[key] = Date.now();
+      }
+    }
+  }, [pendingMessage]);
+
+  const isGenericThinking = isBusy && status.state === "thinking" && (status.verb ?? "thinking") === "thinking";
+  const statusVerb = isGenericThinking ? pickThinkingVerb(elapsedSeconds) : (status.verb ?? status.state);
+  const streamedTokens = estimateStreamedTokens(pendingMessage?.blocks);
+  const thinkingSeconds = Math.round(sumThinkingMs(pendingMessage?.blocks, thinkingStartsRef.current, now) / 1000);
 
   return (
     <div className="rama-chat-column">
@@ -833,6 +1095,20 @@ export function ChatColumn() {
             </div>
           )}
 
+          {/* docs/COMPOSER_CONTEXT_PLAN.md CC0 — lives in the stream, right above the composer,
+              not in the composer rail: reads as the tail of the conversation ("still working"),
+              not part of the input. */}
+          {isBusy && (
+            <div className="rama-status-line">
+              <span className="rama-status-verb">✻ {statusVerb}…</span>
+              <span className="rama-status-meta">
+                ({elapsedSeconds}s · ↓ {streamedTokens} tokens
+                {thinkingSeconds >= 1 ? ` · thought for ${thinkingSeconds}s` : ""})
+              </span>
+              <span className="rama-caret" />
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
@@ -871,6 +1147,70 @@ export function ChatColumn() {
             </div>
           )}
           <div className="rama-composer">
+            {(activeProject || viewingDraft) && (
+              <div className="rama-composer-pills">
+                <button type="button" className="rama-pill rama-pill-folder" onClick={openProjectSwitcher} title="Switch project">
+                  <IconFolder />
+                  {activeProject?.name ?? "select project"}
+                </button>
+                {branch && (
+                  <span className="rama-pill rama-pill-branch">
+                    ⑂ {branch}
+                    <label className="rama-pill-worktree" title="Isolate this chat's tool calls in their own git worktree + branch">
+                      <input type="checkbox" checked={worktreeOn} onChange={(e) => toggleWorktree(e.target.checked)} />
+                      worktree
+                    </label>
+                  </span>
+                )}
+                {extraFolders.map((folder) => (
+                  <span key={folder} className="rama-pill rama-pill-chip" title={folder}>
+                    {folder.split("/").pop() || folder}
+                    <button
+                      type="button"
+                      className="rama-pill-chip-remove"
+                      aria-label={`Remove ${folder}`}
+                      onClick={() => removeExtraFolder(folder)}
+                    >
+                      <IconClose />
+                    </button>
+                  </span>
+                ))}
+                <div className="rama-pill-add-wrap">
+                  <button
+                    type="button"
+                    className="rama-pill rama-pill-add-folder"
+                    onClick={() => setAddFolderOpen((v) => !v)}
+                    title="Point the agent at another folder for context"
+                  >
+                    <IconPlus />
+                  </button>
+                  {addFolderOpen && (
+                    <div className="rama-pill-add-popover">
+                      <input
+                        autoFocus
+                        className="rama-pill-add-input"
+                        placeholder="/path/to/folder"
+                        value={addFolderValue}
+                        onChange={(e) => setAddFolderValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addExtraFolder();
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setAddFolderOpen(false);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!addFolderValue.trim()) setAddFolderOpen(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="rama-composer-row">
               <span className="rama-composer-glyph">❯</span>
               <textarea
@@ -919,16 +1259,13 @@ export function ChatColumn() {
                 draftAgentId={viewingDraft ? draft?.agentId : undefined}
                 onDraftChange={updateDraftAgent}
               />
+              {/* docs/COMPOSER_CONTEXT_PLAN.md CC0 — the verb/elapsed/token readout that used to
+                  live here now renders in the message stream (see the busy status line above),
+                  right where the next assistant turn would appear. This tile is just the hint. */}
               <div className="rama-tile-status">
-                {isBusy ? (
-                  <>
-                    <span className="rama-status-verb">✻ {status.verb ?? status.state}…</span>
-                    <span className="rama-status-meta">{elapsedSeconds}s · esc</span>
-                    <span className="rama-caret" />
-                  </>
-                ) : (
-                  <span className={`rama-tile-hint${composerFocused && !typed.trim() ? "" : " rama-tile-hint-hidden"}`}>⇧⏎ nl</span>
-                )}
+                <span className={`rama-tile-hint${isBusy || (composerFocused && !typed.trim()) ? "" : " rama-tile-hint-hidden"}`}>
+                  {isBusy ? "esc to stop" : "⇧⏎ nl"}
+                </span>
               </div>
             </div>
           </div>

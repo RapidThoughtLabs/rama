@@ -6,6 +6,7 @@ import type {
   ChangeDiffDTO,
   ChangesDTO,
   ChatDTO,
+  ChatSettingsDTO,
   CreateChatInput,
   CreateProjectInput,
   CurationProposalDTO,
@@ -108,6 +109,27 @@ export function deleteChat(chatId: string): Promise<{ ok: true }> {
 // docs/TOOL_LAYER_PLAN.md §5.2 — restores the project's files to the state before the last run.
 export function undoLastRun(chatId: string): Promise<{ ok: boolean; message: string }> {
   return engineJson(`/chats/${chatId}/undo`, { method: "POST" });
+}
+
+// docs/COMPOSER_CONTEXT_PLAN.md Phase CC1 — the composer's "+folder" chips.
+export function fetchChatSettings(chatId: string): Promise<ChatSettingsDTO> {
+  return engineJson(`/chats/${chatId}/settings`);
+}
+
+export function saveChatExtraRoots(chatId: string, extraRoots: string[]): Promise<ChatSettingsDTO> {
+  return engineJson(`/chats/${chatId}/settings`, { method: "PUT", body: JSON.stringify({ extraRoots }) });
+}
+
+// docs/COMPOSER_CONTEXT_PLAN.md Phase CC2 — the composer's worktree checkbox's real backend.
+export function setChatWorktree(chatId: string, enabled: boolean): Promise<ChatSettingsDTO> {
+  return engineJson(`/chats/${chatId}/worktree`, { method: "POST", body: JSON.stringify({ enabled }) });
+}
+
+// CC2 — chat-scoped changes: reads the chat's own worktree path when one is active, the primary
+// project checkout otherwise. Use this instead of fetchChanges(projectId) for the composer's
+// branch pill, since that one always reads the primary checkout.
+export function fetchChatChanges(chatId: string): Promise<ChangesDTO> {
+  return engineJson(`/chats/${chatId}/changes`);
 }
 
 export function fetchMessages(chatId: string): Promise<MessageDTO[]> {

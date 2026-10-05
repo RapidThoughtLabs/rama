@@ -59,7 +59,7 @@ function inputs(overrides: Partial<PromptInputs> = {}): PromptInputs {
     mode: "agent",
     agent: DEFAULT_AGENT,
     effectiveToolNames: Object.keys(tools),
-    projectKnowledge: { global: null, project: null },
+    projectKnowledge: { global: null, project: null, extraRoots: [] },
     ...overrides,
   };
 }
@@ -167,10 +167,19 @@ describe("buildPrompt", () => {
   });
 
   test("project knowledge renders in bp2, alongside static env, never the kernel block", () => {
-    const { blocks } = buildPrompt(inputs({ projectKnowledge: { global: "use bun", project: null } }));
+    const { blocks } = buildPrompt(inputs({ projectKnowledge: { global: "use bun", project: null, extraRoots: [] } }));
     expect(blocks[1].label).toBe("agent+mode+project+env");
     expect(blocks[1].content).toContain("use bun");
     expect(blocks[0].content).not.toContain("use bun");
+  });
+
+  test("extra context folders render as pointers in bp2, never dumped into bp1", () => {
+    const { blocks } = buildPrompt(
+      inputs({ projectKnowledge: { global: null, project: null, extraRoots: ["/Users/x/other-repo"] } }),
+    );
+    expect(blocks[1].content).toContain("/Users/x/other-repo");
+    expect(blocks[1].content).toContain("read-only");
+    expect(blocks[0].content).not.toContain("/Users/x/other-repo");
   });
 
   test("no RAMA.md anywhere still produces non-empty bp2 content (static env alone)", () => {
@@ -226,17 +235,25 @@ describe("formatEffectiveToolsNote", () => {
 
 describe("formatProjectKnowledge", () => {
   test("a project whose RAMA.md says 'use bun' is present verbatim (PS3 exit criterion)", () => {
-    const text = formatProjectKnowledge({ global: null, project: "use bun, not npm, for everything." });
+    const text = formatProjectKnowledge({ global: null, project: "use bun, not npm, for everything.", extraRoots: [] });
     expect(text).toContain("use bun, not npm, for everything.");
   });
 
-  test("empty when neither doc exists", () => {
-    expect(formatProjectKnowledge({ global: null, project: null })).toBe("");
+  test("empty when neither doc exists and there are no extra roots", () => {
+    expect(formatProjectKnowledge({ global: null, project: null, extraRoots: [] })).toBe("");
   });
 
   test("both docs render with distinct headers, global first", () => {
-    const text = formatProjectKnowledge({ global: "g", project: "p" });
+    const text = formatProjectKnowledge({ global: "g", project: "p", extraRoots: [] });
     expect(text.indexOf("Global")).toBeLessThan(text.indexOf("Project"));
+  });
+
+  // docs/COMPOSER_CONTEXT_PLAN.md Phase CC1 — a pointer (the path), never the folder's contents.
+  test("extra roots render as an absolute-path list, not file contents", () => {
+    const text = formatProjectKnowledge({ global: null, project: null, extraRoots: ["/a/b", "/c/d"] });
+    expect(text).toContain("/a/b");
+    expect(text).toContain("/c/d");
+    expect(text).toContain("Additional context folders");
   });
 });
 

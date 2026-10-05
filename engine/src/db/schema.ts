@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS chats (
   project_id TEXT NOT NULL REFERENCES projects(id),
   title TEXT NOT NULL,
   backend_json TEXT NOT NULL DEFAULT '{}',
+  settings_json TEXT NOT NULL DEFAULT '{}', -- docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2: extraRoots + worktree state, mirrors projects.settings_json
   provider_id TEXT NOT NULL DEFAULT 'together',
   model TEXT,
   mode TEXT NOT NULL DEFAULT 'agent',

@@ -1,4 +1,12 @@
-import type { BackendConfig, ChatDTO, ChatMode, CreateChatInput, ThemeIdDTO, UpdateChatInput } from "@rama/protocol";
+import type {
+  BackendConfig,
+  ChatDTO,
+  ChatMode,
+  ChatSettingsDTO,
+  CreateChatInput,
+  ThemeIdDTO,
+  UpdateChatInput,
+} from "@rama/protocol";
 import { getChatRoleModel } from "../agent/config";
 import { db } from "./index";
 import { newId } from "./ids";
@@ -216,4 +224,67 @@ export function recordUsage(id: string, usage: { contextUsed: number; costUsd: n
 // calls for, applied at the storage layer since there's no cost-breakdown UI to feed yet.
 export function recordUtilityUsage(id: string, costUsd: number): void {
   db.query("UPDATE chats SET utility_cost_usd = utility_cost_usd + ? WHERE id = ?").run(costUsd, id);
+}
+
+// docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2 — chats.settings_json, mirroring db/projects.ts's
+// readSettingsJson/ProjectSettingsJson split. Narrow and typed on purpose — see schema.ts's note
+// on why this isn't folded into backend_json.
+interface ChatSettingsJson {
+  extraRoots?: string[];
+  worktreeEnabled?: boolean;
+  worktreePath?: string;
+  worktreeBranch?: string;
+}
+
+function readChatSettingsJson(id: string): ChatSettingsJson | null {
+  const row = db.query<{ settings_json: string }, [string]>("SELECT settings_json FROM chats WHERE id = ?").get(id);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.settings_json) as ChatSettingsJson;
+  } catch {
+    return {};
+  }
+}
+
+function writeChatSettingsJson(id: string, settings: ChatSettingsJson): void {
+  db.query("UPDATE chats SET settings_json = ? WHERE id = ?").run(JSON.stringify(settings), id);
+}
+
+function toSettingsDTO(settings: ChatSettingsJson): ChatSettingsDTO {
+  return {
+    extraRoots: settings.extraRoots ?? [],
+    worktreeEnabled: settings.worktreeEnabled ?? false,
+    worktreePath: settings.worktreePath ?? null,
+    worktreeBranch: settings.worktreeBranch ?? null,
+  };
+}
+
+export function getChatSettings(id: string): ChatSettingsDTO | null {
+  const settings = readChatSettingsJson(id);
+  return settings === null ? null : toSettingsDTO(settings);
+}
+
+// CC1 — the "+folder" pointer chips. The client always sends the full list (it already holds it
+// in local state to render the chips), so this is a replace, not a merge.
+export function setChatExtraRoots(id: string, extraRoots: string[]): ChatSettingsDTO | null {
+  const settings = readChatSettingsJson(id);
+  if (settings === null) return null;
+  const next: ChatSettingsJson = { ...settings, extraRoots };
+  writeChatSettingsJson(id, next);
+  return toSettingsDTO(next);
+}
+
+// CC2 — called by server.ts's POST /chats/:id/worktree after ensureWorktree/removeWorktree has
+// already run; this only persists the outcome. `path`/`branch` are null on disable so a stale
+// path can never leak into a later effectiveProjectPath computation after the worktree is gone.
+export function setChatWorktree(id: string, worktree: { enabled: boolean; path: string | null; branch: string | null }): ChatSettingsDTO | null {
+  const settings = readChatSettingsJson(id);
+  if (settings === null) return null;
+  const next: ChatSettingsJson = { ...settings, worktreeEnabled: worktree.enabled };
+  if (worktree.path) next.worktreePath = worktree.path;
+  else delete next.worktreePath;
+  if (worktree.branch) next.worktreeBranch = worktree.branch;
+  else delete next.worktreeBranch;
+  writeChatSettingsJson(id, next);
+  return toSettingsDTO(next);
 }

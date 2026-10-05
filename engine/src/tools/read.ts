@@ -4,7 +4,7 @@ import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
-import { resolveInProject } from "./paths";
+import { resolveReadPath } from "./paths";
 import { listProjectFiles } from "./projectFiles";
 import { levenshtein } from "./textSimilarity";
 import type { ToolCtx, ToolResult } from "./types";
@@ -62,7 +62,10 @@ export function createReadTool(ctx: ToolCtx) {
       "Read a file's contents, scoped to the project directory. Each line is prefixed with a " +
       '"NNNN| " line number for display only — never copy that gutter into edit\'s oldString, it ' +
       `will not match the file's real bytes. Defaults to the first ${MAX_LINES} lines; pass offset/limit to page ` +
-      "through longer files. Do not use `bash cat` — it does not mark the file as read, and `edit` will refuse afterwards.",
+      "through longer files. Do not use `bash cat` — it does not mark the file as read, and `edit` will refuse afterwards." +
+      (ctx.extraRoots.length
+        ? ` Also accepts an absolute path under one of this chat's extra context folders: ${ctx.extraRoots.join(", ")} — read-only, edit will refuse there.`
+        : ""),
     inputSchema: z.object({
       path: z.string().describe("Path relative to the project root"),
       offset: z.number().int().nonnegative().optional().describe("0-based line number to start from; defaults to 0"),
@@ -70,7 +73,7 @@ export function createReadTool(ctx: ToolCtx) {
     }),
     execute: async (input, options): Promise<ToolResult> =>
       gate(ctx, { name: "read", input, risk: "low" }, async () => {
-        const abs = resolveInProject(ctx.projectPath, input.path);
+        const abs = resolveReadPath(ctx.projectPath, ctx.extraRoots, input.path);
 
         let stat;
         try {

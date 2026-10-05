@@ -77,3 +77,7 @@ addColumnIfMissing("chats", "agent_id", "agent_id TEXT NOT NULL DEFAULT 'default
 // never mutated) so buildTranscriptFromDb's projection survives a reload instead of re-deriving
 // it from a working copy that dies with the run.
 addColumnIfMissing("tool_calls", "decayed_at", "decayed_at INTEGER");
+
+// docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2 — extraRoots + worktree state, mirrors
+// projects.settings_json (added below its own CREATE TABLE for the same reason).
+addColumnIfMissing("chats", "settings_json", "settings_json TEXT NOT NULL DEFAULT '{}'");

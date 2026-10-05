@@ -109,7 +109,7 @@ describe("LM5 Compaction and Decay", () => {
       ephemeral: {},
     };
 
-    const { decayedCount, approxTokensSaved, decayedCallIds } = decayTranscript(transcript);
+    const { decayedCount, approxTokensSaved, decayedCallIds } = decayTranscript(transcript, { pruneOldToolOutputs: true });
     expect(decayedCount).toBe(1);
     expect(decayedCallIds).toEqual(["c1"]);
     expect(approxTokensSaved).toBeGreaterThan(20_000);
@@ -143,7 +143,7 @@ describe("LM5 Compaction and Decay", () => {
       ephemeral: {},
     };
 
-    const { decayedCount, decayedCallIds } = decayTranscript(transcript);
+    const { decayedCount, decayedCallIds } = decayTranscript(transcript, { pruneOldToolOutputs: true });
     expect(decayedCount).toBe(0);
     expect(decayedCallIds).toEqual([]);
     const toolEntry = transcript.entries[2];
@@ -151,6 +151,33 @@ describe("LM5 Compaction and Decay", () => {
     if (toolEntry.kind === "tool") {
       expect(toolEntry.content).toBe(smallOutput);
     }
+  });
+
+  // Follow-up to CB3 (2026-09-26) — mirrors opencode's `compaction.prune` default: pass 2 must sit
+  // out entirely unless a caller opts in, even when the pass would otherwise have plenty to evict.
+  test("pass 2 (age/budget eviction) is skipped entirely unless pruneOldToolOutputs is opted in", () => {
+    const oldOutput = "x".repeat(90_000);
+    const recentOutput = "y".repeat(200_000);
+    const transcript: Transcript = {
+      entries: [
+        { kind: "user", id: "u1", text: "Run an old big command" },
+        { kind: "assistant", id: "a1", text: "", calls: [{ id: "c1", name: "bash", input: { command: "old" } }] },
+        { kind: "tool", callId: "c1", name: "bash", ok: true, content: oldOutput, summary: "ran old command" },
+        { kind: "user", id: "u2", text: "Run a recent big command" },
+        { kind: "assistant", id: "a2", text: "", calls: [{ id: "c2", name: "bash", input: { command: "recent" } }] },
+        { kind: "tool", callId: "c2", name: "bash", ok: true, content: recentOutput, summary: "ran recent command" },
+        { kind: "user", id: "u3", text: "Current turn" },
+        { kind: "assistant", id: "a3", text: "Done", calls: [] },
+      ],
+      ephemeral: {},
+    };
+
+    const withoutOptIn = decayTranscript(transcript);
+    expect(withoutOptIn.decayedCount).toBe(0);
+    expect(withoutOptIn.decayedCallIds).toEqual([]);
+    const oldTool = transcript.entries[2];
+    expect(oldTool.kind).toBe("tool");
+    if (oldTool.kind === "tool") expect(oldTool.content).toBe(oldOutput);
   });
 
   test("CB3 decay: never touches todo or clarify output regardless of age or size", () => {

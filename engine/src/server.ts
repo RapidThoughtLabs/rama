@@ -15,7 +15,19 @@ import { resolveBrowserResponse } from "./browserBridge";
 import { undoLastRun } from "./checkpoints";
 import { getArtifactContent, listArtifacts } from "./db/artifacts";
 import { getProposal, listProposals, resolveProposal, type ProposalStatus } from "./db/curationProposals";
-import { createChat, deleteChat, getChat, listAllChats, listChatsByProject, migrateLegacyCliChats, updateChat } from "./db/chats";
+import {
+  createChat,
+  deleteChat,
+  getChat,
+  getChatSettings,
+  listAllChats,
+  listChatsByProject,
+  migrateLegacyCliChats,
+  setChatExtraRoots,
+  setChatWorktree,
+  updateChat,
+} from "./db/chats";
+import { ensureWorktree, removeWorktree } from "./git/worktree";
 import { deleteDoc, listDocs, readDoc, writeDoc } from "./docs/store";
 import { listMessages } from "./db/messages";
 import {
@@ -108,7 +120,13 @@ const CORS_HEADERS = {
 
 // docs/REDESIGN_PLAN.md Phase R4 — Settings modal defaults, returned whenever a key hasn't been
 // saved yet rather than leaving the UI to invent its own fallback shape.
-const DEFAULT_GENERAL_SETTINGS: GeneralSettingsDTO = { defaultProjectDir: "", defaultMode: "agent", autoNameChats: true, enrichFromOpenRouter: false };
+const DEFAULT_GENERAL_SETTINGS: GeneralSettingsDTO = {
+  defaultProjectDir: "",
+  defaultMode: "agent",
+  autoNameChats: true,
+  enrichFromOpenRouter: false,
+  pruneOldToolOutputs: false,
+};
 const MODEL_ROLES: ModelRole[] = ["chat", "utility", "summarize", "subagent"];
 
 function modelRoleDTO(row: ReturnType<typeof getModelRole>) {
@@ -328,8 +346,79 @@ export function createServer() {
         if (chatMatch && req.method === "DELETE") {
           const chatId = chatMatch[1];
           interrupt(chatId); // best-effort — don't let an in-flight turn keep writing to a chat mid-delete
+          // docs/COMPOSER_CONTEXT_PLAN.md Phase CC2 — a chat's worktree is otherwise orphaned the
+          // moment its row is gone (nothing else references ~/.rama/worktrees/<project>/<chat>).
+          // Best-effort: a worktree that can't be cleanly removed must never block deleting the chat.
+          const chatToDelete = getChat(chatId);
+          const settingsToDelete = chatToDelete ? getChatSettings(chatId) : null;
+          if (chatToDelete && settingsToDelete?.worktreeEnabled) {
+            const project = getProject(chatToDelete.projectId);
+            if (project) await removeWorktree(project.path, project.id, chatId).catch(() => {});
+          }
           if (!deleteChat(chatId)) return json({ error: "chat not found" }, { status: 404 });
           return json({ ok: true });
+        }
+
+        // docs/COMPOSER_CONTEXT_PLAN.md Phase CC1 — GET/PUT /chats/:id/settings: extraRoots today,
+        // read by the worktree fields CC2 also stores here (set only via /worktree below).
+        const chatSettingsMatch = pathname.match(/^\/chats\/([^/]+)\/settings$/);
+        if (chatSettingsMatch) {
+          const chatId = chatSettingsMatch[1];
+          if (!getChat(chatId)) return json({ error: "chat not found" }, { status: 404 });
+
+          if (req.method === "GET") {
+            return json(getChatSettings(chatId) ?? { error: "chat not found" });
+          }
+          if (req.method === "PUT") {
+            const body = await req.json().catch(() => ({}));
+            const extraRoots = Array.isArray(body?.extraRoots) ? body.extraRoots.filter((r: unknown) => typeof r === "string") : [];
+            return json(setChatExtraRoots(chatId, extraRoots) ?? { error: "chat not found" });
+          }
+        }
+
+        // docs/COMPOSER_CONTEXT_PLAN.md Phase CC2 — POST /chats/:id/worktree {enabled}: the CC0
+        // checkbox's real backend. Creates/removes the actual `git worktree` and persists the
+        // outcome; the next turn's runTurn picks up the new effectiveProjectPath on its own.
+        const chatWorktreeMatch = pathname.match(/^\/chats\/([^/]+)\/worktree$/);
+        if (chatWorktreeMatch && req.method === "POST") {
+          const chatId = chatWorktreeMatch[1];
+          const chat = getChat(chatId);
+          if (!chat) return json({ error: "chat not found" }, { status: 404 });
+          const project = getProject(chat.projectId);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const body = await req.json().catch(() => ({}));
+          const enabled = !!body?.enabled;
+          try {
+            if (enabled) {
+              const info = await ensureWorktree(project.path, project.id, chatId);
+              const settings = setChatWorktree(chatId, { enabled: true, path: info.path, branch: info.branch });
+              return json(settings ?? { error: "chat not found" });
+            }
+            await removeWorktree(project.path, project.id, chatId);
+            const settings = setChatWorktree(chatId, { enabled: false, path: null, branch: null });
+            return json(settings ?? { error: "chat not found" });
+          } catch (err) {
+            return json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+          }
+        }
+
+        // docs/COMPOSER_CONTEXT_PLAN.md Phase CC2 — the composer's branch pill, chat-scoped rather
+        // than project-scoped: reads the chat's own worktree path when one is active, the primary
+        // checkout otherwise, so the pill and the live prompt (run.ts's getVolatileEnv, pointed at
+        // the same effectiveProjectPath) always agree on which branch this chat is actually on.
+        const chatChangesMatch = pathname.match(/^\/chats\/([^/]+)\/changes$/);
+        if (chatChangesMatch && req.method === "GET") {
+          const chat = getChat(chatChangesMatch[1]!);
+          if (!chat) return json({ error: "chat not found" }, { status: 404 });
+          const project = getProject(chat.projectId);
+          if (!project) return json({ error: "project not found" }, { status: 404 });
+          const settings = getChatSettings(chat.id);
+          const path = settings?.worktreeEnabled && settings.worktreePath ? settings.worktreePath : project.path;
+          try {
+            return json(await readChanges(path));
+          } catch (err) {
+            return json({ error: String(err) }, { status: 500 });
+          }
         }
 
         const chatMessagesMatch = pathname.match(/^\/chats\/([^/]+)\/messages$/);

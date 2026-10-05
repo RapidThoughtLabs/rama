@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -283,6 +283,21 @@ export function Sidebar({
         .catch(() => {});
     }
   }
+
+  // docs/COMPOSER_CONTEXT_PLAN.md CC0 — the composer's folder pill (ChatColumn.tsx) opens this
+  // same modal rather than forking its own add-project flow. Mirrored into a ref so the
+  // mount-only listener always calls the latest closure (same pattern as ChatColumn.tsx's
+  // runCommandRef).
+  const openAddProjectModalRef = useRef(openAddProjectModal);
+  openAddProjectModalRef.current = openAddProjectModal;
+
+  useEffect(() => {
+    function onOpen() {
+      openAddProjectModalRef.current();
+    }
+    window.addEventListener("rama:open-add-project", onOpen);
+    return () => window.removeEventListener("rama:open-add-project", onOpen);
+  }, []);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   // Every project — active one first — gets the same labeled, collapsible group header, so the

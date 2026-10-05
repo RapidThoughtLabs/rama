@@ -2,7 +2,7 @@ import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
-import { resolveInProject } from "./paths";
+import { resolveReadPath } from "./paths";
 import { EXCLUDE_DIRS } from "./projectFiles";
 import { runWithTimeout } from "./procRun";
 import type { ToolCtx, ToolResult } from "./types";
@@ -67,7 +67,10 @@ export function createGrepTool(ctx: ToolCtx) {
       "under the grep fallback), scoped to the project directory. " +
       '"content" mode (default) returns matching lines; "files" returns unique matching file paths; ' +
       '"count" returns a match-count table per file — try "count" first when a pattern may be broad, ' +
-      "to narrow before spending context on full matches.",
+      "to narrow before spending context on full matches." +
+      (ctx.extraRoots.length
+        ? ` \`path\` also accepts an absolute path under one of this chat's extra context folders: ${ctx.extraRoots.join(", ")}.`
+        : ""),
     inputSchema: z.object({
       pattern: z.string(),
       path: z.string().optional().describe("Path relative to the project root; defaults to the whole project"),
@@ -80,7 +83,7 @@ export function createGrepTool(ctx: ToolCtx) {
     execute: async (input, options): Promise<ToolResult> =>
       gate(ctx, { name: "grep", input, risk: "low" }, async () => {
         const searchPath = input.path ?? ".";
-        resolveInProject(ctx.projectPath, searchPath); // throws if it escapes the project
+        resolveReadPath(ctx.projectPath, ctx.extraRoots, searchPath); // throws if it escapes the project/extra roots
         const mode: Mode = input.mode ?? "content";
         const limit = input.limit ?? DEFAULT_LIMIT;
         const useRg = await hasRipgrep();

@@ -220,6 +220,22 @@ export interface CreateChatInput {
 
 export type UpdateChatInput = Partial<CreateChatInput & { status: string }>;
 
+// docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2 — GET/PUT /chats/:id/settings, mirroring
+// ProjectDTO's settings_json/PermissionSettings split. `extraRoots` are read-only prompt
+// pointers (CC1) — see engine/src/tools/paths.ts's resolveReadPath and
+// agent/prompt/project.ts's formatProjectKnowledge for how they reach the model and the
+// sandbox. The `worktree*` fields (CC2) are set by POST /chats/:id/worktree, never PUT here.
+export interface ChatSettingsDTO {
+  extraRoots: string[];
+  worktreeEnabled: boolean;
+  worktreePath: string | null;
+  worktreeBranch: string | null;
+}
+
+export interface UpdateChatSettingsInput {
+  extraRoots?: string[];
+}
+
 // docs/PROMPT_STACK_PLAN.md §5.3, Phase PS4 — GET /agents. No body/tools-vs-mode-intersection
 // here (that's server-side, per-turn, per §5.2) — just enough for a picker: what it's called,
 // what it's for, and which tier of the three-tier discovery it came from, so a project-local
@@ -536,6 +552,14 @@ export interface GeneralSettingsDTO {
   // docs/PROVIDERS_PLAN.md Phase P6 — gates the OpenRouter enrichment GET entirely: off means the
   // engine never makes that outbound request, not just "don't show the result". Off by default.
   enrichFromOpenRouter: boolean;
+  // docs/CONTEXT_BUDGET_PLAN.md CB3 follow-up (2026-09-26) — gates decay's age/budget eviction
+  // pass (old tool output replaced by a placeholder once it falls outside the protected recent
+  // budget/turns). Mirrors opencode's own `compaction.prune`, which ships "default: false" for
+  // the same reason: it's a lossy space-for-safety trade a long single-turn multi-file task can
+  // easily hit before the model is anywhere near its real context limit. Off by default; decay's
+  // other pass (dropping provably-stale superseded reads/snapshots/repeats) is unaffected and
+  // always runs regardless of this flag.
+  pruneOldToolOutputs: boolean;
 }
 
 // docs/PROVIDERS_PLAN.md Phase P2 — a role names *why* a call happens ('chat', 'utility'), not a
