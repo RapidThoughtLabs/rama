@@ -1,0 +1,101 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Kit tokens — HOME_REDESIGN_PLAN.md Phase HD0, ported from the mockup's
+   :root and per-mode blocks (docs/Rama/home-redesign.html, mock:L20-75).
+
+   Same contract as tokens.css: a theme supplies ground / ink / inkLoud /
+   accent and seedTokens() writes them onto :root; everything here is derived
+   per mode. Values are verbatim apart from three renames that keep the kit
+   clear of the legacy system:
+
+     mockup --ink (hex)   → --ink-c   (legacy --ink is an "R, G, B" triplet)
+     mockup --fs-*        → --k-*     (legacy --fs-* is a different ramp)
+     mockup --scale       → --font-scale
+     mockup --wp-pos      → --wp-position
+
+   The mockup's --good/--warn/--bad literals are deliberately absent:
+   seedTokens() already emits identical per-mode defaults plus each theme's
+   overrides. ════════════════════════════════════════════════════════════ */
+
+:root {
+  /* First-paint fallbacks only — seedTokens() sets both as inline styles. */
+  --ground: var(--bg-base);
+  --ink-c: var(--text-1);
+
+  --f-ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --f-read: "Literata", "Shippori Mincho", Georgia, serif;
+  --f-code: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --f-seal: "Shippori Mincho", "Hiragino Mincho ProN", serif;
+
+  /* Type ramp — 12 / 13.5 / 15 / 17 / 21 / 28 / 44, all scaled by the Text size control */
+  --k-xs: calc(12px * var(--font-scale));
+  --k-sm: calc(13.5px * var(--font-scale));
+  --k-md: calc(15px * var(--font-scale));
+  --k-read: calc(17px * var(--font-scale));
+  --k-lg: calc(21px * var(--font-scale));
+  --k-xl: calc(28px * var(--font-scale));
+  --k-hero: calc(44px * var(--font-scale));
+
+  --ink-1: var(--ink-hi);
+  --ink-2: var(--ink-c);
+  --ink-3: color-mix(in oklab, var(--ink-c) 70%, var(--ground));
+  --ink-4: color-mix(in oklab, var(--ink-c) 50%, var(--ground));
+  --line: color-mix(in oklab, var(--ink-c) 11%, transparent);
+  --line-2: color-mix(in oklab, var(--ink-c) 19%, transparent);
+  --hover: color-mix(in oklab, var(--ink-c) 6%, transparent);
+  --selected: color-mix(in oklab, var(--accent) 15%, transparent);
+  --on-accent: var(--ground);
+  --ring: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+:root[data-rmode="light"] {
+  --sidebar: color-mix(in oklab, var(--ground) 60%, #fff);
+  --raised: color-mix(in oklab, var(--ground) 28%, #fff);
+  --well: color-mix(in oklab, var(--ground) 90%, var(--ink-c));
+  --bubble: color-mix(in oklab, var(--accent) 15%, var(--raised));
+  --panel: color-mix(in oklab, var(--ground) 52%, #fff);
+  --code-bg: color-mix(in oklab, var(--ground) 22%, #fff);
+  --shadow-sm: 0 1px 2px color-mix(in oklab, var(--ink-c) 10%, transparent);
+  --shadow: 0 1px 2px color-mix(in oklab, var(--ink-c) 6%, transparent), 0 10px 30px -14px color-mix(in oklab, var(--ink-c) 28%, transparent);
+  --shadow-pop: 0 2px 6px color-mix(in oklab, var(--ink-c) 8%, transparent), 0 24px 56px -20px color-mix(in oklab, var(--ink-c) 40%, transparent);
+}
+:root[data-rmode="dark"] {
+  --sidebar: color-mix(in oklab, var(--ground) 84%, #000);
+  --raised: color-mix(in oklab, var(--ground) 90%, var(--ink-c));
+  --well: color-mix(in oklab, var(--ground) 76%, #000);
+  --bubble: color-mix(in oklab, var(--accent) 17%, var(--ground));
+  --panel: color-mix(in oklab, var(--ground) 94%, var(--ink-c));
+  --code-bg: color-mix(in oklab, var(--ground) 82%, #000);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.25), 0 14px 36px -16px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 2px 8px rgb(0 0 0 / 0.3), 0 28px 64px -18px rgb(0 0 0 / 0.8);
+}
+
+/* ═══ Foundations (mock:L78-93) ═════════════════════════════════════════════
+   Scoped to the .r-app root rather than body (HOME_REDESIGN_PLAN.md §3 rule 5)
+   so legacy rama-* screens keep their type until the Code plan migrates them.
+   Legacy islands rendered *inside* .r-app opt back out with .r-legacy, which
+   restores what they used to inherit from body. Element selectors go through
+   :where() so a legacy class (.rama-btn etc.) always out-ranks the reset. */
+.r-app {
+  font-family: var(--f-ui);
+  font-size: var(--k-md);
+  line-height: 1.5;
+  color: var(--ink-2);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+}
+:where(.r-app button:not(.r-legacy button)) { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:where(.r-app) :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+:where(.r-app) ::selection { background: color-mix(in oklab, var(--accent) 30%, transparent); }
+:where(.r-app) * { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+:where(.r-app) [hidden] { display: none !important; }
+
+.r-legacy {
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  line-height: normal;
+  color: rgb(var(--ink));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.r-app) *, :where(.r-app) *::before, :where(.r-app) *::after { animation: none !important; transition: none !important; }
+}

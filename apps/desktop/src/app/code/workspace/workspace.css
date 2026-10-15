@@ -1,0 +1,80 @@
+/* Workspace — docs/CODE_REDESIGN_PLAN.md CR3. Mockup CSS (docs/Rama/home-redesign.html mock:L375,
+   509-547, 605-608) ported with the r- prefix and kit token names (--fs-* → --k-*). Deviations are
+   marked inline. */
+
+/* ═══ Code view (mock:L370-376) ═══ */
+.r-view-code { display: flex; flex-direction: column; }
+.r-code-body { flex: 1; min-height: 0; display: flex; position: relative; }
+.r-code-chat { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* CodeChat only needs to fill the slot. */
+.r-code-chat > * { flex: 1; min-height: 0; }
+
+/* ═══ Splitter (mock:L509-512) ═══ */
+.r-splitter { width: 12px; flex-shrink: 0; cursor: col-resize; position: relative; z-index: 3; touch-action: none; }
+.r-splitter::after { content: ""; position: absolute; top: 40%; bottom: 40%; left: 4px; width: 4px; border-radius: 2px; background: var(--line-2); opacity: 0; transition: opacity .15s, background-color .15s; }
+.r-code-body:hover .r-splitter::after { opacity: 1; }
+.r-splitter:hover::after, .r-splitter.drag::after { background: var(--accent); opacity: 1; }
+/* Keyboard focus: the grip lights up and takes the ring (the 12px strip itself has no room for one). */
+.r-splitter:focus-visible { outline: none; }
+.r-splitter:focus-visible::after { background: var(--accent); opacity: 1; box-shadow: 0 0 0 3px var(--ring); }
+.r-code-body[data-dragging] { user-select: none; }
+
+/* ═══ Workspace panel (mock:L513-521) ═══
+   Rows are tabs · band · body. */
+.r-ws {
+  width: var(--ws-w, 48%); min-width: 360px; flex-shrink: 0;
+  /* Deviation: the chat keeps at least 380px even when the window shrinks under a saved width. */
+  max-width: calc(100% - 392px);
+  margin: 0 12px 12px 0; border-radius: 16px; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-w, 212px); grid-template-rows: 50px 42px minmax(0, 1fr);
+  transition: background-color .35s;
+}
+.r-code-body[data-ws="closed"] .r-ws, .r-code-body[data-ws="closed"] .r-splitter { display: none; }
+.r-ws[data-rail="collapsed"] { --rail-w: 48px; }
+
+/* ═══ Tabs (mock:L522-531) ═══ */
+.r-ws-tabs { grid-column: 1 / -1; display: flex; align-items: center; gap: 2px; padding: 0 64px 0 8px; border-bottom: 1px solid var(--line); min-width: 0; }
+.r-ws-tab {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 11px; border-radius: 9px;
+  font-size: var(--k-sm); font-weight: 500; color: var(--ink-3); white-space: nowrap;
+}
+.r-ws-tab:hover { background: var(--hover); color: var(--ink-1); }
+.r-ws-tab[aria-selected="true"] { background: var(--well); color: var(--ink-1); }
+.r-ws-tab .badge { font-size: var(--k-xs); font-weight: 600; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--selected); color: var(--accent); }
+/* Addition (plan §9): a conflicted file turns the count red. */
+.r-ws-tab .badge.bad { background: color-mix(in oklab, var(--bad) 16%, transparent); color: var(--bad); }
+.r-ws-tab .live { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px color-mix(in oklab, var(--good) 22%, transparent); }
+
+/* ═══ Band row, stage and rail (mock:L532-547) ═══
+   Four cells: the pane's stage bar and rail head share row 2 (42px, one bottom border), the stage
+   and the rail fill row 3. */
+.r-stage-bar, .r-rail-head { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); min-width: 0; font-size: var(--k-sm); }
+.r-stage-bar { grid-column: 1; grid-row: 2; padding: 0 8px 0 14px; }
+.r-rail-head { grid-column: 2; grid-row: 2; padding: 0 6px 0 14px; border-left: 1px solid var(--line); color: var(--ink-3); }
+.r-rail-head b { font-weight: 600; color: var(--ink-1); }
+.r-rail-head .grow, .r-stage-bar .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-ws[data-rail="collapsed"] .r-rail-head { padding: 0; justify-content: center; }
+.r-ws[data-rail="collapsed"] .r-rail-head > :not(.rail-toggle) { display: none; }
+.r-stage { grid-column: 1; grid-row: 3; overflow: auto; background: var(--code-bg); min-width: 0; }
+.r-rail { grid-column: 2; grid-row: 3; overflow-y: auto; overflow-x: hidden; border-left: 1px solid var(--line); padding: 6px; min-width: 0; }
+.r-ws[data-rail="collapsed"] .r-rail { padding: 6px 4px; }
+.r-stage-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.r-stage-title b { font-weight: 500; color: var(--ink-1); white-space: nowrap; flex-shrink: 0; }
+.r-stage-title small { color: var(--ink-4); font-size: var(--k-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.r-stage-bar .delta-inline { font-size: var(--k-xs); white-space: nowrap; margin-right: 6px; }
+.r-stage-bar .r-icon-btn, .r-rail-head .r-icon-btn { width: 28px; height: 28px; }
+.r-stage-bar .r-icon-btn svg, .r-rail-head .r-icon-btn svg { width: 15px; height: 15px; }
+
+/* ═══ Sheet (mock:L605-608, 612-616) ═══ */
+@media (max-width: 1100px) {
+  .r-splitter { display: none; }
+  .r-ws { position: absolute; top: 0; right: 0; bottom: 0; width: min(600px, calc(100% - 24px)); min-width: 0; max-width: none; margin: 0 12px 12px 0; z-index: 8; box-shadow: var(--shadow-pop); }
+}
+@media (max-width: 560px) {
+  .r-ws { width: calc(100% - 16px); margin: 0 8px 8px 0; --rail-w: 48px; }
+  .r-ws .r-rail-head > :not(.rail-toggle) { display: none; }
+  .r-ws .r-rail-head { padding: 0; justify-content: center; }
+  .r-ws .r-rail { padding: 6px 4px; }
+  .r-ws-tab .lbl { display: none; }
+}

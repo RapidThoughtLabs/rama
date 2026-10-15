@@ -13,6 +13,7 @@ import type { CachePolicy } from "../catalog";
 import { buildAgentBlock } from "./agent";
 import { buildPrompt, type PromptInputs } from "./build";
 import { formatEffectiveToolsNote } from "./effectiveToolsNote";
+import { HOME_KERNEL_PROMPT, KERNEL_PROMPT } from "./kernel";
 import { buildEphemeralMessage, buildEphemeralText, formatVolatileEnv } from "./ephemeral";
 import { buildModeBlock } from "./mode";
 import { formatProjectKnowledge } from "./project";
@@ -278,5 +279,29 @@ describe("ephemeral block", () => {
     const text = "the ephemeral text";
     expect(buildEphemeralMessage(text, true)).toEqual({ role: "system", content: text });
     expect(buildEphemeralMessage(text, false)).toEqual({ role: "user", content: text });
+  });
+});
+
+// HOME_REDESIGN_PLAN.md Phase HD3 — Home's own layer 0/1.
+describe("buildPrompt for a Home chat", () => {
+  const knowledge = { global: "GLOBAL-RAMA-MD", project: null, extraRoots: [] };
+
+  test("uses the Home kernel and drops the mode and project blocks", () => {
+    const { blocks } = buildPrompt(inputs({ kind: "home", projectKnowledge: knowledge }));
+    expect(blocks[0].content.startsWith(HOME_KERNEL_PROMPT)).toBe(true);
+    expect(blocks[0].content).not.toContain(KERNEL_PROMPT);
+    expect(blocks[1].content).not.toContain(buildModeBlock("agent"));
+    expect(blocks[1].content).not.toContain("GLOBAL-RAMA-MD");
+  });
+
+  test("a Code chat (the default) is unchanged", () => {
+    const { blocks } = buildPrompt(inputs({ projectKnowledge: knowledge }));
+    expect(blocks[0].content.startsWith(KERNEL_PROMPT)).toBe(true);
+    expect(blocks[1].content).toContain(buildModeBlock("agent"));
+    expect(blocks[1].content).toContain("GLOBAL-RAMA-MD");
+  });
+
+  test("the Home kernel teaches the draft fence HD6 renders", () => {
+    expect(HOME_KERNEL_PROMPT).toContain("```draft Email draft");
   });
 });

@@ -81,3 +81,11 @@ addColumnIfMissing("tool_calls", "decayed_at", "decayed_at INTEGER");
 // docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2 — extraRoots + worktree state, mirrors
 // projects.settings_json (added below its own CREATE TABLE for the same reason).
 addColumnIfMissing("chats", "settings_json", "settings_json TEXT NOT NULL DEFAULT '{}'");
+
+// HOME_REDESIGN_PLAN.md Phase HD3 / Decision D3 — Home chats live under a hidden system project
+// (db/home.ts's ensureHomeProject) and are told apart from Code chats by `kind`. The index is
+// created here rather than in SCHEMA_SQL because an existing DB has no `kind` column until the
+// ALTER above it runs.
+addColumnIfMissing("projects", "is_system", "is_system INTEGER NOT NULL DEFAULT 0");
+addColumnIfMissing("chats", "kind", "kind TEXT NOT NULL DEFAULT 'code'");
+db.exec("CREATE INDEX IF NOT EXISTS idx_chats_kind ON chats(kind);");

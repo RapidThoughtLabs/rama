@@ -1,6 +1,7 @@
 {
   "id": "tsubaki",
   "label": "Tsubaki",
+  "kanji": "椿",
   "family": "red",
   "mode": "dark",
   "ground": "#1c0f14",
@@ -9,5 +10,5 @@
   "accent": "#cf8fa0",
   "semantic": { "bad": "#d9455c", "bad2": "#e86a80" },
   "texture": { "grain": 0.30, "vignette": 0.60 },
-  "wallpaper": { "image": "/wallpapers/nebula-rose.jpg", "veil": 0.60 }
+  "wallpaper": { "image": "/wallpapers/nebula-rose.jpg", "css": "radial-gradient(75% 60% at 70% 5%, rgba(207,143,160,0.35), transparent 62%), radial-gradient(70% 60% at 10% 100%, rgba(120,40,70,0.45), transparent 65%)", "veil": 0.60 }
 }

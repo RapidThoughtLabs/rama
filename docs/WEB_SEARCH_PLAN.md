@@ -402,6 +402,19 @@ is answered in one `web` call; the rendered block is under the WS0 budget;
 `ignored` is non-empty and rendered when a `recency` filter is passed to a
 provider that lacks one.
 
+**Home's globe toggle (HOME_REDESIGN_PLAN.md HD7).** Home chats carry a per-chat
+`chats.settings_json.webSearch` boolean, already persisted and patchable
+(`PATCH /chats/:id { webSearch }`). When `web` exists, the `home` agent's tool
+list should include it only while that flag is on. The toggle can change
+mid-chat, so the next turn's tool set changes, and with it Home's cache prefix:
+Home's bp1 inventory is just the tools it can call (HD3), so flipping the globe
+invalidates the cached prefix once. That's accepted. The Home UI also wants
+`tool_calls.result_meta_json.sources` (`{ title, source }[]`, `source` being
+the result host mapped to a friendly site name, else the bare host) exposed as
+`ToolCallDTO.resultMeta`, for the "Searched the web · N sources" row and its
+list. Until then the composer says "Web search isn't set up yet" while the
+globe is on.
+
 ### WS3 — SearXNG: the keyless half, and the abstraction's real test
 
 `websearch/searxng/index.ts` against `{base_url}/search?format=json`. Row has

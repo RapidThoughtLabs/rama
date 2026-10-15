@@ -1,0 +1,127 @@
+/* Workspace panes — docs/CODE_REDESIGN_PLAN.md CR4. Mockup CSS (docs/Rama/home-redesign.html
+   mock:L339-341, 410-411, 465-491, 549-602) ported with the r- prefix and kit token names
+   (--fs-* → --k-*, --scale → --font-scale, .icon-btn → .r-icon-btn). Deviations marked inline. */
+
+.r-plus { color: var(--good); font-variant-numeric: tabular-nums; }
+.r-minus { color: var(--bad); font-variant-numeric: tabular-nums; }
+
+.r-mini { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; font-family: var(--f-ui); font-size: var(--k-xs); color: var(--ink-3); }
+.r-mini:hover:not(:disabled) { background: var(--hover); color: var(--ink-1); }
+.r-mini:disabled { opacity: .4; cursor: default; }
+.r-mini svg { width: 13px; height: 13px; }
+
+.r-empty { display: grid; place-items: center; text-align: center; height: 100%; padding: 24px; font-size: var(--k-sm); color: var(--ink-4); }
+.r-empty b { display: block; font-size: var(--k-md); font-weight: 500; color: var(--ink-2); margin-bottom: 4px; }
+.r-empty .r-btn { margin-top: 14px; }
+.r-empty .err { margin-top: 10px; color: var(--bad); font-size: var(--k-xs); }
+
+/* ═══ Diffs, files and terminal output — the only monospace surfaces (mock:L465-491) ═══ */
+.r-diff, .r-codeview, .r-term { font-family: var(--f-code); font-size: calc(12.5px * var(--font-scale)); line-height: 1.7; color: var(--ink-1); }
+.r-hunk { font-family: var(--f-ui); font-size: var(--k-xs); color: var(--ink-4); padding: 10px 16px 6px; }
+.r-diff, .r-codeview { width: max-content; min-width: 100%; }
+.r-dl { display: grid; grid-template-columns: 38px 38px 16px auto; white-space: pre; padding-right: 20px; }
+.r-dl .n { color: var(--ink-4); text-align: right; padding-right: 8px; user-select: none; opacity: .8; }
+.r-dl .s { color: var(--ink-4); user-select: none; }
+.r-dl.add { background: color-mix(in oklab, var(--good) 13%, transparent); }
+.r-dl.add .s { color: var(--good); }
+.r-dl.del { background: color-mix(in oklab, var(--bad) 11%, transparent); }
+.r-dl.del .s { color: var(--bad); }
+.r-cl { display: grid; grid-template-columns: 46px auto; white-space: pre; padding-right: 20px; }
+.r-cl .n { color: var(--ink-4); text-align: right; padding-right: 16px; user-select: none; opacity: .75; }
+/* The wrap toggle (plan §9): long lines fold under their number instead of scrolling sideways. */
+.r-codeview.wrap { width: auto; }
+.r-codeview.wrap .r-cl { grid-template-columns: 46px minmax(0, 1fr); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Syntax roles (mock:L481-484, plan CR4): highlight.js's many classes fold into four colours. Built-in
+   types (`string`, `void`) stay plain, as the mockup draws them — the plan listed them as accent. The
+   `.r-code` scope outranks the global `.hljs-*` rules in mission-control/panes/syntax.css, which
+   the transcript's code fences use. */
+.r-code [class*="hljs-"] { color: inherit; font-weight: inherit; font-style: normal; background: none; }
+.r-code .hljs-keyword, .r-code .hljs-literal, .r-code .hljs-meta, .r-code .hljs-selector-tag { color: var(--accent); }
+.r-code .hljs-string, .r-code .hljs-regexp, .r-code .hljs-template-variable,
+.r-code .hljs-attribute, .r-code .hljs-selector-attr { color: color-mix(in oklab, var(--good) 75%, var(--ink-1)); }
+.r-code .hljs-comment, .r-code .hljs-quote, .r-code .hljs-doctag { color: var(--ink-4); font-style: italic; }
+.r-code .hljs-number, .r-code .hljs-symbol, .r-code .hljs-bullet { color: var(--warn); }
+/* Function names are plain in diffs and the file view; only transcript code fences (CR6/CR7, class
+   `fn`) colour them, as the mockup's `.tok-fn` does. */
+.r-code.fn .hljs-title.function_ { color: var(--accent); font-weight: 500; }
+.r-code .hljs-emphasis { font-style: italic; }
+.r-code .hljs-strong { font-weight: 600; }
+
+/* The oversize notice above a truncated file. */
+.r-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; font-size: var(--k-xs); color: var(--ink-3); background: var(--well); border-bottom: 1px solid var(--line); position: sticky; left: 0; }
+.r-banner .r-btn { height: 26px; padding: 0 11px; font-size: var(--k-xs); }
+
+/* Terminal. xterm paints into its own element; the padding sits on `.xterm` because FitAddon
+   subtracts that element's padding when it counts rows and columns (mock:L485). */
+.r-term-surface { height: 100%; min-height: 0; }
+.r-term-surface .xterm { padding: 14px 18px 20px; height: 100%; }
+.r-term-surface .xterm-viewport { background: transparent !important; }
+
+/* ═══ Rail rows (mock:L549-564) ═══ */
+.r-rrow { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; column-gap: 9px; width: 100%; text-align: left; padding: 6px 8px; border-radius: 8px; font-size: var(--k-sm); color: var(--ink-2); }
+.r-rrow:hover { background: var(--hover); }
+.r-rrow[aria-current="true"] { background: var(--selected); color: var(--ink-1); }
+.r-rrow svg { width: 15px; height: 15px; color: var(--ink-4); }
+.r-rrow .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-rrow .sub { grid-column: 2 / -1; font-size: var(--k-xs); color: var(--ink-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-rrow .end { font-size: var(--k-xs); color: var(--ink-4); }
+/* Addition (plan §9): a conflicted file reads red in the rail. */
+.r-rrow.bad svg, .r-rrow.bad .sub { color: var(--bad); }
+/* Addition (plan §9): the close `x` appears on row hover, over the right-hand meta. */
+.r-rrow { position: relative; cursor: pointer; }
+.r-rrow .row-x { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 6px; display: none; place-items: center; background: var(--panel); color: var(--ink-4); }
+.r-rrow:hover .row-x, .r-rrow .row-x:focus-visible { display: grid; }
+.r-rrow .row-x:hover { background: var(--hover); color: var(--ink-1); }
+.r-rrow .row-x svg { width: 11px; height: 11px; color: inherit; }
+.r-rdir { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 8px 4px; font-size: var(--k-xs); font-weight: 500; color: var(--ink-4); text-align: left; }
+.r-rdir span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.r-sdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; justify-self: center; }
+.r-sdot.run { background: var(--good); box-shadow: 0 0 0 3px color-mix(in oklab, var(--good) 22%, transparent); }
+.r-sdot.idle { box-shadow: inset 0 0 0 1.5px var(--ink-4); }
+.r-sdot.done { background: var(--ink-4); }
+.r-ws[data-rail="collapsed"] .r-rrow { grid-template-columns: 1fr; justify-items: center; padding: 8px 0; }
+.r-ws[data-rail="collapsed"] .r-rrow > :not(:first-child), .r-ws[data-rail="collapsed"] .r-rdir, .r-ws[data-rail="collapsed"] .r-rrow .row-x { display: none; }
+
+/* ═══ Files tree (mock:L566-573, 503) ═══ */
+.r-tree-row { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 4px 8px; border-radius: 7px; font-size: var(--k-sm); color: var(--ink-2); white-space: nowrap; }
+.r-tree-row:hover { background: var(--hover); }
+.r-tree-row[aria-current="true"] { background: var(--selected); color: var(--ink-1); font-weight: 500; }
+.r-tree-row svg { width: 14px; height: 14px; color: var(--ink-4); flex-shrink: 0; }
+.r-tree-row .tw { width: 12px; height: 12px; }
+.r-tree-row .tw.open { transform: rotate(90deg); }
+.r-tree-row.leaf { padding-left: 26px; }
+.r-tree-row span { overflow: hidden; text-overflow: ellipsis; }
+.r-tree-row .ign { opacity: .55; }
+/* Addition: the git letter beside a changed file, in the delta colours. */
+.r-tree-row .gs { margin-left: auto; padding-left: 6px; font-size: var(--k-xs); font-weight: 600; color: var(--accent); flex-shrink: 0; }
+.r-tree-row .gs.added { color: var(--good); }
+.r-tree-row .gs.deleted, .r-tree-row .gs.conflicted { color: var(--bad); }
+.r-tree-row .gs.untracked { color: var(--ink-4); }
+.r-ws[data-rail="collapsed"] .r-tree-row { display: none; }
+.r-only-collapsed { display: none !important; }
+.r-ws[data-rail="collapsed"] .r-only-collapsed { display: grid !important; }
+
+/* ═══ File tabs (mock:L575-583) ═══ */
+.r-ftabs { display: flex; align-items: stretch; height: 100%; margin-left: -14px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.r-ftabs::-webkit-scrollbar { display: none; }
+.r-ftab { display: inline-flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; font-size: var(--k-sm); color: var(--ink-3); white-space: nowrap; border-right: 1px solid var(--line); position: relative; }
+.r-ftab:hover { color: var(--ink-1); background: var(--hover); }
+.r-ftab[aria-selected="true"] { color: var(--ink-1); background: var(--code-bg); }
+.r-ftab[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--code-bg); }
+.r-ftab.preview { font-style: italic; }
+.r-ftab .x { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; color: var(--ink-4); }
+.r-ftab .x:hover { background: var(--hover); color: var(--ink-1); }
+.r-ftab .x svg { width: 11px; height: 11px; }
+.r-stage-bar .r-icon-btn.on { background: var(--selected); color: var(--accent); }
+
+/* ═══ Web (mock:L585-586, 591) ═══ */
+.r-urlbar { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border-radius: 999px; background: var(--code-bg); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--k-xs); color: var(--ink-2); }
+.r-urlbar svg { width: 12px; height: 12px; color: var(--ink-4); flex-shrink: 0; }
+.r-urlbar input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; }
+.r-urlbar:focus-within { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent); }
+.r-urlbar .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--line-2); border-top-color: var(--accent); flex-shrink: 0; animation: r-spin .8s linear infinite; }
+@keyframes r-spin { to { transform: rotate(360deg); } }
+/* The native child webview is laid over this card's rect (useWebviewVisibility measures it). It can't
+   be clipped by a CSS radius, so its corners stay square; the card draws the shadow and the radius. */
+.r-page { margin: 18px; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); height: calc(100% - 36px); min-height: 300px; display: flex; background: var(--ground); }

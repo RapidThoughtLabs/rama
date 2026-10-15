@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import type { ChatMode } from "@rama/protocol";
+import type { ChatKind, ChatMode } from "@rama/protocol";
 import type { WireMessage } from "../../llm/types";
 import type { RamaToolSet } from "../../tools/define";
 import type { AgentDef } from "../agents/types";
 import type { CachePolicy } from "../catalog";
 import { buildAgentBlock } from "./agent";
 import { formatEffectiveToolsNote } from "./effectiveToolsNote";
-import { KERNEL_PROMPT } from "./kernel";
+import { HOME_KERNEL_PROMPT, KERNEL_PROMPT } from "./kernel";
 import { buildModeBlock } from "./mode";
 import { formatProjectKnowledge, type ProjectKnowledgeInputs } from "./project";
 import { formatStaticEnv, type StaticEnv } from "./sources";
@@ -24,6 +24,9 @@ import { generateToolInventory } from "./toolInventory";
 // conversation-tail cache anchor instead). bp3/bp4 are the two conversation-tail anchors, marked
 // by transcript.ts's project().
 export interface PromptInputs {
+  /** HOME_REDESIGN_PLAN.md Phase HD3 — a Home chat gets HOME_KERNEL_PROMPT and skips the mode and
+   *  project blocks (no RAMA.md, no mode authority text: Home has neither). Defaults to "code". */
+  kind?: ChatKind;
   /** Already sorted by name (toolInventory.ts's sortTools) — every tool the harness has, NOT
    *  narrowed by mode/agent. bp1's inventory is a stable build-level capability list on purpose
    *  (§4.2: "switching agent ... keeps tools+kernel warm"); `effectiveToolNames` below is what's
@@ -58,14 +61,17 @@ export interface PromptBlocks {
 export function buildPrompt(inputs: PromptInputs): PromptBlocks {
   const cached = inputs.cache.style === "explicit";
 
-  const kernelContent = [KERNEL_PROMPT, generateToolInventory(inputs.tools), inputs.hekuManifest].filter(Boolean).join("\n\n");
+  const home = inputs.kind === "home";
+  const kernelContent = [home ? HOME_KERNEL_PROMPT : KERNEL_PROMPT, generateToolInventory(inputs.tools), inputs.hekuManifest]
+    .filter(Boolean)
+    .join("\n\n");
   const toolsNote = formatEffectiveToolsNote(inputs.effectiveToolNames, Object.keys(inputs.tools));
   const agentModeProjectContent = [
     buildAgentBlock(inputs.agent),
-    buildModeBlock(inputs.mode),
+    home ? "" : buildModeBlock(inputs.mode),
     toolsNote,
     formatStaticEnv(inputs.staticEnv),
-    formatProjectKnowledge(inputs.projectKnowledge),
+    home ? "" : formatProjectKnowledge(inputs.projectKnowledge),
   ]
     .filter(Boolean)
     .join("\n\n");

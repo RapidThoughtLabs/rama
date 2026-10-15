@@ -62,9 +62,6 @@
   --accent-tint: oklch(from var(--accent) l c h / 0.08);
   --accent-border: oklch(from var(--accent) l c h / 0.25);
 
-  --dot-field-color: rgb(from var(--accent) r g b / 0.32);
-  --grain-op: 0.29;
-  --vig-a: 0.59;
   --shadow-menu: 0 24px 64px -16px rgba(var(--rc), 0.8), 0 0 28px -10px var(--a35);
   --shadow-composer: 0 8px 32px -12px rgba(var(--rc), 0.6), 0 0 0 1px var(--a06);
   --shadow-btn-primary: 0 0 24px var(--accent-glow);
@@ -88,9 +85,6 @@
   --accent-tint: oklch(from var(--accent) l c h / 0.07);
   --accent-border: oklch(from var(--accent) l c h / 0.20);
 
-  --dot-field-color: oklch(from var(--accent) 0.20 calc(c * 0.55) h / 0.30);
-  --grain-op: 0.12;
-  --vig-a: 0.22;
   --shadow-menu: 0 20px 48px -14px rgba(var(--ink), 0.16), 0 0 22px -10px var(--a25);
   --shadow-composer: 0 6px 20px -10px rgba(var(--ink), 0.12), 0 0 0 1px var(--a06);
   --shadow-btn-primary: none;
@@ -103,7 +97,7 @@
   --page-bg: var(--bg-base);
 }
 
-/* ── WALLPAPER — image/gradient → veil → vignette → accent wash → grain ──
+/* ── WALLPAPER — image/gradient → veil (kit/MainWall.tsx, HD0) ──────────
    --wp/--veil/--wp-blend/--wp-fit/--wp-position are theme-authored now
    (SETTINGS_PLAN.md Phase S0 — wallpaper moved from a user setting into the
    theme record) and set at runtime by seedTokens()/theme.tsx. These are

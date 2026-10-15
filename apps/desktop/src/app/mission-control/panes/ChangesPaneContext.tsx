@@ -1,157 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useGotoArg } from "../../code/workspace/gotoBridge";
 import type { ReactNode } from "react";
 import type { ChangeDiffDTO, ChangeEntryDTO, ChangesDTO } from "@rama/protocol";
 import { fetchChangeDiff, fetchChanges, initProjectRepo } from "../../../engine/client";
 import { onProjectEvent, send } from "../../../engine/ws";
-import { WINDOW_LABEL } from "../../../engine/window";
 import { useProjectsData } from "../../data/ProjectsProvider";
 
-// docs/WORKSPACE_PANES_PLAN.md Phase W4 — Changes pane state layer.
-
-export type ChangesTreeNode =
-  | {
-      kind: "dir";
-      path: string;
-      label: string;
-      children: ChangesTreeNode[];
-      added: number | null;
-      removed: number | null;
-      fileCount: number;
-      untracked?: boolean;
-    }
-  | {
-      kind: "file";
-      entry: ChangeEntryDTO;
-      label: string;
-      path: string;
-    };
-
-interface InternalDirNode {
-  kind: "dir";
-  name: string;
-  path: string;
-  children: Map<string, InternalDirNode | { kind: "file"; entry: ChangeEntryDTO; name: string; path: string }>;
-}
-
-function buildTree(entries: ChangeEntryDTO[]): ChangesTreeNode[] {
-  const trackedEntries = entries.filter((e) => e.status !== "untracked");
-  const untrackedEntries = entries.filter((e) => e.status === "untracked");
-
-  const root: InternalDirNode = { kind: "dir", name: "", path: "", children: new Map() };
-
-  for (const entry of trackedEntries) {
-    const segments = entry.path.split("/");
-    let curr = root;
-    for (let i = 0; i < segments.length - 1; i++) {
-      const seg = segments[i]!;
-      let next = curr.children.get(seg);
-      if (!next || next.kind !== "dir") {
-        next = { kind: "dir", name: seg, path: segments.slice(0, i + 1).join("/"), children: new Map() };
-        curr.children.set(seg, next);
-      }
-      curr = next as InternalDirNode;
-    }
-    const fileName = segments[segments.length - 1]!;
-    curr.children.set(fileName, { kind: "file", entry, name: fileName, path: entry.path });
-  }
-
-  function convertAndCompact(dir: InternalDirNode): ChangesTreeNode {
-    // Recursively convert children
-    let convertedChildren: ChangesTreeNode[] = Array.from(dir.children.values()).map((child) => {
-      if (child.kind === "dir") return convertAndCompact(child);
-      return { kind: "file", entry: child.entry, label: child.name, path: child.path };
-    });
-
-    // Compact single-child directories: dir with 1 child dir collapses into one row
-    let label = dir.name;
-    let path = dir.path;
-    while (convertedChildren.length === 1 && convertedChildren[0]!.kind === "dir") {
-      const onlyChild = convertedChildren[0]! as Extract<ChangesTreeNode, { kind: "dir" }>;
-      label = label ? `${label}/${onlyChild.label}` : onlyChild.label;
-      path = onlyChild.path;
-      convertedChildren = onlyChild.children;
-    }
-
-    // Sort: directories first, then files; both alphabetical
-    convertedChildren.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
-      return a.label.localeCompare(b.label);
-    });
-
-    let added: number | null = null;
-    let removed: number | null = null;
-    let fileCount = 0;
-
-    for (const child of convertedChildren) {
-      if (child.kind === "file") {
-        fileCount++;
-        if (child.entry.added !== null) added = (added ?? 0) + child.entry.added;
-        if (child.entry.removed !== null) removed = (removed ?? 0) + child.entry.removed;
-      } else {
-        fileCount += child.fileCount;
-        if (child.added !== null) added = (added ?? 0) + child.added;
-        if (child.removed !== null) removed = (removed ?? 0) + child.removed;
-      }
-    }
-
-    return {
-      kind: "dir",
-      path,
-      label,
-      children: convertedChildren,
-      added,
-      removed,
-      fileCount,
-    };
-  }
-
-  const result: ChangesTreeNode[] = [];
-
-  for (const child of Array.from(root.children.values())) {
-    if (child.kind === "dir") {
-      result.push(convertAndCompact(child));
-    } else {
-      result.push({ kind: "file", entry: child.entry, label: child.name, path: child.path });
-    }
-  }
-
-  // Sort top-level entries: directories first, then files
-  result.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
-    return a.label.localeCompare(b.label);
-  });
-
-  // Synthetic (untracked) group at bottom if untracked entries exist
-  if (untrackedEntries.length > 0) {
-    let untrackedAdded: number | null = null;
-    let untrackedRemoved: number | null = null;
-    const untrackedChildren: ChangesTreeNode[] = untrackedEntries.map((e) => {
-      if (e.added !== null) untrackedAdded = (untrackedAdded ?? 0) + e.added;
-      if (e.removed !== null) untrackedRemoved = (untrackedRemoved ?? 0) + e.removed;
-      return {
-        kind: "file",
-        entry: e,
-        label: e.path,
-        path: e.path,
-      };
-    });
-
-    untrackedChildren.sort((a, b) => a.label.localeCompare(b.label));
-
-    result.push({
-      kind: "dir",
-      path: "(untracked)",
-      label: "(untracked)",
-      children: untrackedChildren,
-      added: untrackedAdded,
-      removed: untrackedRemoved,
-      fileCount: untrackedChildren.length,
-      untracked: true,
-    });
-  }
-
-  return result;
-}
+// docs/WORKSPACE_PANES_PLAN.md Phase W4 — Changes pane state layer. CR4 dropped the folder tree: the
+// rail is a flat list grouped by directory, so there is no collapse state to keep.
 
 interface ChangesPaneValue {
   changes: ChangesDTO | null;
@@ -167,9 +23,6 @@ interface ChangesPaneValue {
   initRepo: () => Promise<void>;
   initializingRepo: boolean;
   initRepoError: string | null;
-  tree: ChangesTreeNode[];
-  toggleFolder: (path: string) => void;
-  isFolderCollapsed: (path: string) => boolean;
   projectPath: string | null;
 }
 
@@ -187,38 +40,6 @@ export function ChangesPaneProvider({ children }: { children: ReactNode }) {
   const [diffLoading, setDiffLoading] = useState(false);
   const [initializingRepo, setInitializingRepo] = useState(false);
   const [initRepoError, setInitRepoError] = useState<string | null>(null);
-
-  const storageKey = `rama:changes:collapsed:${WINDOW_LABEL}:${activeProjectId ?? "none"}`;
-  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const toggleFolder = useCallback(
-    (folderPath: string) => {
-      setCollapsedFolders((prev) => {
-        const next = { ...prev, [folderPath]: !prev[folderPath] };
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-        return next;
-      });
-    },
-    [storageKey],
-  );
-
-  const isFolderCollapsed = useCallback(
-    (folderPath: string) => {
-      return !!collapsedFolders[folderPath];
-    },
-    [collapsedFolders],
-  );
 
   const loadChanges = useCallback(
     async (silent = false) => {
@@ -298,6 +119,10 @@ export function ChangesPaneProvider({ children }: { children: ReactNode }) {
     }
   }, [changes, activePath]);
 
+  // goto("changes:<path>") from the workspace bridge (docs/CODE_REDESIGN_PLAN.md CR3).
+  const changedPaths = useMemo(() => changes?.entries.map((e) => e.path) ?? [], [changes]);
+  useGotoArg("changes", changedPaths, setActivePath);
+
   const activeEntry = useMemo(() => {
     if (!changes || !activePath) return null;
     return changes.entries.find((e) => e.path === activePath) ?? null;
@@ -343,11 +168,6 @@ export function ChangesPaneProvider({ children }: { children: ReactNode }) {
     };
   }, [activeProjectId, activePath, activeEntry, stagedView]);
 
-  const tree = useMemo(() => {
-    if (!changes || changes.entries.length === 0) return [];
-    return buildTree(changes.entries);
-  }, [changes]);
-
   const value = useMemo<ChangesPaneValue>(
     () => ({
       changes,
@@ -363,9 +183,6 @@ export function ChangesPaneProvider({ children }: { children: ReactNode }) {
       initRepo,
       initializingRepo,
       initRepoError,
-      tree,
-      toggleFolder,
-      isFolderCollapsed,
       projectPath: currentProject?.path ?? null,
     }),
     [
@@ -380,9 +197,6 @@ export function ChangesPaneProvider({ children }: { children: ReactNode }) {
       initRepo,
       initializingRepo,
       initRepoError,
-      tree,
-      toggleFolder,
-      isFolderCollapsed,
       currentProject?.path,
     ],
   );

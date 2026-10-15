@@ -63,3 +63,24 @@ describe("computeEffectiveTools", () => {
     expect(out.grep).toBeUndefined();
   });
 });
+
+// HOME_REDESIGN_PLAN.md Phase HD3 — a Home chat can never be widened past read + clarify, by any
+// agent, and loses the non-harness tools (skills, heku) that an agent allowlist leaves alone.
+describe("computeEffectiveTools for a Home chat", () => {
+  const withClarify = (): RamaToolSet => ({ ...harnessTools(), clarify: fakeTool() });
+
+  test("an unrestricted agent still only gets read and clarify", () => {
+    const out = computeEffectiveTools(withClarify(), "agent", fakeAgent(), "home");
+    expect(Object.keys(out).sort()).toEqual(["clarify", "read"]);
+  });
+
+  test("an agent asking for write/bash/skills gets none of them", () => {
+    const out = computeEffectiveTools(withClarify(), "agent", fakeAgent({ tools: ["read", "write", "bash", "skill_foo", "clarify"] }), "home");
+    expect(Object.keys(out).sort()).toEqual(["clarify", "read"]);
+  });
+
+  test("the agent allowlist still narrows inside the Home ceiling", () => {
+    const out = computeEffectiveTools(withClarify(), "agent", fakeAgent({ tools: ["clarify"] }), "home");
+    expect(Object.keys(out)).toEqual(["clarify"]);
+  });
+});

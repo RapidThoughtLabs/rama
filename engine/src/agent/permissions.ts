@@ -1,4 +1,5 @@
-import type { PermissionRule, PermissionSettings, PermissionTool } from "@rama/protocol";
+import type { PermissionRule, PermissionScope, PermissionSettings, PermissionTool } from "@rama/protocol";
+import { addChatPermissionAllow, chatPermissionAllow } from "../db/chats";
 import { newId } from "../db/ids";
 import { getProjectPermissions } from "../db/projects";
 import { DEFAULT_PERMISSIONS, getSetting } from "../db/settings";
@@ -22,6 +23,14 @@ function permissionToolFor(name: string): PermissionTool | null {
     default:
       return null;
   }
+}
+
+// E3 — what "Always allow in this chat" remembers: the tool's settings bucket, or its own name when
+// it has none (git_write, file_op). Browser actions are their own bucket (`browser_action`), since
+// approving "Click Buy" must not also approve opening any page.
+export function allowKeyFor(name: string, opts: { browserAction?: boolean } = {}): string {
+  if (opts.browserAction) return "browser_action";
+  return permissionToolFor(name) ?? name;
 }
 
 function resolvePermissionRule(projectId: string, tool: PermissionTool): PermissionRule {
@@ -62,8 +71,12 @@ export function resolveBrowserActionRule(projectId: string, origin: string | und
 }
 
 // Pending `ask`-mode approvals, keyed by reqId — resolved from server.ts's approvePermission
-// WS handler, or auto-denied if the run's AbortController fires while we're waiting.
-const pending = new Map<string, (approve: boolean) => void>();
+// WS handler, or auto-denied if the run's AbortController fires while we're waiting. `allowKey` is
+// what a "chat"-scoped approval writes to the chat's allow list.
+const pending = new Map<
+  string,
+  { chatId: string; allowKey: string; request: { tool: string; input: unknown; risk: ToolRisk }; resolve: (approve: boolean) => void }
+>();
 
 export function requestPermission(
   chatId: string,
@@ -71,6 +84,7 @@ export function requestPermission(
   input: unknown,
   risk: ToolRisk,
   abortSignal: AbortSignal,
+  allowKey: string = allowKeyFor(tool),
 ): Promise<boolean> {
   const reqId = newId();
   broadcast(chatId, { type: "permission.request", reqId, tool, input, risk });
@@ -82,18 +96,38 @@ export function requestPermission(
       resolve(false);
     };
     abortSignal.addEventListener("abort", onAbort, { once: true });
-    pending.set(reqId, (approve) => {
-      abortSignal.removeEventListener("abort", onAbort);
-      resolve(approve);
+    pending.set(reqId, {
+      chatId,
+      allowKey,
+      request: { tool, input, risk },
+      resolve: (approve) => {
+        abortSignal.removeEventListener("abort", onAbort);
+        resolve(approve);
+      },
     });
   });
 }
 
-export function resolvePermission(reqId: string, approve: boolean): void {
-  const resolver = pending.get(reqId);
-  if (!resolver) return;
+// `scope: "chat"` only counts on an approval: denying "always" is not a thing, and a Deny must
+// never leave a standing rule behind.
+/** The open prompts for a chat — what a test (or a future "answer from the CLI") needs, since the
+ *  reqId otherwise only travels over the wire. */
+export function pendingIdsFor(chatId: string): string[] {
+  return [...pending].filter(([, entry]) => entry.chatId === chatId).map(([id]) => id);
+}
+
+/** A chat's unanswered asks, for a window that subscribes after they were broadcast: the sidebar
+ *  flags the chat as waiting, so opening it has to show the card it is waiting on. */
+export function pendingRequestsFor(chatId: string): { reqId: string; tool: string; input: unknown; risk: ToolRisk }[] {
+  return [...pending].filter(([, entry]) => entry.chatId === chatId).map(([reqId, entry]) => ({ reqId, ...entry.request }));
+}
+
+export function resolvePermission(reqId: string, approve: boolean, scope: PermissionScope = "once"): void {
+  const entry = pending.get(reqId);
+  if (!entry) return;
   pending.delete(reqId);
-  resolver(approve);
+  if (approve && scope === "chat") addChatPermissionAllow(entry.chatId, entry.allowKey);
+  entry.resolve(approve);
 }
 
 // docs/HARNESS_DESIGN.md T5 — "independent read-only calls run in parallel; writes serialise."
@@ -156,8 +190,10 @@ export async function gate(
     if (rule === "deny") {
       return { ok: false, summary: `blocked: ${opts.name} is disabled in permission settings` };
     }
-    if (rule === "ask" || ctx.mode === "ask") {
-      const approved = await requestPermission(ctx.chatId, opts.name, opts.input, opts.risk, ctx.abortSignal);
+    // `deny` and plan mode were settled above, so this is only ever skipping a *prompt*.
+    const allowKey = allowKeyFor(opts.name, { browserAction: opts.rule !== undefined });
+    if ((rule === "ask" || ctx.mode === "ask") && !chatPermissionAllow(ctx.chatId).includes(allowKey)) {
+      const approved = await requestPermission(ctx.chatId, opts.name, opts.input, opts.risk, ctx.abortSignal, allowKey);
       if (!approved) return { ok: false, summary: "denied by user" };
       broadcast(ctx.chatId, { type: "status", state: "tool", verb: `running ${opts.name}` });
     }

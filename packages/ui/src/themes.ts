@@ -24,7 +24,8 @@ export interface ThemeWallpaper {
       `/themes/:id/asset/:file` route. Absent + no `css` means no wallpaper: the image/veil
       layers don't render at all rather than rendering an invisible one. */
   image?: string;
-  /** Raw CSS background-image value (a gradient, typically). Wins over `image` if both are set. */
+  /** Raw CSS background-image value (a gradient, typically). With `image` too, it's layered
+      underneath the image — it shows wherever the image doesn't cover (a `fit` like "100% auto"). */
   css?: string;
   /** 0 = image/gradient at full strength, 1 = fully covered by --page-bg. Required with `image`
       or `css` — the safe failure (a theme that forgets it) is fully covered, not a photo at full
@@ -45,6 +46,8 @@ export interface ThemeSemantic {
   bad2?: string;
 }
 
+/** Dead since HOME_REDESIGN_PLAN.md Phase HD0 retired the grain/vignette layers — still parsed so
+    older theme files load, but nothing reads it. */
 export interface ThemeTexture {
   grain?: number;
   vignette?: number;
@@ -53,6 +56,10 @@ export interface ThemeTexture {
 export interface RamaTheme {
   id: ThemeId;
   label: string;
+  /** The seal's text (HOME_REDESIGN_PLAN.md Phase HD2) — the theme's name in kanji, set
+      vertically in the corner stamp and the theme popover's mini-seals. Optional for user themes;
+      resolved to the first character of `label` by parseTheme when absent. */
+  kanji: string;
   family: ThemeFamily;
   mode: ThemeMode;
   ground: string;
@@ -110,6 +117,7 @@ export function parseTheme(raw: unknown, filenameStem: string): RamaTheme {
   return {
     id: t.id as string,
     label: t.label as string,
+    kanji: typeof t.kanji === "string" && t.kanji.trim() ? t.kanji.trim() : Array.from(t.label as string)[0],
     family: t.family as ThemeFamily,
     mode: t.mode as ThemeMode,
     ground,
@@ -128,6 +136,15 @@ const DEFAULT_SEMANTIC: Record<ThemeMode, Required<ThemeSemantic>> = {
   dark: { good: "#8cc9a0", warn: "#e6c384", bad: "#e8808a", bad2: "#f0a0a8" },
   light: { good: "#2e7d4f", warn: "#a6791f", bad: "#b33a3a", bad2: "#8f2a2a" },
 };
+
+/** A theme's wallpaper as a CSS background-image value ("none" without one). Shared by
+    seedTokens and the theme popover's swatch previews, which render *other* themes. */
+export function wallpaperCss(theme: RamaTheme): string {
+  const wp = theme.wallpaper;
+  if (!wp || (!wp.image && !wp.css)) return "none";
+  if (wp.image && wp.css) return `url('${wp.image}'), ${wp.css}`;
+  return wp.css ?? `url('${wp.image}')`;
+}
 
 /** All CSS custom properties that must be raw hex/"R, G, B" strings (used directly inside
     `rgba(var(--x), a)` elsewhere in the app, or as inline-style strings in .tsx) — anything that
@@ -149,6 +166,10 @@ export function seedTokens(theme: RamaTheme): Record<string, string> {
     "--sf-lo": rgbTriplet(surface),
     "--rc": rgbTriplet(deep),
     "--ink": rgbTriplet(theme.ink),
+    // Kit names (kit/tokens.css, HOME_REDESIGN_PLAN.md Phase HD0) — the mockup's hex --ink is
+    // --ink-c here since --ink above is already a triplet.
+    "--ground": theme.ground,
+    "--ink-c": theme.ink,
     "--text-1": theme.ink,
     "--ink-hi": theme.inkLoud,
     "--good": semantic.good,
@@ -158,12 +179,9 @@ export function seedTokens(theme: RamaTheme): Record<string, string> {
     "--warn-rgb": rgbTriplet(semantic.warn),
   };
 
-  if (theme.texture?.grain !== undefined) out["--grain-op"] = String(theme.texture.grain);
-  if (theme.texture?.vignette !== undefined) out["--vig-a"] = String(theme.texture.vignette);
-
   const wp = theme.wallpaper;
   if (wp && (wp.image || wp.css)) {
-    out["--wp"] = wp.css ?? `url('${wp.image}')`;
+    out["--wp"] = wallpaperCss(theme);
     out["--veil"] = String(wp.veil);
     out["--wp-blend"] = wp.blend ?? "normal";
     out["--wp-fit"] = wp.fit ?? "cover";

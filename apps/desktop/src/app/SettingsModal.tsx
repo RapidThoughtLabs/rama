@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { FONT_SCALES, Fluke, Input, Modal, SegmentedControl, Toggle, useTheme, useToast, type RamaTheme, type ThemeFamily } from "@rama/ui";
+import { FONT_SCALES, Fluke, Input, Modal, SegmentedControl, Toggle, useTheme, useToast, wallpaperCss, type RamaTheme, type ThemeFamily } from "@rama/ui";
 import type { ChatMode, GeneralSettingsDTO, ModelRole, ModelRoleDTO, PermissionRule, PermissionSettings, PermissionTool } from "@rama/protocol";
 import {
   fetchGeneralSettings,
@@ -50,7 +50,7 @@ export function SettingsModal({
   const [pane, setPane] = useState<Pane>("general");
   const { providers, health } = useProvidersData();
 
-  // docs/PROVIDERS_PLAN.md Phase P1 — a deep link (ModelPicker's banner, StatusBar's dot) lands
+  // docs/PROVIDERS_PLAN.md Phase P1 — a deep link (the composer's model menu, the topbar) lands
   // on a specific pane every time it's used, not just the first time the modal ever opened.
   useEffect(() => {
     if (open && initialPane) setPane(initialPane);
@@ -279,7 +279,7 @@ function themeSwatchStyle(t: RamaTheme): CSSProperties {
   if (!wp || (!wp.image && !wp.css)) return { background: t.preview.bg };
   return {
     background: t.preview.bg,
-    backgroundImage: wp.css ?? `url('${wp.image}')`,
+    backgroundImage: wallpaperCss(t),
     backgroundSize: wp.fit ?? "cover",
     backgroundPosition: wp.position ?? "center",
   };
@@ -336,7 +336,7 @@ function AppearancePane() {
         <label className="rama-settings-label">font size — {FONT_SCALE_LABEL.get(fontScale)}</label>
         <SegmentedControl
           options={FONT_SCALE_OPTIONS}
-          value={FONT_SCALE_LABEL.get(fontScale) ?? "default"}
+          value={FONT_SCALE_LABEL.get(fontScale) ?? "Default"}
           onChange={(label) => {
             const scale = FONT_SCALE_BY_LABEL.get(label);
             if (scale !== undefined) setFontScale(scale);

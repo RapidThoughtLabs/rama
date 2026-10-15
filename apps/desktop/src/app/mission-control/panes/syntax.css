@@ -1,0 +1,80 @@
+/* highlight.js token colours for code fences in prose (home/HomeMarkdown.tsx, so the Code transcript
+   and Home). The workspace's diff and file view recolour these to the mockup's four roles under
+   `.r-code` (code/workspace/panes.css); this is the look everywhere else. */
+
+/* ════════════════════════════════════════════════════════════════════════
+   Syntax Highlighting Tokens — mapped to Rama theme tokens
+   ════════════════════════════════════════════════════════════════════════ */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.hljs-string,
+.hljs-title.class_,
+.hljs-section,
+.hljs-attribute,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: var(--good);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-meta,
+.hljs-doctag {
+  color: var(--text-4);
+  font-style: italic;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--warn);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-function {
+  color: var(--accent-bright);
+}
+
+.hljs-type,
+.hljs-built_in {
+  color: var(--accent-hi, var(--accent));
+}
+
+.hljs-variable,
+.hljs-variable.language_,
+.hljs-params {
+  color: rgb(var(--ink));
+}
+
+.hljs-operator,
+.hljs-punctuation {
+  color: rgba(var(--ink), 0.65);
+}
+
+.hljs-addition {
+  color: var(--good);
+  background: rgba(var(--good), 0.1);
+}
+
+.hljs-deletion {
+  color: var(--bad);
+  background: rgba(var(--bad), 0.1);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+

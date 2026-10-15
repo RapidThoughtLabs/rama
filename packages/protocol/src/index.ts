@@ -28,7 +28,7 @@ export type ChatBlock =
 
 export type SessionEvent =
   | { type: "run.started"; runId: string; ts: number }
-  | { type: "message.user"; id: string; text: string; ts: number }
+  | { type: "message.user"; id: string; text: string; ts: number; attachments?: AttachmentDTO[] }
   | { type: "thinking.delta"; runId: string; text: string; stepIndex?: number; blockIndex?: number }
   | { type: "thinking.done"; runId: string; durationMs: number; stepIndex?: number; blockIndex?: number }
   | { type: "message.delta"; runId: string; text: string; stepIndex?: number; blockIndex?: number }
@@ -53,6 +53,10 @@ export type SessionEvent =
   | { type: "cost.update"; usd: number }
   | { type: "permission.request"; reqId: string; tool: string; input: unknown; risk: "low" | "high" }
   | { type: "status"; state: SessionStatusState; verb?: string }
+  // CODE_REDESIGN_PLAN.md E2 — the same state, on the chat's *project* topic, so the sidebar can
+  // flag a waiting or running chat that isn't the one open. `idle` and `error` both arrive as
+  // "idle": the sidebar draws neither.
+  | { type: "chat.status"; chatId: string; status: SessionStatusState }
   | { type: "run.finished"; runId: string; ts: number; state?: TerminalState; summary?: string }
   | { type: "error"; message: string; detail?: string }
   // docs/LOOP_MIGRATION_PLAN.md LM5 — fired when compaction or decay is applied to the working transcript
@@ -132,12 +136,14 @@ export interface BrowserRequest {
 export type ClientCommand =
   | { type: "subscribeChat"; chatId: string }
   | { type: "unsubscribeChat"; chatId: string }
-  | { type: "sendUserTurn"; chatId: string; text: string }
+  // HD7 — `attachmentIds` are uploads (POST /home/chats/:id/attachments) not yet on a message.
+  | { type: "sendUserTurn"; chatId: string; text: string; attachmentIds?: string[] }
   | { type: "interrupt"; chatId: string }
   | { type: "setModel"; chatId: string; model: string }
   | { type: "setMode"; chatId: string; mode: ChatMode }
   | { type: "setAgent"; chatId: string; agentId: string }
-  | { type: "approvePermission"; reqId: string; approve: boolean }
+  // E3 — `scope: "chat"` also remembers the approval for this chat (ChatSettingsDTO.permissionAllow).
+  | { type: "approvePermission"; reqId: string; approve: boolean; scope?: PermissionScope }
   // docs/MISSION_CONTROL_PLAN.md §5.3 — the project-scoped counterpart to subscribeChat/
   // unsubscribeChat, for the `terminal.*` events above.
   | { type: "subscribeProject"; projectId: string }
@@ -178,9 +184,14 @@ export interface InstructionsDTO {
   exists: boolean;
 }
 
+// HOME_REDESIGN_PLAN.md Phase HD3 — which section a chat belongs to. Home chats live under the
+// hidden system project "home" (Decision D3) and never appear in the Code routes.
+export type ChatKind = "home" | "code";
+
 export interface ChatDTO {
   id: string;
   projectId: string;
+  kind: ChatKind;
   title: string;
   backend: BackendConfig;
   providerId: string;
@@ -195,6 +206,29 @@ export interface ChatDTO {
   contextMax: number;
   createdAt: number;
   updatedAt: number;
+}
+
+// CR8 — GET /projects/:id/recent-chats. The Code landing's "Recent in {project}" rows: a Code chat
+// plus a one-line `snippet` (the first sentence of its last assistant reply, or "Waiting for your OK
+// to {verb}." while it is blocked on an ask). Computed per request, never stored.
+export interface RecentChatDTO extends ChatDTO {
+  snippet: string | null;
+}
+
+// HD3 — GET /home/chats. `snippet` is the first sentence of the last assistant reply, markdown
+// stripped, at most 140 characters; computed per request, never stored. `webSearch` is the
+// composer's web toggle, persisted per chat (HD7 wires it into the run).
+export interface HomeChatSummaryDTO extends ChatDTO {
+  snippet: string | null;
+  webSearch: boolean;
+}
+
+// HD3 — POST /home/chats. Everything else about a Home chat is fixed: the "home" project, the
+// "home" agent, agent mode.
+export interface CreateHomeChatInput {
+  providerId?: string;
+  model?: string;
+  webSearch?: boolean;
 }
 
 export interface CreateProjectInput {
@@ -227,6 +261,11 @@ export type UpdateChatInput = Partial<CreateChatInput & { status: string }>;
 // sandbox. The `worktree*` fields (CC2) are set by POST /chats/:id/worktree, never PUT here.
 export interface ChatSettingsDTO {
   extraRoots: string[];
+  /** E3 — the tools this chat's reader said "Always allow in this chat" to. A tool's permission
+   *  bucket ("bash", "edit", "write", "web", "browser_action"), or its own name when it has none
+   *  (e.g. "git_write"). The `ask` rule and ask mode skip their prompt for these; `deny` and plan
+   *  mode still win. */
+  permissionAllow: string[];
   worktreeEnabled: boolean;
   worktreePath: string | null;
   worktreeBranch: string | null;
@@ -234,6 +273,8 @@ export interface ChatSettingsDTO {
 
 export interface UpdateChatSettingsInput {
   extraRoots?: string[];
+  /** Replaces the list — how a later UI revokes one. */
+  permissionAllow?: string[];
 }
 
 // docs/PROMPT_STACK_PLAN.md §5.3, Phase PS4 — GET /agents. No body/tools-vs-mode-intersection
@@ -273,7 +314,26 @@ export interface MessageDTO {
   thinkingDurationMs?: number;
   /** docs/CHAT_VIEW_PLAN.md CV5/CV6 — ordered block timeline. */
   blocks?: ChatBlock[];
+  /** HOME_REDESIGN_PLAN.md HD6 — the model that wrote an assistant row (Home's turn byline).
+   *  Absent on rows written before HD6 and on the live run's local message. */
+  providerId?: string;
+  model?: string;
+  /** HOME_REDESIGN_PLAN.md HD7 — files the user attached to this turn (message_attachments). */
+  attachments?: AttachmentDTO[];
 }
+
+export interface AttachmentDTO {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  /** PDFs only. */
+  pages?: number;
+}
+
+/** HD7 — the per-file and per-turn limits, enforced by the composer and (size) by the engine. */
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const ATTACHMENTS_PER_TURN = 5;
 
 // Phase 3 — tools + artifacts wire types.
 
@@ -303,6 +363,10 @@ export interface ToolCallDTO {
   startedAt: number | null;
   endedAt: number | null;
   artifactId: string | null;
+  /** HOME_REDESIGN_PLAN.md HD6/HD7 — the tool's structured result, where the UI needs more than the
+   *  summary (the `web` tool's `sources: { title, source }[]` for "Searched the web"). The engine
+   *  starts sending it with HD7. */
+  resultMeta?: Record<string, unknown> | null;
 }
 
 // docs/MISSION_CONTROL_PLAN.md §5.2 — terminal runtime wire types (Phase M2). A terminal is
@@ -531,6 +595,9 @@ export interface DocContentDTO {
 // gate (engine/src/agent/permissions.ts) — that gate is keyed on chat mode today, and "web" has no
 // corresponding tool yet, so wiring real enforcement is follow-up work, not this phase's.
 export type PermissionRule = "allow" | "ask" | "deny";
+
+/** How long an approval lasts: this one call, or every call of that tool in the chat. */
+export type PermissionScope = "once" | "chat";
 // AGENT_BROWSER_PLAN.md AB4 — "browser_action" (click/type/press/scroll) is deliberately not in
 // DEFAULT_PERMISSIONS: its default isn't a static rule but "loopback origins auto-allow, ask
 // everywhere else" (engine/src/agent/permissions.ts's resolveBrowserActionRule). A project or

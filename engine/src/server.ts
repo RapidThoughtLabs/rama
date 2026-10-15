@@ -1,4 +1,5 @@
-import type { AgentSummaryDTO, ClientCommand, CurationProposalDTO, GeneralSettingsDTO, InstructionsDTO, PermissionSettings } from "@rama/protocol";
+import { ATTACHMENT_MAX_BYTES } from "@rama/protocol";
+import type { AgentSummaryDTO, ClientCommand, SessionEvent, CurationProposalDTO, GeneralSettingsDTO, InstructionsDTO, PermissionSettings } from "@rama/protocol";
 import {
   applyProjectProposal,
   getGlobalInstructions,
@@ -9,7 +10,7 @@ import {
 import { draftProjectInstructions } from "./agent/instructionsInit";
 import { runCurator } from "./agent/curator/curator";
 import { getPromptPreview, interrupt, isRunning, runTurn } from "./agent/run/run";
-import { resolvePermission } from "./agent/permissions";
+import { pendingRequestsFor, resolvePermission } from "./agent/permissions";
 import { checkAuth } from "./auth";
 import { resolveBrowserResponse } from "./browserBridge";
 import { undoLastRun } from "./checkpoints";
@@ -20,16 +21,22 @@ import {
   deleteChat,
   getChat,
   getChatSettings,
+  setChatPermissionAllow,
   listAllChats,
   listChatsByProject,
+  listRecentChats,
   migrateLegacyCliChats,
+  readChatSettingsJson,
   setChatExtraRoots,
   setChatWorktree,
   updateChat,
+  writeChatSettingsJson,
 } from "./db/chats";
 import { ensureWorktree, removeWorktree } from "./git/worktree";
 import { deleteDoc, listDocs, readDoc, writeDoc } from "./docs/store";
-import { listMessages } from "./db/messages";
+import { listMessages, rewindToUserTurn } from "./db/messages";
+import { toAttachmentDTO } from "./db/attachments";
+import { removeAttachmentFiles, saveHomeAttachment } from "./files/attachments";
 import {
   appendScrollback,
   createTerminal,
@@ -40,11 +47,14 @@ import {
   markTerminalExited,
   renameTerminal,
 } from "./db/terminals";
+import { waitingSnippet } from "./db/snippet";
+import { HOME_AGENT_ID, createHomeChat, ensureHomeProject, listHomeChats, removeHomeChatFiles } from "./db/home";
 import {
   createProject,
   deleteProject,
   getProject,
   getProjectPermissions,
+  isSystemProject,
   listProjects,
   updateProject,
   updateProjectPermissions,
@@ -151,6 +161,7 @@ export function createServer() {
   // backend_json `{"kind":"cli"}` no longer parse against BackendConfig's shrunk union and would
   // render as a chat with no messages and no way to type.
   migrateLegacyCliChats();
+  ensureHomeProject();
   ensureThemesHome();
   watchThemes(broadcastThemes);
   // docs/PROVIDERS_PLAN.md Phase P0 — rehydrate provider_models from catalog.json on every boot.
@@ -223,6 +234,7 @@ export function createServer() {
             if (result === "has-chats") {
               return json({ error: "project still has chats — move or delete them first" }, { status: 409 });
             }
+            if (result === "system") return json({ error: "the Home project can't be removed" }, { status: 409 });
             return json({ ok: true });
           }
         }
@@ -231,10 +243,44 @@ export function createServer() {
           return json(listAllChats());
         }
 
+        // HOME_REDESIGN_PLAN.md Phase HD3 — Home's own list and create. PATCH/DELETE go through
+        // /chats/:id like any chat.
+        if (pathname === "/home/chats" && req.method === "GET") {
+          return json(listHomeChats());
+        }
+        if (pathname === "/home/chats" && req.method === "POST") {
+          const body = await req.json().catch(() => ({}));
+          return json(
+            createHomeChat({
+              providerId: typeof body?.providerId === "string" ? body.providerId : undefined,
+              model: typeof body?.model === "string" ? body.model : undefined,
+              webSearch: body?.webSearch === true,
+            }),
+            { status: 201 },
+          );
+        }
+
+        // HOME_REDESIGN_PLAN.md Phase HD7 — one file per request (multipart, field "file"), stored
+        // under ~/.rama/home/attachments/<chatId>/ and left unlinked until a sendUserTurn carries
+        // its id. A PDF's text is extracted here, once.
+        const homeAttachMatch = pathname.match(/^\/home\/chats\/([^/]+)\/attachments$/);
+        if (homeAttachMatch && req.method === "POST") {
+          const chatId = homeAttachMatch[1];
+          if (getChat(chatId)?.kind !== "home") return json({ error: "chat not found" }, { status: 404 });
+          const form = await req.formData().catch(() => null);
+          const file = form?.get("file");
+          if (!file || typeof file === "string") return json({ error: "a file is required" }, { status: 400 });
+          if (file.size > ATTACHMENT_MAX_BYTES) return json({ error: "files can be up to 20 MB" }, { status: 413 });
+          const stored = await saveHomeAttachment(chatId, { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) });
+          return json(toAttachmentDTO(stored), { status: 201 });
+        }
+
+        // Code chats only — the system "home" project answers 404 here, so a Code chat can never
+        // be created under it.
         const projectChatsMatch = pathname.match(/^\/projects\/([^/]+)\/chats$/);
         if (projectChatsMatch) {
           const projectId = projectChatsMatch[1];
-          if (!getProject(projectId)) return json({ error: "project not found" }, { status: 404 });
+          if (!getProject(projectId) || isSystemProject(projectId)) return json({ error: "project not found" }, { status: 404 });
 
           if (req.method === "GET") {
             return json(listChatsByProject(projectId));
@@ -243,6 +289,20 @@ export function createServer() {
             const body = await req.json().catch(() => ({}));
             return json(createChat(projectId, body ?? {}), { status: 201 });
           }
+        }
+
+        // CODE_REDESIGN_PLAN.md CR8 — GET /projects/:id/recent-chats?limit=3
+        const recentChatsMatch = pathname.match(/^\/projects\/([^/]+)\/recent-chats$/);
+        if (recentChatsMatch && req.method === "GET") {
+          const projectId = recentChatsMatch[1]!;
+          if (!getProject(projectId)) return json({ error: "project not found" }, { status: 404 });
+          const limit = Math.min(10, Math.max(1, Number(url.searchParams.get("limit")) || 3));
+          return json(
+            listRecentChats(projectId, limit, (chatId) => {
+              const ask = pendingRequestsFor(chatId)[0];
+              return ask ? waitingSnippet(ask.tool, ask.input) : null;
+            }),
+          );
         }
 
         // WORKSPACE_PANES_PLAN.md §5.2 / §6.1 — GET /projects/:id/changes
@@ -341,6 +401,10 @@ export function createServer() {
           const body = await req.json().catch(() => ({}));
           const updated = updateChat(chatMatch[1], body ?? {});
           if (!updated) return json({ error: "chat not found" }, { status: 404 });
+          // HD7 — a Home chat's globe toggle; the next turn's tool set follows it.
+          if (updated.kind === "home" && typeof body?.webSearch === "boolean") {
+            writeChatSettingsJson(updated.id, { ...(readChatSettingsJson(updated.id) ?? {}), webSearch: body.webSearch });
+          }
           return json(updated);
         }
         if (chatMatch && req.method === "DELETE") {
@@ -356,6 +420,7 @@ export function createServer() {
             if (project) await removeWorktree(project.path, project.id, chatId).catch(() => {});
           }
           if (!deleteChat(chatId)) return json({ error: "chat not found" }, { status: 404 });
+          if (chatToDelete?.kind === "home") removeHomeChatFiles(chatId);
           return json({ ok: true });
         }
 
@@ -371,8 +436,14 @@ export function createServer() {
           }
           if (req.method === "PUT") {
             const body = await req.json().catch(() => ({}));
-            const extraRoots = Array.isArray(body?.extraRoots) ? body.extraRoots.filter((r: unknown) => typeof r === "string") : [];
-            return json(setChatExtraRoots(chatId, extraRoots) ?? { error: "chat not found" });
+            const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((r): r is string => typeof r === "string") : []);
+            // Each field is optional so revoking an allow-list entry can't wipe the folder chips (E3);
+            // a bare PUT still means "no extra folders", as it always did.
+            const hasAllow = Array.isArray(body?.permissionAllow);
+            let settings = null;
+            if (!hasAllow || Array.isArray(body?.extraRoots)) settings = setChatExtraRoots(chatId, strings(body?.extraRoots));
+            if (hasAllow) settings = setChatPermissionAllow(chatId, strings(body.permissionAllow));
+            return json(settings ?? { error: "chat not found" });
           }
         }
 
@@ -449,6 +520,24 @@ export function createServer() {
           return json({ content });
         }
 
+        // HOME_REDESIGN_PLAN.md HD6 — "Try again": drop a user turn (`{ userTurn }`, its 0-based
+        // position among the chat's user messages; the last one when omitted) and everything after
+        // it, then run that text again as a fresh turn. The client drops the same rows locally
+        // first, and the new run's events (message.user, run.*) refill the transcript.
+        const chatRetryMatch = pathname.match(/^\/chats\/([^/]+)\/retry$/);
+        if (chatRetryMatch && req.method === "POST") {
+          const chatId = chatRetryMatch[1];
+          if (!getChat(chatId)) return json({ error: "chat not found" }, { status: 404 });
+          if (isRunning(chatId)) return json({ error: "a run is in progress" }, { status: 409 });
+          const body = (await req.json().catch(() => ({}))) as { userTurn?: unknown };
+          const userTurn = typeof body.userTurn === "number" && Number.isInteger(body.userTurn) && body.userTurn >= 0 ? body.userTurn : undefined;
+          const rewound = rewindToUserTurn(chatId, userTurn);
+          if (rewound === null) return json({ error: "nothing to try again" }, { status: 409 });
+          removeAttachmentFiles(rewound.removedPaths);
+          void runTurn(chatId, rewound.text, rewound.attachmentIds);
+          return json({ ok: true }, { status: 202 });
+        }
+
         // docs/TOOL_LAYER_PLAN.md §5.2 — restores the project's files to the state before the
         // most recently started run, via the shadow checkpoint git repo. One level of undo.
         const chatUndoMatch = pathname.match(/^\/chats\/([^/]+)\/undo$/);
@@ -484,7 +573,8 @@ export function createServer() {
           const projectId = url.searchParams.get("projectId") ?? undefined;
           const project = projectId ? getProject(projectId) : null;
           const agents = discoverAgents({ projectId, projectPath: project?.path });
-          return json(agents.map(agentSummaryDTO));
+          // HD3 — the Home agent is fixed to Home chats; it never belongs in Code's picker.
+          return json(agents.filter((a) => a.name !== HOME_AGENT_ID).map(agentSummaryDTO));
         }
 
         const projectTerminalsMatch = pathname.match(/^\/projects\/([^/]+)\/terminals$/);
@@ -1035,14 +1125,21 @@ export function createServer() {
           case "subscribeChat":
             ws.subscribe(command.chatId);
             ws.data.subscriptions.add(command.chatId);
-            broadcast(command.chatId, { type: "status", state: isRunning(command.chatId) ? "streaming" : "idle" });
+            // To this socket only: broadcast() would also feed the sidebar's live status, and a chat
+            // that is waiting on an approval must not read "streaming" because someone looked at it.
+            {
+              const send = (event: SessionEvent) => ws.send(JSON.stringify({ chatId: command.chatId, event }));
+              const waiting = pendingRequestsFor(command.chatId);
+              send({ type: "status", state: waiting.length ? "waiting_permission" : isRunning(command.chatId) ? "streaming" : "idle" });
+              for (const request of waiting) send({ type: "permission.request", ...request });
+            }
             break;
           case "unsubscribeChat":
             ws.unsubscribe(command.chatId);
             ws.data.subscriptions.delete(command.chatId);
             break;
           case "sendUserTurn":
-            void runTurn(command.chatId, command.text);
+            void runTurn(command.chatId, command.text, Array.isArray(command.attachmentIds) ? command.attachmentIds.filter((id) => typeof id === "string") : []);
             break;
           case "interrupt":
             interrupt(command.chatId);
@@ -1057,7 +1154,7 @@ export function createServer() {
             updateChat(command.chatId, { agentId: command.agentId });
             break;
           case "approvePermission":
-            resolvePermission(command.reqId, command.approve);
+            resolvePermission(command.reqId, command.approve, command.scope);
             break;
           // docs/MISSION_CONTROL_PLAN.md §5.3 — the project-scoped counterpart to
           // subscribeChat/unsubscribeChat above, for `terminal.*` events.

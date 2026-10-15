@@ -1,0 +1,90 @@
+/* Kit base — HOME_REDESIGN_PLAN.md Phase HD0. Mockup CSS ported verbatim apart from the r- prefix
+   and the token renames listed in kit/tokens.css. */
+
+/* mock:L92 */
+svg.r-i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* mock:L167-169 */
+.r-wall, .r-veil { position: absolute; inset: 0; pointer-events: none; }
+.r-wall { background-image: var(--wp); background-size: var(--wp-fit); background-position: var(--wp-position); background-repeat: no-repeat; background-color: var(--ground); }
+.r-veil { background: var(--ground); opacity: var(--veil); transition: background-color .35s, opacity .35s; }
+
+/* ═══ Buttons (mock:L113-119, 363-369) ═══ */
+.r-icon-btn {
+  width: 30px; height: 30px; border-radius: 8px;
+  display: inline-grid; place-items: center;
+  color: var(--ink-3);
+  transition: background-color .15s, color .15s;
+}
+.r-icon-btn:hover { background: var(--hover); color: var(--ink-1); }
+
+.r-btn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 15px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-family: var(--f-ui); font-size: var(--k-sm); font-weight: 500; white-space: nowrap; }
+.r-btn:hover { background: color-mix(in oklab, var(--accent) 88%, var(--ink-1)); }
+.r-btn-ghost { background: transparent; color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+.r-btn-ghost:hover { background: var(--hover); color: var(--ink-1); }
+.r-btn-soft { background: var(--selected); color: var(--accent); }
+.r-btn-soft:hover { background: color-mix(in oklab, var(--accent) 22%, transparent); }
+.r-btn svg { width: 14px; height: 14px; }
+
+/* mock:L339-341 — the small text button in card heads and notices. */
+.r-mini { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; font-family: var(--f-ui); font-size: var(--k-xs); color: var(--ink-3); }
+.r-mini:hover:not(:disabled) { background: var(--hover); color: var(--ink-1); }
+.r-mini svg { width: 13px; height: 13px; }
+
+/* ═══ Segmented controls (mock:L121-133, 654-656) ═══ */
+.r-seg {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 2px;
+  margin: 4px 12px 14px; padding: 3px;
+  background: var(--well); border-radius: 11px;
+}
+.r-seg button {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  height: 32px; border-radius: 8px;
+  font-size: var(--k-sm); font-weight: 500; color: var(--ink-3);
+  transition: background-color .15s, color .15s;
+}
+.r-seg button:hover { color: var(--ink-1); }
+.r-seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink-1); box-shadow: var(--shadow-sm); }
+
+.r-mini-seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--well); }
+.r-mini-seg button { height: 28px; padding: 0 11px; border-radius: 7px; font-size: var(--k-xs); font-weight: 500; color: var(--ink-3); }
+.r-mini-seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink-1); box-shadow: var(--shadow-sm); }
+
+/* ═══ Popovers (mock:L622-629, 658-666) ═══ */
+.r-pop {
+  position: fixed; z-index: 50;
+  background: var(--raised); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  animation: r-pop .16s ease-out;
+}
+@keyframes r-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+.r-pop h3 { margin: 0 0 12px; font-size: var(--k-sm); font-weight: 600; color: var(--ink-1); }
+.r-pop h3 + .sub { margin: -10px 0 12px; font-size: var(--k-xs); color: var(--ink-4); }
+.r-pop .divider { height: 1px; background: var(--line); margin: 16px -18px; }
+
+.r-mp-label { font-size: var(--k-xs); font-weight: 500; color: var(--ink-4); padding: 8px 10px 4px; }
+.r-mp-item { display: grid; grid-template-columns: 18px 1fr 16px; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 10px; }
+.r-mp-item:hover { background: var(--hover); }
+.r-mp-item svg { color: var(--ink-3); }
+.r-mp-item b { display: block; font-size: var(--k-sm); font-weight: 500; color: var(--ink-1); line-height: 1.3; }
+.r-mp-item small { font-size: var(--k-xs); color: var(--ink-4); }
+.r-mp-item .tick { color: var(--accent); visibility: hidden; }
+.r-mp-item[aria-checked="true"] .tick { visibility: visible; }
+
+/* ═══ Confirm dialog (HD4) — not in the mockup (§6.3), designed from kit tokens ═══ */
+.r-dialog-scrim { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / .25); animation: r-fade .15s ease-out; }
+.r-dialog {
+  width: min(380px, 100%); padding: 20px 20px 16px;
+  background: var(--raised); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-pop);
+  font-family: var(--f-ui); line-height: 1.5;
+  animation: r-pop .16s ease-out;
+}
+.r-dialog h3 { margin: 0 0 6px; font-size: var(--k-md); font-weight: 600; color: var(--ink-1); }
+.r-dialog p { margin: 0; font-size: var(--k-sm); color: var(--ink-3); overflow-wrap: anywhere; }
+.r-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.r-dialog button { border: 0; cursor: pointer; }
+.r-btn-danger { background: var(--bad); color: #fff; }
+.r-btn-danger:hover { background: color-mix(in oklab, var(--bad) 88%, #000); }
+@keyframes r-fade { from { opacity: 0; } to { opacity: 1; } }

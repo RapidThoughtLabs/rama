@@ -1,6 +1,7 @@
 {
   "id": "shu",
   "label": "Shu",
+  "kanji": "朱",
   "family": "red",
   "mode": "dark",
   "ground": "#140a09",
@@ -9,5 +10,5 @@
   "accent": "#e34a33",
   "semantic": { "bad": "#e34d7a", "bad2": "#ff6f9c" },
   "texture": { "grain": 0.30, "vignette": 0.62 },
-  "wallpaper": { "image": "/wallpapers/nebula-inferno.jpg", "veil": 0.62 }
+  "wallpaper": { "image": "/wallpapers/nebula-inferno.jpg", "css": "radial-gradient(70% 60% at 75% 0%, rgba(227,74,51,0.35), transparent 62%), radial-gradient(70% 60% at 0% 100%, rgba(140,40,20,0.4), transparent 65%)", "veil": 0.62 }
 }

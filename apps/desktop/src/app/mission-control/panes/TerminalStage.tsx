@@ -1,77 +1,47 @@
-import { useRef } from "react";
-import type { Terminal } from "@xterm/xterm";
-import { useProjectsData } from "../../data/ProjectsProvider";
+import { Empty, tildePath } from "../../code/workspace/parts";
 import { XtermSurface } from "../XtermSurface";
 import { useTerminalPane } from "./TerminalPaneContext";
 
-// docs/MISSION_CONTROL_PLAN.md §4.6 / §8 Phase M3 — stage toolbar: cwd breadcrumb · command ·
-// `⌫` clear · `⏹` kill (disabled once exited). `key={active.id}` on XtermSurface below is
-// deliberate: switching the selected terminal fully unmounts/remounts the xterm instance rather
-// than reusing it, same as the old TerminalView.tsx did per-chat.
-export function TerminalStage() {
-  const { projects } = useProjectsData();
-  const { active, runningIds, killTerminal } = useTerminalPane();
-  const termRef = useRef<Terminal | null>(null);
+// docs/CODE_REDESIGN_PLAN.md CR4 (mock:L1776-1787) — the Terminal stage bar (title, cwd, Clear,
+// Stop) and the xterm surface. Clear needs the live xterm, which the stage owns, so the provider
+// holds the ref the two share.
+
+export function TerminalStageBar() {
+  const { active, runningIds, killTerminal, termRef } = useTerminalPane();
 
   if (!active) {
-    return <div className="rama-mc-coming-soon">no terminal selected — press + to start one.</div>;
+    return (
+      <div className="r-stage-title">
+        <b>No terminals</b>
+      </div>
+    );
   }
 
-  const project = projects.find((p) => p.id === active.projectId);
-  const cwdLabel =
-    project && active.cwd.startsWith(project.path) ? `~${active.cwd.slice(project.path.length) || "/"}` : active.cwd;
-  const commandLine = [active.shell, ...active.argv].join(" ");
   const running = runningIds.has(active.id) && active.status === "running";
+  const failed = active.status === "exited" && active.exitCode !== null && active.exitCode !== 0;
 
   return (
     <>
-      <div className="rama-artifact-preview-toolbar">
-        <span
-          style={{
-            flexShrink: 0,
-            maxWidth: "40%",
-            fontSize: "var(--fs-sm)",
-            color: "rgb(var(--ink))",
-            fontWeight: 600,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {cwdLabel}
-        </span>
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: "var(--fs-micro)",
-            color: "rgba(var(--ink),0.4)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {commandLine}
-        </span>
-        {active.status === "exited" && (
-          <span className={`rama-badge ${active.exitCode === 0 ? "rama-badge-good" : "rama-badge-warn"}`}>
-            exit {active.exitCode}
-          </span>
-        )}
-        <button type="button" className="rama-btn rama-btn-icon" title="Clear" onClick={() => termRef.current?.clear()}>
-          ⌫
-        </button>
-        <button
-          type="button"
-          className="rama-btn rama-btn-icon"
-          title="Kill"
-          disabled={!running}
-          onClick={() => void killTerminal(active.id)}
-        >
-          ⏹
-        </button>
+      <div className="r-stage-title">
+        <b>{active.title}</b>
+        <small>{tildePath(active.cwd)}</small>
+        {failed && <small style={{ color: "var(--bad)" }}>exit {active.exitCode}</small>}
       </div>
-      <XtermSurface key={active.id} terminal={active} onTerminal={(t) => (termRef.current = t)} />
+      <span className="grow" />
+      <button className="r-mini" onClick={() => termRef.current?.clear()}>
+        Clear
+      </button>
+      <button className="r-mini" disabled={!running} onClick={() => void killTerminal(active.id)}>
+        Stop
+      </button>
     </>
   );
+}
+
+// `key={active.id}` on XtermSurface is deliberate: switching the selected terminal fully
+// unmounts/remounts the xterm instance rather than reusing it, as the old TerminalView did per chat.
+export function TerminalStage() {
+  const { active, termRef } = useTerminalPane();
+  if (!active) return <Empty title="No terminals yet">Open one with the + button, or ask Rama to run something.</Empty>;
+  return <XtermSurface key={active.id} terminal={active} onTerminal={(t) => (termRef.current = t)} />;
 }

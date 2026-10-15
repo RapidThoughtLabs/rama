@@ -3,6 +3,7 @@ import { z } from "zod";
 import { mutate } from "./mutate";
 import { resolveInProject } from "./paths";
 import { dirtyPathsAmong, getRepoState, getStatus, isGitRepo, NOT_A_REPO_MESSAGE, runGit } from "./gitShared";
+import { parseCommitLine } from "./testSummary";
 import type { ToolCtx, ToolResult } from "./types";
 
 // docs/TOOL_LAYER_PLAN.md §6.12 — the write half of native git. Deliberately absent: push, pull,
@@ -105,7 +106,8 @@ async function runCommit(projectPath: string, message: string, stageAll?: boolea
   const cleanMessage = stripCoAuthoredBy(message);
   const { output, exitCode } = await runGit(projectPath, ["commit", "-m", cleanMessage]);
   if (exitCode !== 0) return { ok: false, summary: "git commit failed", content: output.trim() || "git commit failed" };
-  return { ok: true, content: output.trim(), summary: "committed", meta: { filesWritten: [] } };
+  const where = parseCommitLine(output); // CR6/E5: "committed · main 4c1e9a2"
+  return { ok: true, content: output.trim(), summary: where ? `committed · ${where}` : "committed", meta: { filesWritten: [] } };
 }
 
 async function runBranch(projectPath: string, name: string, from?: string): Promise<ToolResult> {

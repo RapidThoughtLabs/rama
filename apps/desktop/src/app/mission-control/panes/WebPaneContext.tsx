@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useGotoArg } from "../../code/workspace/gotoBridge";
 import type { ReactNode } from "react";
 import {
   webviewCreate,
@@ -156,6 +157,13 @@ export async function closeWebPage(id: string): Promise<void> {
   await webviewDestroy(id).catch(() => {});
 }
 
+/** Fixture mode only (fixtures-entry.tsx): puts pages in the store without creating native webviews,
+ *  which don't exist in a browser tab. */
+export function seedWebPages(seed: WebPageState[]): void {
+  pages = [...pages, ...seed];
+  notify();
+}
+
 export function getWebPage(id: string): WebPageState | undefined {
   return pages.find((p) => p.id === id);
 }
@@ -196,6 +204,10 @@ export function WebPaneProvider({ children }: { children: ReactNode }) {
       setActiveId(projectPages[projectPages.length - 1].id);
     }
   }, [projectPages, activeId]);
+
+  // goto("web:<pageId>") from the workspace bridge (docs/CODE_REDESIGN_PLAN.md CR3).
+  const pageIds = useMemo(() => projectPages.map((p) => p.id), [projectPages]);
+  useGotoArg("web", pageIds, setActiveId);
 
   const active = projectPages.find((p) => p.id === activeId) ?? null;
 

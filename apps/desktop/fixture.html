@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <!--
+    Dev-only entry for the design-parity fixtures (docs/CODE_REDESIGN_PLAN.md CR1). Not part of
+    `vite build` (only index.html is). Open it as /fixture.html?fixture=code-flash&theme=wakaba.
+    It boots the real app against an in-memory engine; see src/app/fixtures/install.ts.
+    Keep the head section in step with index.html (and never write the tag name in this comment:
+    Vite injects its React preamble at the first occurrence).
+  -->
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/tauri.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>rama (fixture)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&family=Martian+Mono:wght@300;400;500;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/fixtures-entry.tsx"></script>
+  </body>
+</html>

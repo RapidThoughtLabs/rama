@@ -6,6 +6,7 @@ import { newId } from "../db/ids";
 import { createTerminal, listTerminalsByProject } from "../db/terminals";
 import { broadcast, broadcastProject } from "../ws";
 import { classifyCommand, findHardRefusal, findShadow } from "./risk";
+import { testSummarySuffix } from "./testSummary";
 import { headTailTruncate } from "./truncate";
 import type { ToolCtx, ToolResult } from "./types";
 
@@ -171,7 +172,7 @@ export function createBashTool(ctx: ToolCtx) {
           ? `timed out after ${timeoutMs}ms`
           : result.aborted
             ? "aborted"
-            : `exit ${result.exitCode} · ${lineCount} line${lineCount === 1 ? "" : "s"}`;
+            : `exit ${result.exitCode} · ${lineCount} line${lineCount === 1 ? "" : "s"}${testSummarySuffix(output)}`; // CR6/E5
 
         const { content: truncatedOutput, truncated } = headTailTruncate(output, MODEL_OUTPUT_CHARS);
         const cwdNote = result.cwd !== cwdBefore ? `\ncwd is now ${result.cwd}` : "";

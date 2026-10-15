@@ -4,10 +4,11 @@
 // Replaces engine/src/agent/loop.ts.
 // docs/LOOP_MIGRATION_PLAN.md §6.1, §6.5
 
-import type { ChatMode, GeneralSettingsDTO, TerminalState } from "@rama/protocol";
+import type { ChatKind, ChatMode, GeneralSettingsDTO, TerminalState } from "@rama/protocol";
 import { createCheckpointer } from "../../checkpoints";
-import { clearModelError, recordModelError } from "../../db/providerModels";
+import { clearModelError, listProviderModels, recordModelError } from "../../db/providerModels";
 import { createArtifact } from "../../db/artifacts";
+import { linkAttachments, toAttachmentDTO } from "../../db/attachments";
 import { getChat, getChatSettings, recordUsage, stubTitleFromFirstMessage } from "../../db/chats";
 import { appendMessage, finalizeMessage } from "../../db/messages";
 import { getProject } from "../../db/projects";
@@ -26,7 +27,7 @@ import { todoEphemeralBlock } from "../../tools/todo";
 import type { ToolCtx } from "../../tools/types";
 import { newId } from "../../db/ids";
 import { broadcast } from "../../ws";
-import { resolveAgent } from "../agents/discover";
+import { resolveAgent, resolveHomeAgent } from "../agents/discover";
 import { computeEffectiveTools } from "../agents/effectiveTools";
 import type { AgentDef } from "../agents/types";
 import { getCachePolicy, getSupportsMidConversationSystem } from "../catalog";
@@ -125,6 +126,7 @@ export function reclassifyCompactionRetryError(err: unknown, isCompactionRetrySt
  * Pure given its inputs; the caller computes it once per run/preview, outside any loop.
  */
 export function buildProjectionContext(params: {
+  kind?: ChatKind;
   providerId: string;
   model: string;
   tools: RamaToolSet;
@@ -136,6 +138,7 @@ export function buildProjectionContext(params: {
 }): { promptBlocks: PromptBlocks; policy: ProjectionPolicy } {
   const cachePolicy = getCachePolicy(params.providerId, params.model);
   const promptBlocks = buildPrompt({
+    kind: params.kind,
     tools: params.tools,
     hekuManifest: buildManifest(),
     staticEnv: getStaticEnv(),
@@ -181,30 +184,44 @@ function resolveSubagent(
  * Manages the step loop, tool execution, budget, completion gate, and terminal states.
  * docs/LOOP_MIGRATION_PLAN.md §6.1
  */
-export async function runTurn(chatId: string, text: string): Promise<void> {
+export async function runTurn(chatId: string, text: string, attachmentIds: readonly string[] = []): Promise<void> {
   const chat = getChat(chatId);
   if (!chat) return;
   const projectRow = getProject(chat.projectId);
   if (!projectRow) return;
 
+  // HOME_REDESIGN_PLAN.md HD7 — the turn's uploads are linked to its user row, and ride the
+  // message.user event so the bubble shows them before the run starts.
+  const recordUserTurn = () => {
+    const userMessage = appendMessage(chatId, { role: "user", content: text });
+    const files = attachmentIds.length ? linkAttachments(chatId, userMessage.id, attachmentIds) : [];
+    broadcast(chatId, {
+      type: "message.user",
+      id: newId(),
+      text,
+      ts: Date.now(),
+      ...(files.length ? { attachments: files.map(toAttachmentDTO) } : {}),
+    });
+    return files;
+  };
+
   if (activeRuns.has(chatId)) {
     // A run is already active: record the user message in DB, show it in UI, and enqueue for mid-run steering (LM4)
-    appendMessage(chatId, { role: "user", content: text });
-    broadcast(chatId, { type: "message.user", id: newId(), text, ts: Date.now() });
+    recordUserTurn();
     enqueueSteeringMessage(chatId, text);
     return;
   }
 
   // Record user message
-  appendMessage(chatId, { role: "user", content: text });
-  broadcast(chatId, { type: "message.user", id: newId(), text, ts: Date.now() });
+  const files = recordUserTurn();
 
   const isFirstTurn = chat.title === DEFAULT_TITLE;
-  const stubTitle = stubTitleFromFirstMessage(chatId, text);
+  // A turn of files alone is titled after them until the real title comes in.
+  const stubTitle = stubTitleFromFirstMessage(chatId, text || files.map((f) => f.name).join(", "));
   if (stubTitle) broadcast(chatId, { type: "chat.renamed", chatId, title: stubTitle.title });
 
   const taskComplexityHint =
-    isFirstTurn && (await classifyComplexity(chatId, text, projectRow.path)) === "complex"
+    isFirstTurn && chat.kind !== "home" && (await classifyComplexity(chatId, text, projectRow.path)) === "complex"
       ? "This looks like a multi-part or ambiguous request. If there are genuinely different " +
         "reasonable interpretations, call clarify now (at most 3 questions, each with a default) " +
         "before starting — otherwise proceed."
@@ -265,7 +282,8 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
   try {
     const client = resolveClient(providerRow, model, apiKey);
     const subagent = resolveSubagent(providerRow, model, apiKey, client);
-    const agent: AgentDef = resolveAgent({ projectId: projectRow.id, projectPath: projectRow.path }, chat.agentId);
+    const agentCtx = { projectId: projectRow.id, projectPath: projectRow.path };
+    const agent: AgentDef = chat.kind === "home" ? resolveHomeAgent(agentCtx) : resolveAgent(agentCtx, chat.agentId);
 
     const chatSettings = getChatSettings(chatId) ?? { extraRoots: [], worktreeEnabled: false, worktreePath: null, worktreeBranch: null };
     const effectivePath = effectiveProjectPath(projectRow.path, chatSettings);
@@ -293,13 +311,16 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
       ...createHekuTools(toolCtx),
     });
 
-    const effectiveTools = computeEffectiveTools(tools, chat.mode, agent);
+    const effectiveTools = computeEffectiveTools(tools, chat.mode, agent, chat.kind);
     const checkAvailable = "check" in effectiveTools;
 
     const { policy: projectionPolicy } = buildProjectionContext({
+      kind: chat.kind,
       providerId,
       model,
-      tools,
+      // HD3 — Home has no agent switching to keep bp1 warm across, so its inventory is just what
+      // it can call.
+      tools: chat.kind === "home" ? effectiveTools : tools,
       mode: chat.mode,
       agent,
       effectiveToolNames: Object.keys(effectiveTools),
@@ -309,7 +330,9 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
 
     const volatileEnv = await getVolatileEnv(effectivePath);
 
-    const transcript: Transcript = buildTranscriptFromDb(chatId);
+    // HD7 — attached photos go to the model only if it can see them.
+    const vision = listProviderModels(providerId).find((m) => m.id === model)?.supportsVision ?? false;
+    const transcript: Transcript = buildTranscriptFromDb(chatId, { vision });
     const budget = new BudgetController(chat.mode);
     // Opt-in, off by default — see GeneralSettingsDTO.pruneOldToolOutputs' doc comment.
     const pruneOldToolOutputs = getSetting<GeneralSettingsDTO>("general")?.pruneOldToolOutputs ?? false;
@@ -363,7 +386,7 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
       // row with an ascending seq, its own text/thinking/blocks, and its own tool calls —
       // buildTranscriptFromDb (already written per-row, see transcript.ts) reproduces this
       // directly instead of collapsing a whole turn into one row on reload.
-      const stepMessage = appendMessage(chatId, { role: "assistant", content: null });
+      const stepMessage = appendMessage(chatId, { role: "assistant", content: null, producedBy: { providerId, model } });
 
       // 5. Execute step
       const isCompactionRetryStep = pendingCompactionRetryStep;
@@ -580,11 +603,12 @@ export async function runTurn(chatId: string, text: string): Promise<void> {
 
     // Fire-and-forget: auto-titling stage 2
     if (isFirstTurn && (getSetting<GeneralSettingsDTO>("general")?.autoNameChats ?? true)) {
-      void maybeTitleChat(chatId, text);
+      void maybeTitleChat(chatId, text || files.map((f) => f.name).join(", "));
     }
 
     // Fire-and-forget: instructions curator
-    if (!blockedOnQuestion) {
+    // (not for Home: there's no RAMA.md to propose changes to)
+    if (!blockedOnQuestion && chat.kind !== "home") {
       void runCurator(chatId, projectRow.id, projectRow.path);
     }
   } catch (err) {
@@ -688,7 +712,8 @@ export async function getPromptPreview(chatId: string): Promise<PromptPreview | 
   const apiKey = getSecret(providerId);
   const client = resolveClient(providerRow, model, apiKey);
   const subagent = resolveSubagent(providerRow, model, apiKey, client);
-  const agent: AgentDef = resolveAgent({ projectId: projectRow.id, projectPath: projectRow.path }, chat.agentId);
+  const agentCtx = { projectId: projectRow.id, projectPath: projectRow.path };
+  const agent: AgentDef = chat.kind === "home" ? resolveHomeAgent(agentCtx) : resolveAgent(agentCtx, chat.agentId);
 
   const chatSettings = getChatSettings(chatId) ?? { extraRoots: [], worktreeEnabled: false, worktreePath: null, worktreeBranch: null };
   const effectivePath = effectiveProjectPath(projectRow.path, chatSettings);
@@ -714,14 +739,17 @@ export async function getPromptPreview(chatId: string): Promise<PromptPreview | 
     ...createSkillTools(toolCtx),
     ...createHekuTools(toolCtx),
   });
-  const effectiveTools = computeEffectiveTools(tools, chat.mode, agent);
+  const effectiveTools = computeEffectiveTools(tools, chat.mode, agent, chat.kind);
 
   // Same call as runTurn — buildProjectionContext is the only place buildPrompt is invoked, so
   // preview and run cannot diverge again. docs/LOOP_MENDING_PLAN.md MD0.
   const { promptBlocks, policy: projectionPolicy } = buildProjectionContext({
+    kind: chat.kind,
     providerId,
     model,
-    tools,
+    // HD3 — Home has no agent switching to keep bp1 warm across, so its inventory is just what
+    // it can call.
+    tools: chat.kind === "home" ? effectiveTools : tools,
     mode: chat.mode,
     agent,
     effectiveToolNames: Object.keys(effectiveTools),

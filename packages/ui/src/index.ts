@@ -1,11 +1,13 @@
 import "./tokens.css";
-import "./wallpaper.css";
 import "./primitives.css";
+import "./fonts/fonts.css";
+import "./kit/tokens.css";
+import "./kit/kit.css";
+import "./kit/composer.css";
+import "./kit/transcript/transcript.css";
 
 export * from "./theme";
 export * from "./themes";
-export * from "./DotFieldBackground";
-export * from "./WallpaperStack";
 export * from "./components/Button";
 export * from "./components/Badge";
 export * from "./components/Input";
@@ -19,3 +21,11 @@ export * from "./components/FileIcon";
 export * from "./components/Modal";
 export * from "./components/Toast";
 
+export * from "./kit/Icon";
+export * from "./kit/MainWall";
+export * from "./kit/Popover";
+export * from "./kit/ConfirmDialog";
+export * from "./kit/modelPlace";
+export * from "./kit/ModelMenu";
+export * from "./kit/Composer";
+export * from "./kit/transcript/Transcript";

@@ -1,29 +1,46 @@
+import { Icon } from "@rama/ui";
 import type { TerminalDTO } from "@rama/protocol";
+import { Empty, PressRow, useNow } from "../../code/workspace/parts";
 import { useProjectsData } from "../../data/ProjectsProvider";
+import { terminalLastActivity } from "../useTerminalSession";
 import { useTerminalPane } from "./TerminalPaneContext";
 
-// docs/MISSION_CONTROL_PLAN.md §4.6 / §8 Phase M3 — replaces M1's "coming in M3" stub. Row
-// anatomy per §4.6: status dot · index · title · cwd (relative to project root) · `⌁` iff
-// agent-owned. The "●/○ running-vs-idle" distinction §4.6 sketches would need OS-level activity
-// introspection the data model doesn't carry (TerminalStatus is just 'running' | 'exited') — every
-// running terminal renders `●` here, a deliberate simplification, not a bug.
+// docs/CODE_REDESIGN_PLAN.md CR4 (mock:L1776-1787) — the Terminal rail head and rail. Each terminal
+// is a status dot, its title and one line saying what it is doing and who started it.
 
-function relativeCwd(cwd: string, projectPath: string | undefined): string {
-  if (projectPath && cwd.startsWith(projectPath)) {
-    const rest = cwd.slice(projectPath.length).replace(/^\/+/, "");
-    return rest ? `~/${rest}` : "~";
-  }
-  return cwd;
+/** A running shell that has printed nothing for this long reads as idle (plan CR4; the protocol only
+ *  knows running or exited, so quiet is the closest honest signal). */
+const IDLE_AFTER_MS = 60_000;
+
+type Dot = "run" | "idle" | "done";
+
+export function TerminalRailHead() {
+  const { activeProjectId } = useProjectsData();
+  const { createTerminal } = useTerminalPane();
+  return (
+    <>
+      <b className="grow">Terminals</b>
+      <button className="r-icon-btn" title="New terminal (⌘⇧`)" aria-label="New terminal" disabled={!activeProjectId} onClick={() => void createTerminal()}>
+        <Icon name="plus" />
+      </button>
+    </>
+  );
 }
 
-function statusGlyph(t: TerminalDTO, running: boolean): string {
-  if (t.status === "exited") return t.exitCode === 0 ? "✓" : "✗";
-  return running ? "●" : "○";
+function describe(t: TerminalDTO, running: boolean, now: number): { dot: Dot; sub: string } {
+  const by = t.owner === "agent" ? "Rama" : "you";
+  if (t.status === "exited") {
+    return { dot: "done", sub: t.exitCode === 0 || t.exitCode === null ? `Finished, started by ${by}` : `Exited with code ${t.exitCode}, started by ${by}` };
+  }
+  // The row says running but nothing in this app owns the process: the app restarted since (§8 M3).
+  if (!running) return { dot: "done", sub: "Ended when the app restarted" };
+  if (now - terminalLastActivity(t) > IDLE_AFTER_MS) return { dot: "idle", sub: "Idle" };
+  return { dot: "run", sub: `Running, started by ${by}` };
 }
 
 export function TerminalRail({ collapsed }: { collapsed: boolean }) {
-  const { projects, allChats } = useProjectsData();
   const { terminals, activeId, setActiveId, runningIds, killTerminal, removeTerminal } = useTerminalPane();
+  const now = useNow(15_000);
 
   async function closeTerminal(t: TerminalDTO) {
     // A still-running shell has to be killed before its row can go away — deleting the DB row
@@ -32,88 +49,32 @@ export function TerminalRail({ collapsed }: { collapsed: boolean }) {
     await removeTerminal(t.id);
   }
 
-  if (collapsed) {
-    return (
-      <>
-        {terminals.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`rama-mc-rail-icon-row${t.id === activeId ? " rama-mc-rail-icon-row-active" : ""}`}
-            title={t.title}
-            onClick={() => setActiveId(t.id)}
-          >
-            {statusGlyph(t, runningIds.has(t.id))}
-          </button>
-        ))}
-      </>
-    );
-  }
-
-  if (terminals.length === 0) {
-    return (
-      <div style={{ padding: "8px 12px", fontSize: "var(--fs-sm)", color: "rgba(var(--ink),0.4)" }}>no terminals yet.</div>
-    );
-  }
+  if (terminals.length === 0) return collapsed ? null : <Empty compact title="No terminals yet" />;
 
   return (
     <>
-      {terminals.map((t, i) => {
-        const running = runningIds.has(t.id);
-        // §8 M3 reattach logic — DB says running, Rust doesn't have it: the app restarted.
-        const endedRemotely = t.status === "running" && !running;
-        const project = projects.find((p) => p.id === t.projectId);
-        const originChat = t.originChatId ? allChats.find((c) => c.id === t.originChatId) : undefined;
+      {terminals.map((t) => {
+        const { dot, sub } = describe(t, runningIds.has(t.id), now);
         return (
-          <div
-            key={t.id}
-            role="option"
-            aria-selected={t.id === activeId}
-            className="rama-artifact-row"
-            onClick={() => setActiveId(t.id)}
-          >
-            <span className="rama-artifact-glyph">{statusGlyph(t, running)}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="rama-artifact-name">
-                {i + 1}. {t.title}
-                {t.owner === "agent" && (
-                  <span title={originChat ? `started by ${originChat.title}` : "started by an agent"}> ⌁</span>
-                )}
-              </div>
-              <div className="rama-artifact-meta">{endedRemotely ? "ended — app restarted" : relativeCwd(t.cwd, project?.path)}</div>
-            </div>
-            {t.status === "exited" && <span className="rama-artifact-badge">{t.exitCode === 0 ? "ok" : `exit ${t.exitCode}`}</span>}
+          <PressRow key={t.id} className="r-rrow" aria-current={t.id === activeId} title={t.title} onPress={() => setActiveId(t.id)}>
+            <span className={`r-sdot ${dot}`} />
+            <span className="t">{t.title}</span>
+            <span className="end" />
+            <span className="sub">{sub}</span>
             <button
-              type="button"
-              className="rama-btn rama-btn-icon"
-              title="Close"
+              className="row-x"
+              title="Close terminal"
+              aria-label={`Close ${t.title}`}
               onClick={(e) => {
                 e.stopPropagation();
                 void closeTerminal(t);
               }}
             >
-              ✕
+              <Icon name="x" />
             </button>
-          </div>
+          </PressRow>
         );
       })}
     </>
-  );
-}
-
-// §4.6 — the rail header's `+`, rendered via the registry's `RailActions` slot.
-export function TerminalRailActions() {
-  const { activeProjectId } = useProjectsData();
-  const { createTerminal } = useTerminalPane();
-  return (
-    <button
-      type="button"
-      className="rama-mc-rail-action-btn"
-      title="New terminal (⌘⇧`)"
-      disabled={!activeProjectId}
-      onClick={() => void createTerminal()}
-    >
-      +
-    </button>
   );
 }

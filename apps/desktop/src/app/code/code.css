@@ -1,0 +1,73 @@
+/* Code-tab chrome shared by the top bar, composer and workspace — docs/CODE_REDESIGN_PLAN.md CR2.
+   Mockup CSS (mock:L381-395, 360-369) with the r- prefix and kit token names. */
+
+/* ═══ Crumbs and chips (mock:L381-388) ═══ */
+.r-crumbs { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: 2px; }
+.r-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px;
+  font-size: var(--k-xs); font-weight: 500; color: var(--ink-3); white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.r-chip svg { width: 13px; height: 13px; color: var(--ink-4); }
+button.r-chip:hover { background: var(--hover); color: var(--ink-1); }
+.r-chip[aria-pressed="true"] { background: var(--selected); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent); }
+.r-chip[aria-pressed="true"] svg { color: var(--accent); }
+
+/* ═══ Top actions (mock:L389-393) ═══ */
+.r-cmd-btn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 10px; border-radius: 8px; font-size: var(--k-sm); color: var(--ink-3); }
+.r-cmd-btn:hover { background: var(--hover); color: var(--ink-1); }
+.r-cmd-btn kbd { font-family: var(--f-ui); font-size: var(--k-xs); color: var(--ink-4); padding: 1px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); }
+.r-topbar .r-icon-btn[aria-pressed="true"] { color: var(--accent); background: var(--selected); }
+.r-topbar .r-icon-btn:disabled { opacity: .4; cursor: default; pointer-events: none; }
+
+@media (max-width: 560px) {
+  .r-cmd-btn span { display: none; }
+  .r-crumbs { display: none; }
+}
+
+/* ═══ Sidebar list (mock:L146-156, 495-499) ═══ */
+.r-project-label { display: flex; align-items: center; gap: 8px; font-size: var(--k-sm); font-weight: 600; color: var(--ink-2); padding: 16px 10px 5px; }
+.r-project-label svg { color: var(--ink-4); }
+.r-project-label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-project-label .add { margin-left: auto; width: 24px; height: 24px; opacity: 0; }
+.r-project-label .add svg { width: 14px; height: 14px; }
+.r-project-label:hover .add, .r-project-label .add:focus-visible { opacity: 1; }
+/* Inline rename / branch edit — not in the mockup (§9.2): the label's own type in a well. */
+.r-project-edit {
+  min-width: 0; flex: 1; height: 24px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: var(--well); color: var(--ink-1);
+  font: inherit; font-weight: 600; outline: none; box-shadow: 0 0 0 3px var(--ring);
+}
+.r-project-edit + .r-project-edit { flex: 0 1 90px; font-weight: 400; }
+
+.r-chat-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 6px 10px; border-radius: 8px;
+  font-size: var(--k-sm); color: var(--ink-2);
+}
+.r-chat-row:hover { background: var(--hover); }
+.r-chat-row[aria-current="true"] { background: var(--selected); color: var(--ink-1); font-weight: 500; }
+.r-chat-row .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-chat-row .owner { width: 13px; height: 13px; color: var(--ink-4); }
+.r-chat-row .flag { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--warn) 25%, transparent); }
+/* Addition (§9.4): a chat that is working shows a soft-pulsing accent dot in the flag's slot. */
+.r-chat-row .running { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--accent); animation: r-pulse 1.6s ease-in-out infinite; }
+@keyframes r-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent); } }
+
+.r-add-project { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; padding: 6px 10px; border-radius: 8px; font-size: var(--k-sm); color: var(--ink-4); }
+.r-add-project:hover { background: var(--hover); color: var(--ink-1); }
+.r-sb-empty { padding: 16px 10px; font-size: var(--k-sm); color: var(--ink-4); }
+
+/* ═══ Landing (CR8) ═══ */
+/* The frame is Home's (home/home.css, mock:L203-229); this only seats it in the chat column (mock:L378). */
+.r-code-landing { flex: 1; min-height: 0; }
+/* Not in the mockup (plan §9.36): with no project, or no provider, the composer's place is a card. */
+.r-empty-card {
+  width: min(680px, 100%); padding: 22px 24px; border-radius: 14px; box-sizing: border-box;
+  background: var(--raised); border: 1px solid var(--line);
+  font-family: var(--f-ui); text-align: center;
+}
+.r-empty-card h2 { margin: 0 0 6px; font-size: var(--k-md); font-weight: 600; color: var(--ink-1); }
+.r-empty-card p { margin: 0 0 16px; font-size: var(--k-sm); color: var(--ink-3); line-height: 1.5; }
+.r-empty-wizard { text-align: left; }
+.r-empty-wizard h2 { text-align: center; margin-bottom: 14px; }

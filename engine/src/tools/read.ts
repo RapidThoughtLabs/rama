@@ -4,6 +4,8 @@ import { defineTool } from "./define";
 import { z } from "zod";
 import { gate } from "../agent/permissions";
 import { createArtifact } from "../db/artifacts";
+import { HOME_PROJECT_ID } from "../db/home";
+import { readPdfText } from "../files/pdf";
 import { resolveReadPath } from "./paths";
 import { listProjectFiles } from "./projectFiles";
 import { levenshtein } from "./textSimilarity";
@@ -56,9 +58,17 @@ async function suggestNearestPaths(projectPath: string, relPath: string): Promis
   return scored.filter((s) => s.score <= NEAREST_MATCH_MAX_SCORE).slice(0, NEAREST_MATCH_LIMIT).map((s) => s.path);
 }
 
+// HOME_REDESIGN_PLAN.md HD7 — Home's read is for the files the user attaches, so it gets plain
+// wording without the Code-only advice about bash and edit (an HD3 follow-up).
+const HOME_DESCRIPTION =
+  "Read a file the user attached (its path is given in their message), or another file in your Home " +
+  'folder. Each line is prefixed with a "NNNN| " line number for reference. A PDF comes back as its ' +
+  'text, with a "--- Page N ---" line before each page. ' +
+  `Defaults to the first ${MAX_LINES} lines; pass offset/limit to page through longer files.`;
+
 export function createReadTool(ctx: ToolCtx) {
   return defineTool({
-    description:
+    description: ctx.projectId === HOME_PROJECT_ID ? HOME_DESCRIPTION :
       "Read a file's contents, scoped to the project directory. Each line is prefixed with a " +
       '"NNNN| " line number for display only — never copy that gutter into edit\'s oldString, it ' +
       `will not match the file's real bytes. Defaults to the first ${MAX_LINES} lines; pass offset/limit to page ` +
@@ -94,12 +104,28 @@ export function createReadTool(ctx: ToolCtx) {
           return { ok: false, summary: content, content };
         }
 
+        // HD7 — a PDF reads as its extracted text (a Home attachment's sidecar, or extracted now).
+        if (extname(abs).toLowerCase() === ".pdf") {
+          let pdf;
+          try {
+            pdf = await readPdfText(abs);
+          } catch (err) {
+            const content = `couldn't open ${input.path} as a PDF: ${err instanceof Error ? err.message : String(err)}`;
+            return { ok: false, summary: `couldn't open ${basename(input.path)}`, content };
+          }
+          return textResult(ctx, input, options.toolCallId, pdf.text, stat, ` · ${pdf.pages} page${pdf.pages === 1 ? "" : "s"}`);
+        }
+
         const buf = readFileSync(abs);
         if (looksBinary(buf)) {
           const size = formatSize(buf.length);
           const mime = IMAGE_MIME[extname(input.path).toLowerCase()];
+          // HD7 — in Home a photo the user attaches already comes with their message when the
+          // model can see images, so read only points back there.
           const content = mime
-            ? `[image · ${size} · ${mime} — this model cannot view images]`
+            ? ctx.projectId === HOME_PROJECT_ID
+              ? `[photo · ${size} · ${mime} — read can't show images. If the user attached it and you can see images, it's included with their message.]`
+              : `[image · ${size} · ${mime} — this model cannot view images]`
             : `[binary · ${size} · ${mime ?? "application/octet-stream"}]`;
           return {
             ok: true,
@@ -109,47 +135,59 @@ export function createReadTool(ctx: ToolCtx) {
           };
         }
 
-        const raw = buf.toString("utf8");
-        const allLines = raw.split("\n");
-        const offset = input.offset ?? 0;
-        const limit = input.limit ?? MAX_LINES;
-        const slice = allLines.slice(offset, offset + limit);
-        const truncated = offset + slice.length < allLines.length;
-
-        const content = slice.length
-          ? slice.map((line, i) => `${String(offset + i + 1).padStart(4)}| ${line}`).join("\n")
-          : "(empty file)";
-
-        const artifact = createArtifact({
-          chatId: ctx.chatId,
-          projectId: ctx.projectId,
-          toolCallId: options.toolCallId,
-          kind: "code",
-          name: input.path,
-          meta: { lines: allLines.length },
-          body: raw,
-        });
-
-        const shownRange = slice.length ? `${offset + 1}-${offset + slice.length}` : "0";
-        return {
-          ok: true,
-          content,
-          summary: `${shownRange} of ${allLines.length} lines`,
-          artifactId: artifact.id,
-          meta: {
-            filesRead: [{ path: input.path, mtimeMs: stat.mtimeMs, size: stat.size }],
-            ...(truncated
-              ? {
-                  truncated: {
-                    shown: slice.length,
-                    total: allLines.length,
-                    unit: "lines" as const,
-                    how: `pass offset:${offset + slice.length} to continue reading`,
-                  },
-                }
-              : {}),
-          },
-        };
+        return textResult(ctx, input, options.toolCallId, buf.toString("utf8"), stat);
       }),
   });
+}
+
+// A text file's lines, paged by offset/limit. `summarySuffix` carries a PDF's page count
+// (" · 14 pages"), which Home's activity row shows instead of the line count.
+function textResult(
+  ctx: ToolCtx,
+  input: { path: string; offset?: number; limit?: number },
+  toolCallId: string,
+  raw: string,
+  stat: { mtimeMs: number; size: number },
+  summarySuffix = "",
+): ToolResult {
+  const allLines = raw.split("\n");
+  const offset = input.offset ?? 0;
+  const limit = input.limit ?? MAX_LINES;
+  const slice = allLines.slice(offset, offset + limit);
+  const truncated = offset + slice.length < allLines.length;
+
+  const content = slice.length
+    ? slice.map((line, i) => `${String(offset + i + 1).padStart(4)}| ${line}`).join("\n")
+    : "(empty file)";
+
+  const artifact = createArtifact({
+    chatId: ctx.chatId,
+    projectId: ctx.projectId,
+    toolCallId,
+    kind: "code",
+    name: input.path,
+    meta: { lines: allLines.length },
+    body: raw,
+  });
+
+  const shownRange = slice.length ? `${offset + 1}-${offset + slice.length}` : "0";
+  return {
+    ok: true,
+    content,
+    summary: `${shownRange} of ${allLines.length} lines${summarySuffix}`,
+    artifactId: artifact.id,
+    meta: {
+      filesRead: [{ path: input.path, mtimeMs: stat.mtimeMs, size: stat.size }],
+      ...(truncated
+        ? {
+            truncated: {
+              shown: slice.length,
+              total: allLines.length,
+              unit: "lines" as const,
+              how: `pass offset:${offset + slice.length} to continue reading`,
+            },
+          }
+        : {}),
+    },
+  };
 }

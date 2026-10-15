@@ -1,5 +1,7 @@
 import { ThemeProvider, ToastProvider, mergeThemes } from "@rama/ui";
 import { AppShell } from "./app/AppShell";
+import { HomeChatsProvider } from "./app/data/HomeChatsProvider";
+import { NavigationProvider } from "./app/data/NavigationProvider";
 import { ProjectsProvider } from "./app/data/ProjectsProvider";
 import { ProvidersProvider } from "./app/data/ProvidersProvider";
 import { SessionProvider } from "./app/data/SessionProvider";
@@ -15,17 +17,21 @@ function ThemedApp() {
   return (
     <ThemeProvider themes={mergeThemes(userThemes)}>
       <ToastProvider>
-        <ProvidersProvider>
-          <ProjectsProvider>
-            <WindowTabsProvider>
-              <SessionProvider>
-                <SettingsLinkProvider>
-                  <AppShell />
-                </SettingsLinkProvider>
-              </SessionProvider>
-            </WindowTabsProvider>
-          </ProjectsProvider>
-        </ProvidersProvider>
+        <NavigationProvider>
+          <ProvidersProvider>
+            <ProjectsProvider>
+              <WindowTabsProvider>
+                <SessionProvider>
+                  <HomeChatsProvider>
+                    <SettingsLinkProvider>
+                      <AppShell />
+                    </SettingsLinkProvider>
+                  </HomeChatsProvider>
+                </SessionProvider>
+              </WindowTabsProvider>
+            </ProjectsProvider>
+          </ProvidersProvider>
+        </NavigationProvider>
       </ToastProvider>
     </ThemeProvider>
   );

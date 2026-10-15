@@ -35,3 +35,6 @@ lerna-debug.log*
 # Claude Code local state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# design-parity screenshots (scripts/parity.ts)
+docs/Rama/parity/

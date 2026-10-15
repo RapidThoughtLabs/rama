@@ -29,9 +29,14 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
     // packages/ui and packages/protocol live outside this app's root (monorepo workspace
-    // packages consumed as source, no build step in Phase 0) — allow Vite to serve them.
+    // packages consumed as source, no build step in Phase 0) — allow Vite to serve them. Paths
+    // resolve against this app's root, so ".." is apps/ only: modules in the import graph get
+    // through regardless, but assets they reference (packages/ui's kit fonts) need packages/
+    // listed explicitly or they 403.
+    // HOME_REDESIGN_PLAN.md §5 — the design mockup is served from docs/Rama in dev so it can be
+    // opened next to the app at /@fs/<repo>/docs/Rama/home-redesign.html for pixel diffs.
     fs: {
-      allow: [".."],
+      allow: ["..", "../../packages", "../../docs/Rama"],
     },
   },
 }));

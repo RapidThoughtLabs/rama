@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { ArtifactDTO, ChatBlock, MessageDTO, SessionStatusState, ToolCallDTO } from "@rama/protocol";
-import { fetchArtifacts, fetchMessages, fetchToolCalls, undoLastRun } from "../../engine/client";
+import type { ArtifactDTO, ChatBlock, MessageDTO, PermissionScope, SessionStatusState, ToolCallDTO } from "@rama/protocol";
+import { fetchArtifacts, fetchMessages, fetchToolCalls, retryTurn, undoLastRun } from "../../engine/client";
 import { onEvent, send } from "../../engine/ws";
+import { useNavigation } from "./NavigationProvider";
 import { useProjectsData } from "./ProjectsProvider";
 
 // Phase 2 — live conversation state (docs/IMPLEMENTATION_PLAN.md Phase 2), layered on top of
-// ProjectsProvider's activeChatId. Deliberately a separate context: Projects/Chats CRUD +
+// the active chat id (useActiveSessionChatId below: ProjectsProvider's, or Home's since HD3). Deliberately a separate context: Projects/Chats CRUD +
 // theme is Phase 1's concern, this one owns the WS event stream / streaming message buffer.
 // Phase 3 extends it with live tool calls, artifacts, and permission requests.
 
@@ -45,20 +46,34 @@ interface SessionDataValue {
   artifacts: ArtifactDTO[];
   artifactBuffers: Record<string, string>;
   pendingPermission: PendingPermission | null;
-  sendUserTurn: (text: string) => void;
+  /** HD7 — `attachmentIds` are Home uploads to go on this turn; with them, the text may be empty. */
+  sendUserTurn: (text: string, attachmentIds?: string[]) => void;
   /** Same as `sendUserTurn`, but for a chat that isn't `activeChatId` yet — a chat this render
    *  just created from a draft, before the `selectChat` that made it active has re-rendered.
    *  Subscribes first so the run's events aren't missed (engine/src/server.ts's `broadcast`
    *  only reaches sockets that called `subscribeChat` for that chat id). */
-  sendUserTurnTo: (chatId: string, text: string) => void;
+  sendUserTurnTo: (chatId: string, text: string, attachmentIds?: string[]) => void;
   interrupt: () => void;
-  approvePermission: (reqId: string, approve: boolean) => void;
+  approvePermission: (reqId: string, approve: boolean, scope?: PermissionScope) => void;
   /** docs/TOOL_LAYER_PLAN.md §5.2 — `/undo`: restores the project's files to the state before
    *  the last run and drops a local system-style note into the transcript with the result. */
   restoreLastRun: () => void;
+  /** HOME_REDESIGN_PLAN.md HD6 — Home's "Try again": drops a user turn (its 0-based position among
+   *  the user messages; the last when omitted) and everything after it, here and in the engine,
+   *  which then runs the same text again. */
+  retryTurn: (userTurn?: number) => void;
 }
 
 const DEFAULT_STATUS: ChatStatus = { state: "idle", runStartedAt: null };
+
+/** HOME_REDESIGN_PLAN.md Phase HD3 — the one chat this window's live session follows: the open
+ *  Home chat while the Home section is showing, the active Code chat otherwise. Still one live
+ *  session per window, as before. */
+export function useActiveSessionChatId(): string | null {
+  const { section, homeChatId } = useNavigation();
+  const { activeChatId } = useProjectsData();
+  return section === "home" ? homeChatId : activeChatId;
+}
 
 const SessionContext = createContext<SessionDataValue | null>(null);
 
@@ -72,7 +87,7 @@ interface PendingAssistantMessage {
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const { activeChatId } = useProjectsData();
+  const activeChatId = useActiveSessionChatId();
   const [messagesByChat, setMessagesByChat] = useState<Record<string, MessageDTO[]>>({});
   const [pendingByChat, setPendingByChat] = useState<Record<string, PendingAssistantMessage | undefined>>({});
   const [statusByChat, setStatusByChat] = useState<Record<string, ChatStatus>>({});
@@ -126,6 +141,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             content: event.text,
             thinking: null,
             createdAt: event.ts,
+            ...(event.attachments?.length ? { attachments: event.attachments } : {}),
           }));
           break;
         case "run.started": {
@@ -501,19 +517,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [activeChatId]);
 
   const sendUserTurn = useCallback(
-    (text: string) => {
+    (text: string, attachmentIds?: string[]) => {
       const trimmed = text.trim();
-      if (!activeChatId || !trimmed) return;
-      void send({ type: "sendUserTurn", chatId: activeChatId, text: trimmed });
+      if (!activeChatId || (!trimmed && !attachmentIds?.length)) return;
+      void send({ type: "sendUserTurn", chatId: activeChatId, text: trimmed, ...(attachmentIds?.length ? { attachmentIds } : {}) });
     },
     [activeChatId],
   );
 
-  const sendUserTurnTo = useCallback((chatId: string, text: string) => {
+  const sendUserTurnTo = useCallback((chatId: string, text: string, attachmentIds?: string[]) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && !attachmentIds?.length) return;
     void send({ type: "subscribeChat", chatId });
-    void send({ type: "sendUserTurn", chatId, text: trimmed });
+    void send({ type: "sendUserTurn", chatId, text: trimmed, ...(attachmentIds?.length ? { attachmentIds } : {}) });
   }, []);
 
   const interrupt = useCallback(() => {
@@ -521,8 +537,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void send({ type: "interrupt", chatId: activeChatId });
   }, [activeChatId]);
 
-  const approvePermission = useCallback((reqId: string, approve: boolean) => {
-    void send({ type: "approvePermission", reqId, approve });
+  const approvePermission = useCallback((reqId: string, approve: boolean, scope?: PermissionScope) => {
+    void send({ type: "approvePermission", reqId, approve, scope });
   }, []);
 
   const restoreLastRun = useCallback(() => {
@@ -552,6 +568,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }));
       });
   }, [activeChatId, appendLocalMessage]);
+
+  const retry = useCallback(
+    (userTurn?: number) => {
+      const chatId = activeChatId;
+      if (!chatId) return;
+      setMessagesByChat((prev) => {
+        const list = prev[chatId] ?? [];
+        const users = list.flatMap((m, i) => (m.role === "user" ? [i] : []));
+        const cut = userTurn === undefined ? users[users.length - 1] : users[userTurn];
+        return cut === undefined ? prev : { ...prev, [chatId]: list.slice(0, cut) };
+      });
+      setErrorByChat((prev) => ({ ...prev, [chatId]: undefined }));
+      retryTurn(chatId, userTurn).catch((err) => {
+        console.error("[rama] try again failed", err);
+        setErrorByChat((prev) => ({ ...prev, [chatId]: err instanceof Error ? err.message : String(err) }));
+        // The engine refused, so nothing was dropped there: put the transcript back.
+        fetchMessages(chatId)
+          .then((history) => setMessagesByChat((prev) => ({ ...prev, [chatId]: history })))
+          .catch(() => {});
+      });
+    },
+    [activeChatId],
+  );
 
   const messages = useMemo(() => {
     const base = activeChatId ? (messagesByChat[activeChatId] ?? []) : [];
@@ -588,6 +627,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       interrupt,
       approvePermission,
       restoreLastRun,
+      retryTurn: retry,
     }),
     [
       messages,
@@ -605,6 +645,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       interrupt,
       approvePermission,
       restoreLastRun,
+      retry,
     ],
   );
 

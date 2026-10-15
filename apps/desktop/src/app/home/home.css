@@ -1,0 +1,34 @@
+/* Home views — HOME_REDESIGN_PLAN.md Phases HD5/HD6. Mockup CSS ported verbatim apart from the r- prefix
+   and the kit token names (--fs-* → --k-*, --scale → --font-scale). */
+
+/* ═══ Landing (mock:L202-229) ═══ */
+.r-landing { overflow-y: auto; }
+.r-landing-inner { min-height: 100%; display: flex; flex-direction: column; align-items: center; padding: 11vh 24px 56px; }
+.r-greet-fluke { width: 40px; height: 34px; color: var(--accent); }
+.r-greet {
+  font-family: var(--f-read); font-weight: 400; font-size: var(--k-hero); line-height: 1.1;
+  letter-spacing: -0.015em; color: var(--ink-1);
+  margin: 14px 0 30px; text-align: center; text-wrap: balance;
+}
+.r-landing-inner .r-composer-wrap { width: min(680px, 100%); }
+.r-resume { width: min(680px, 100%); margin-top: 52px; }
+.r-resume h2 { font-size: var(--k-sm); font-weight: 500; color: var(--ink-3); margin: 0 0 6px 14px; }
+.r-resume-row {
+  display: grid; grid-template-columns: 1fr auto; column-gap: 20px; width: 100%; text-align: left;
+  padding: 11px 14px; border-radius: 12px;
+  transition: background-color .15s;
+}
+.r-resume-row:hover { background: var(--hover); }
+.r-resume-row b { font-weight: 500; font-size: var(--k-md); color: var(--ink-1); }
+.r-resume-row p { grid-column: 1; margin: 1px 0 0; font-size: var(--k-sm); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-resume-row time { grid-row: 1; grid-column: 2; font-size: var(--k-xs); color: var(--ink-4); font-variant-numeric: tabular-nums; align-self: center; }
+
+/* The one orchestrated moment: fluke, greeting, composer arrive in sequence. */
+.arrive .r-greet-fluke { animation: r-rise .7s cubic-bezier(.2,.7,.2,1) both; }
+.arrive .r-greet { animation: r-rise .7s .08s cubic-bezier(.2,.7,.2,1) both; }
+.arrive .r-composer-wrap { animation: r-rise .7s .16s cubic-bezier(.2,.7,.2,1) both; }
+.arrive .r-resume { animation: r-fade .8s .3s ease both; }
+@keyframes r-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ═══ Conversation (mock:L281) — the transcript pieces live in the kit (kit/transcript/) ═══ */
+.r-home-chat { display: flex; flex-direction: column; }

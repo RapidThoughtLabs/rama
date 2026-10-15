@@ -9,6 +9,30 @@
         "dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "desktop-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/desktop",
+        "dev"
+      ],
+      "port": 1420
+    },
+    {
+      "name": "desktop-web-home",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/desktop",
+        "dev",
+        "--port",
+        "1441"
+      ],
+      "port": 1441
     }
   ]
 }

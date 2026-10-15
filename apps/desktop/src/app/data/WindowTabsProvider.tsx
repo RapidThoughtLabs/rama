@@ -134,7 +134,7 @@ export function WindowTabsProvider({ children }: { children: ReactNode }) {
   //
   // Only ever called with a real, freshly-created chat — the "New chat" button itself no longer
   // creates one (see ProjectsProvider.openDraft); this only runs once the user actually sends
-  // the draft's first message (ChatColumn.submit), which is also the only thing allowed to
+  // the draft's first message (CodeChat's submit), which is also the only thing allowed to
   // create the chat that gets registered here.
   const promoteDraft = useCallback(async () => {
     if (!draft) return null;

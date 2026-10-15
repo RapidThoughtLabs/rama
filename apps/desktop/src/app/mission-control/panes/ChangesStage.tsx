@@ -1,134 +1,97 @@
 import { openPath } from "@tauri-apps/plugin-opener";
-import { DiffView } from "../../diff/DiffView";
+import { Icon } from "@rama/ui";
+import { Delta, Empty, baseName, dirName } from "../../code/workspace/parts";
+import { Diff } from "../../code/workspace/Diff";
 import { useChangesPane } from "./ChangesPaneContext";
 
-// docs/WORKSPACE_PANES_PLAN.md Phase W4 — Changes stage: toolbar + DiffView + staged/unstaged switch.
+// docs/CODE_REDESIGN_PLAN.md CR4 (mock:L1760-1775) — the Changes stage bar and stage. The bar says
+// which file, then its delta and two actions; the stage is the diff or one of the empty states.
 
-export function ChangesStage() {
-  const {
-    changes,
-    loading,
-    activePath,
-    activeEntry,
-    stagedView,
-    setStagedView,
-    diff,
-    diffLoading,
-    projectPath,
-    initRepo,
-    initializingRepo,
-    initRepoError,
-  } = useChangesPane();
+export function ChangesStageBar() {
+  const { changes, activePath, activeEntry, stagedView, setStagedView, projectPath } = useChangesPane();
 
-  if (loading && !changes) {
-    return <div className="rama-mc-coming-soon">loading changes…</div>;
-  }
-
-  if (!changes || !changes.isRepo) {
+  if (!changes || !changes.isRepo || changes.entries.length === 0 || !activeEntry || !activePath) {
     return (
-      <div className="rama-mc-coming-soon" style={{ flexDirection: "column", gap: 10 }}>
-        <span>not a git repository — this project directory has no .git</span>
-        <button
-          type="button"
-          className="rama-mc-rail-action-btn"
-          style={{ width: "auto", padding: "4px 12px", border: "1px solid rgba(var(--ink), 0.1)" }}
-          disabled={initializingRepo}
-          onClick={() => void initRepo()}
-        >
-          {initializingRepo ? "initializing…" : "initialize repository"}
-        </button>
-        {initRepoError && <span style={{ color: "var(--bad)", fontSize: "var(--fs-sm)" }}>{initRepoError}</span>}
+      <div className="r-stage-title">
+        <small>Working tree</small>
       </div>
     );
   }
 
-  if (changes.entries.length === 0) {
-    return <div className="rama-mc-coming-soon">working tree clean.</div>;
-  }
-
-  if (!activeEntry || !activePath) {
-    return <div className="rama-mc-coming-soon">select a file to view diff.</div>;
-  }
-
-  const hasBothStagedAndUnstaged = activeEntry.staged && activeEntry.unstaged;
-
-  function copyPath() {
-    if (activePath) void navigator.clipboard.writeText(activePath);
-  }
+  const both = activeEntry.staged && activeEntry.unstaged;
+  const dir = dirName(activePath);
 
   function openExternally() {
-    if (!activePath) return;
-    const full = projectPath ? `${projectPath}/${activePath}` : activePath;
+    const full = projectPath ? `${projectPath}/${activePath}` : activePath!;
     void openPath(full).catch((err) => console.error("[rama] failed to open external file", err));
   }
 
   return (
     <>
-      <div className="rama-changes-stage-toolbar">
-        <span className="rama-changes-stage-path" title={activePath}>
-          {activePath}
-        </span>
-        <span className={`rama-changes-status-pill rama-changes-status-${activeEntry.status}`}>
-          {activeEntry.status}
-        </span>
-        {hasBothStagedAndUnstaged && (
-          <div className="rama-changes-segment-switch">
-            <button
-              type="button"
-              className={`rama-changes-segment-btn${!stagedView ? " active" : ""}`}
-              onClick={() => setStagedView(false)}
-            >
-              unstaged
-            </button>
-            <button
-              type="button"
-              className={`rama-changes-segment-btn${stagedView ? " active" : ""}`}
-              onClick={() => setStagedView(true)}
-            >
-              staged
-            </button>
-          </div>
-        )}
-        <span style={{ flex: 1 }} />
-        {activeEntry.binary ? (
-          <span className="rama-changes-binary-tag">binary</span>
-        ) : (
-          (activeEntry.added !== null || activeEntry.removed !== null) && (
-            <span style={{ fontSize: "var(--fs-sm)", display: "flex", gap: 5 }}>
-              {activeEntry.added !== null && <span style={{ color: "var(--good)" }}>+{activeEntry.added}</span>}
-              {activeEntry.removed !== null && <span style={{ color: "var(--bad)" }}>−{activeEntry.removed}</span>}
-            </span>
-          )
-        )}
-        <button
-          type="button"
-          className="rama-changes-action-btn"
-          title="Copy path"
-          onClick={copyPath}
-        >
-          ⧉
-        </button>
-        <button
-          type="button"
-          className="rama-changes-action-btn"
-          title="Open in external editor"
-          onClick={openExternally}
-        >
-          ↗
-        </button>
+      <div className="r-stage-title">
+        <b>{baseName(activePath)}</b>
+        {dir && <small>{dir}</small>}
       </div>
-
-      <div className="rama-changes-stage-body">
-        {diffLoading ? (
-          <div className="rama-mc-coming-soon">loading diff…</div>
-        ) : diff?.binary || activeEntry.binary ? (
-          <div className="rama-mc-coming-soon">binary file — diff not available.</div>
-        ) : diff && diff.diff ? (
-          <DiffView diff={diff.diff} />
-        ) : (
-          <div className="rama-mc-coming-soon">no changes in {stagedView ? "staged" : "unstaged"}.</div>
-        )}
-      </div>
+      <span className="grow" />
+      {both && (
+        <div className="r-mini-seg" role="group" aria-label="Which changes to show">
+          <button aria-pressed={!stagedView} onClick={() => setStagedView(false)}>
+            Unstaged
+          </button>
+          <button aria-pressed={stagedView} onClick={() => setStagedView(true)}>
+            Staged
+          </button>
+        </div>
+      )}
+      <span className="delta-inline">
+        {activeEntry.binary ? "binary" : <Delta added={activeEntry.added} removed={activeEntry.removed} />}
+      </span>
+      <button className="r-icon-btn" title="Copy path" aria-label="Copy path" onClick={() => void navigator.clipboard.writeText(activePath)}>
+        <Icon name="copy" />
+      </button>
+      <button className="r-icon-btn" title="Open in your editor" aria-label="Open in your editor" onClick={openExternally}>
+        <Icon name="pop" />
+      </button>
     </>
   );
+}
+
+export function ChangesStage() {
+  const { changes, loading, activePath, activeEntry, stagedView, diff, diffLoading, initRepo, initializingRepo, initRepoError } = useChangesPane();
+
+  if (loading && !changes) return <Empty title="Loading changes…" />;
+
+  if (!changes || !changes.isRepo) {
+    return (
+      <div className="r-empty">
+        <div>
+          <b>Not a git repository</b>
+          This project has no .git folder.
+          <div>
+            <button className="r-btn r-btn-soft" disabled={initializingRepo} onClick={() => void initRepo()}>
+              {initializingRepo ? "Initializing…" : "Initialize repository"}
+            </button>
+          </div>
+          {initRepoError && <div className="err">{initRepoError}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  if (changes.entries.length === 0) {
+    const branch = changes.branch ?? "HEAD";
+    return (
+      <Empty title="Nothing to commit">
+        {changes.ahead > 0
+          ? `${branch} is ${changes.ahead} commit${changes.ahead === 1 ? "" : "s"} ahead of origin. Push when you're ready.`
+          : "The working tree is clean."}
+      </Empty>
+    );
+  }
+
+  if (!activeEntry || !activePath) return <Empty title="Pick a file">Choose one from the list to see what changed.</Empty>;
+  if (diffLoading) return <Empty title="Loading diff…" />;
+  if (diff?.binary || activeEntry.binary) return <Empty title="Binary file">There is no text diff to show.</Empty>;
+  if (diff && diff.diff) return <Diff diff={diff.diff} path={activePath} />;
+  return <Empty title={`No ${stagedView ? "staged" : "unstaged"} changes`}>This file has nothing in that view.</Empty>;
 }

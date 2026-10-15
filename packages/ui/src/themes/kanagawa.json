@@ -1,6 +1,7 @@
 {
   "id": "kanagawa",
   "label": "Kanagawa",
+  "kanji": "神奈川",
   "family": "blue",
   "mode": "dark",
   "ground": "#081420",
@@ -8,5 +9,5 @@
   "inkLoud": "#f3ecdd",
   "accent": "#6fb6e6",
   "texture": { "grain": 0.28, "vignette": 0.58 },
-  "wallpaper": { "image": "/wallpapers/nebula-indigo.jpg", "veil": 0.62 }
+  "wallpaper": { "image": "/wallpapers/nebula-indigo.jpg", "css": "radial-gradient(80% 60% at 25% 0%, rgba(111,182,230,0.35), transparent 62%), radial-gradient(70% 60% at 90% 100%, rgba(50,80,150,0.45), transparent 65%)", "veil": 0.62 }
 }

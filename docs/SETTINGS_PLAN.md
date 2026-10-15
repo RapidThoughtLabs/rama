@@ -265,13 +265,15 @@ true rather than aspirationally true.
                             //   --dot-field-color, the --a* alpha ramp
 
   // ── everything below is optional ───────────────────────────────────────
+  "kanji": "松",                             // the theme seal's text (HOME_REDESIGN_PLAN HD0/HD2);
+                                             //   defaults to the label's first character
   "wallpaper": {                             // S0's block, verbatim. Absent = no image.
     "css": "radial-gradient(120% 90% at 20% 0%, #1c3324, transparent 62%), \
             radial-gradient(90% 70% at 85% 15%, #0f2416, transparent 58%)",
     "veil": 0.58                             // 0 = full strength, 1 = fully covered
   },
   "semantic": { "bad": "#e0707a" },          // good/warn/bad/bad2; mode defaults otherwise
-  "texture":  { "grain": 0.30, "vignette": 0.60 },
+  "texture":  { "grain": 0.30, "vignette": 0.60 },  // dead since HOME_REDESIGN_PLAN HD0; still parsed
   "tokens":   { "--bg-elevated": "#1b2a1e" } // raw escape hatch, applied last
 }
 ```

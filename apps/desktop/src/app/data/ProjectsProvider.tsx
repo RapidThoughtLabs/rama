@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useTheme } from "@rama/ui";
-import type { ThemeId } from "@rama/ui";
 import type { BackendConfig, ChatDTO, ChatMode, ProjectDTO, UpdateProjectInput } from "@rama/protocol";
 import {
   createChat as createChatApi,
@@ -12,14 +11,14 @@ import {
   fetchGeneralSettings,
   fetchModelRoles,
   fetchProjects,
-  patchChat,
   updateProject as updateProjectApi,
 } from "../../engine/client";
-import { onEvent } from "../../engine/ws";
+import { onEvent, onProjectEvent, send } from "../../engine/ws";
 import { WINDOW_LABEL } from "../../engine/window";
 
-// Real projects/chats + per-chat theme persistence (docs/IMPLEMENTATION_PLAN.md Phase 1),
-// replacing the mockData.ts wiring from Phase 0.
+// Real projects/chats (docs/IMPLEMENTATION_PLAN.md Phase 1), replacing the mockData.ts wiring
+// from Phase 0. Chats used to carry their own theme too; HOME_REDESIGN_PLAN.md Decision D1 made
+// the theme app-wide, so `themeId` below only fills the dead `chats.theme_id` column.
 
 // Label-suffixed (Phase 5, docs/IMPLEMENTATION_PLAN.md): each window is an independent instance
 // of this provider, so a single shared key would make multiple windows fight over "the" last
@@ -55,6 +54,8 @@ export interface ProjectsDataValue {
   updateDraftMode: (mode: ChatMode) => void;
   updateDraftModel: (providerId: string, model: string) => void;
   updateDraftAgent: (agentId: string) => void;
+  /** Re-points the unsent draft at another project (the composer's project chip). */
+  retargetDraft: (projectId: string) => void;
   clearDraft: () => void;
   addProject: (input: { name: string; path: string }) => Promise<ProjectDTO>;
   updateProject: (projectId: string, patch: UpdateProjectInput) => Promise<ProjectDTO>;
@@ -71,7 +72,7 @@ export interface ProjectsDataValue {
 const ProjectsContext = createContext<ProjectsDataValue | null>(null);
 
 export function ProjectsProvider({ children }: { children: ReactNode }) {
-  const { themeId, applyTheme } = useTheme();
+  const { themeId } = useTheme();
   const [projects, setProjects] = useState<ProjectDTO[]>([]);
   const [chatsByProject, setChatsByProject] = useState<Record<string, ChatDTO[]>>({});
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -108,12 +109,6 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       .catch((err) => console.error("[rama] failed to load default chat model", err));
   }, []);
 
-  // Tracks the theme values we last pushed onto the chrome (from selecting a chat or from
-  // the app just loading it), so the persistence effect below can tell "the active chat
-  // changed and brought its own theme with it" apart from "the user changed the theme while
-  // this chat is active" — only the latter should PATCH the chat.
-  const lastAppliedTheme = useRef<{ themeId: string } | null>(null);
-
   // Mirrors `activeChatId` so the initial-load effect below (which only runs once and closes
   // over whatever `activeChatId` was at mount, i.e. always null) can check the *current* value
   // instead of a stale one — see its own comment for why that matters.
@@ -141,13 +136,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       // whatever the user had typed into it) around so "New chat" can hand it right back.
       setViewingDraft(false);
       window.localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, chatId);
-      const chat = allChats.find((c) => c.id === chatId);
-      if (chat) {
-        lastAppliedTheme.current = { themeId: chat.themeId };
-        applyTheme({ themeId: chat.themeId as ThemeId });
-      }
     },
-    [allChats, applyTheme],
+    [],
   );
 
   // "New chat": resumes the existing draft rather than starting a second one, and is a no-op if
@@ -193,6 +183,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     setDraft((prev) => (prev ? { ...prev, agentId } : prev));
   }, []);
 
+  const retargetDraft = useCallback((projectId: string) => {
+    setDraft((prev) => (prev && prev.projectId !== projectId ? { ...prev, projectId, agentId: "default" } : prev));
+  }, []);
+
   const clearDraft = useCallback(() => {
     setDraft(null);
     setViewingDraft(false);
@@ -206,8 +200,10 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setProjects(projectList);
 
+        // The engine only returns Code chats here (HD3); the kind filter is a second line of
+        // defence so a Home chat can never reach the Code sidebar or WindowTabsProvider.
         const entries = await Promise.all(
-          projectList.map(async (p) => [p.id, await fetchChats(p.id)] as const),
+          projectList.map(async (p) => [p.id, (await fetchChats(p.id)).filter((c) => c.kind === "code")] as const),
         );
         if (cancelled) return;
         const byProject = Object.fromEntries(entries) as Record<string, ChatDTO[]>;
@@ -223,8 +219,6 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         // up yet.
         if (initialChat && activeChatIdRef.current == null) {
           setActiveChatId(initialChat.id);
-          lastAppliedTheme.current = { themeId: initialChat.themeId };
-          applyTheme({ themeId: initialChat.themeId as ThemeId });
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -235,9 +229,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [applyTheme]);
+  }, []);
 
-  // The one place a chat mutated elsewhere (model/agent pickers, theme sync) gets folded back
+  // The one place a chat mutated elsewhere (model/agent pickers, renames) gets folded back
   // into chatsByProject — without this, patchChat's server-side write succeeds but every consumer
   // of allChats (the composer pill, the sidebar) keeps rendering the pre-patch chat forever, since
   // nothing else here re-fetches after a PATCH.
@@ -248,21 +242,6 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       return { ...prev, [updated.projectId]: list.map((c) => (c.id === updated.id ? updated : c)) };
     });
   }, []);
-
-  useEffect(() => {
-    if (!activeChatId) return;
-    const current = { themeId };
-    const last = lastAppliedTheme.current;
-    if (last && last.themeId === current.themeId) {
-      return;
-    }
-    lastAppliedTheme.current = current;
-    patchChat(activeChatId, current)
-      .then(applyChatPatch)
-      .catch((err) => {
-        console.error("[rama] failed to persist chat theme", err);
-      });
-  }, [themeId, activeChatId, applyChatPatch]);
 
   // docs/PROVIDERS_PLAN.md Phase P2 — auto-titling's only way to reach the sidebar; a chat's
   // title lives in this provider's chatsByProject, not SessionProvider's per-run state, so the
@@ -279,6 +258,32 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
           return { ...prev, [projectId]: nextList };
         }
         return prev;
+      });
+    });
+  }, []);
+
+  // CODE_REDESIGN_PLAN.md E2 — the sidebar's waiting flag and running dot for chats that aren't the
+  // open one. A chat's own events only reach a socket that subscribed to *that* chat, so this window
+  // listens on every project's topic, where the engine repeats each chat's state as `chat.status`.
+  const projectIds = projects.map((p) => p.id).join(",");
+  useEffect(() => {
+    const ids = projectIds ? projectIds.split(",") : [];
+    for (const id of ids) void send({ type: "subscribeProject", projectId: id });
+    return () => {
+      for (const id of ids) void send({ type: "unsubscribeProject", projectId: id });
+    };
+  }, [projectIds]);
+
+  useEffect(() => {
+    return onProjectEvent((projectId, event) => {
+      if (event.type !== "chat.status") return;
+      setChatsByProject((prev) => {
+        const list = prev[projectId];
+        const idx = list?.findIndex((c) => c.id === event.chatId) ?? -1;
+        if (!list || idx === -1 || list[idx]!.status === event.status) return prev;
+        const next = [...list];
+        next[idx] = { ...next[idx]!, status: event.status };
+        return { ...prev, [projectId]: next };
       });
     });
   }, []);
@@ -369,6 +374,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       updateDraftMode,
       updateDraftModel,
       updateDraftAgent,
+      retargetDraft,
       clearDraft,
       addProject,
       updateProject,
@@ -393,6 +399,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       updateDraftMode,
       updateDraftModel,
       updateDraftAgent,
+      retargetDraft,
       clearDraft,
       addProject,
       updateProject,

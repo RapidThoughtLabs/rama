@@ -1,0 +1,111 @@
+/* The Code transcript's own blocks — docs/CODE_REDESIGN_PLAN.md CR6/CR7. The frame, user bubble, act
+   rows, prose, cards, turn actions, working line and notice are the kit's (packages/ui/src/kit/
+   transcript/transcript.css, Home's). This is the part of mock:L407-461 that only Code draws: row
+   bodies, the path pill, the plan, changes and ask cards. Mockup CSS with the r- prefix and the
+   kit's token names; additions the mockup doesn't draw are marked. */
+
+.r-chat-col { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* mock:L379 — Code's column is 700px, not the kit's 720 (the dock's half of the rule is in composer/composer.css). */
+.r-code-chat .r-transcript { width: min(700px, 100%); }
+
+/* ═══ Spacing between Code's blocks (mock:L407) ═══ */
+.r-turn-ai > .r-card + .r-acts, .r-turn-ai > .r-plan + .r-acts, .r-turn-ai > .r-ask + .r-acts { margin-top: 6px; }
+.r-acts .r-act-btn b { font-weight: 500; color: var(--ink-2); }
+
+/* ═══ Row meta tones (mock:L408-411) ═══ */
+.r-act-btn .meta .t-plus { color: var(--good); font-variant-numeric: tabular-nums; }
+.r-act-btn .meta .t-minus { color: var(--bad); font-variant-numeric: tabular-nums; }
+.r-act-btn .meta .t-ok, .r-act-btn .meta .t-good { color: var(--good); }
+.r-act-btn .meta .t-fail { color: var(--bad); }
+/* Not in the mockup: a running row's meta is the accent colour (plan CR6). */
+.r-act-btn .meta .t-accent { color: var(--accent); }
+
+/* ═══ Row bodies (mock:L412-420) ═══ */
+.r-act-body .r-card { margin: 6px 0 4px; max-width: 100%; }
+.r-act-body .r-link { display: inline-flex; align-items: center; gap: 5px; margin: 4px 0 2px; font-size: var(--k-xs); font-weight: 500; color: var(--accent); }
+.r-act-body .r-link:hover { text-decoration: underline; }
+.r-act-body .r-link svg { width: 12px; height: 12px; }
+.r-act-body p:has(+ .r-link) { margin-bottom: 4px; }
+.r-files { list-style: none; margin: 0; padding: 0; }
+.r-files li { display: flex; align-items: baseline; gap: 8px; margin: 4px 0; }
+.r-files li > span:first-child { color: var(--ink-4); min-width: 66px; }
+/* The mockup leaves `code` in a row body unstyled (the browser's own monospace, in the row's colour);
+   the legacy global `code` rule would make it accent-green, so this puts it back. */
+.r-act-body code { font-family: monospace; font-size: 1em; color: inherit; }
+.r-muted { color: var(--ink-4); }
+
+/* A diff or output inside a card (mock:L476, 487-491). The card scrolls; the diff paints on the code background. */
+.r-code-card:has(.r-diff) { max-height: 300px; overflow: auto; }
+.r-card .r-diff { padding-bottom: 8px; background: var(--code-bg); }
+.r-term { padding: 14px 18px 20px; white-space: pre-wrap; word-break: break-word; }
+.r-card .r-term { max-height: 260px; overflow: auto; background: var(--code-bg); padding: 12px 16px; }
+
+/* ═══ Path pill (mock:L422-428) ═══ */
+.r-path {
+  display: inline-flex; align-items: baseline; gap: 4px;
+  font-family: var(--f-code); font-size: .8em; line-height: 1.3;
+  padding: .1em .45em; border-radius: 6px; background: var(--well); color: var(--ink-1);
+  cursor: pointer; vertical-align: baseline;
+}
+.r-path:hover { background: var(--selected); color: var(--accent); }
+
+/* ═══ Plan (mock:L430-440) ═══ */
+.r-plan { margin: .4em 0 1em; padding: 14px 16px 10px; border-radius: 14px; background: var(--raised); border: 1px solid var(--line); font-family: var(--f-ui); max-width: 66ch; }
+.r-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: var(--k-sm); color: var(--ink-3); }
+.r-plan-head b { font-weight: 600; color: var(--ink-1); }
+.r-plan-bar { height: 4px; border-radius: 2px; background: var(--well); margin: 10px 0 6px; overflow: hidden; }
+.r-plan-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width .3s; }
+.r-plan ul { list-style: none; margin: 0; padding: 0; }
+.r-plan li { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; font-size: var(--k-md); color: var(--ink-2); line-height: 1.4; }
+.r-tick-circle { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; margin-top: 1px; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px var(--line-2); }
+.r-tick-circle svg { width: 11px; height: 11px; stroke-width: 2.2; }
+.r-plan li.done .r-tick-circle { background: var(--accent); box-shadow: none; color: var(--on-accent); }
+.r-plan li.done > span:last-child { color: var(--ink-3); }
+/* Not in the mockup (plan §9.11): the item being worked on has an accent ring and a dot, and reads in full ink. */
+.r-plan li.active .r-tick-circle { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.r-plan li.active .r-tick-circle::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.r-plan li.active > span:last-child { color: var(--ink-1); }
+
+/* ═══ Changes (mock:L442-449) ═══ */
+.r-changes-card .r-card-head b { color: var(--ink-1); font-weight: 600; font-size: var(--k-sm); }
+.r-cf-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 16px; font-family: var(--f-ui); font-size: var(--k-sm); border-bottom: 1px solid var(--line); }
+.r-cf-row:hover { background: var(--hover); }
+.r-cf-row svg { color: var(--ink-4); width: 15px; height: 15px; }
+.r-cf-row .nm { color: var(--ink-1); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-cf-row .nm small { font-weight: 400; color: var(--ink-4); margin-left: 6px; font-size: var(--k-xs); }
+.r-cf-row .delta { font-size: var(--k-xs); display: flex; gap: 6px; }
+.r-card-foot { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
+/* Not in the mockup: after Undo the card dims and its foot says so. */
+.r-changes-card.undone .r-cf-row { opacity: .5; }
+.r-undone { padding: 4px 4px; font-size: var(--k-sm); color: var(--ink-3); }
+
+/* ═══ Ask (mock:L451-461) ═══ */
+.r-ask {
+  margin: .4em 0 .6em; padding: 16px 18px 14px; border-radius: 14px; max-width: 66ch;
+  background: color-mix(in oklab, var(--warn) 8%, var(--raised));
+  border: 1px solid color-mix(in oklab, var(--warn) 38%, transparent);
+  font-family: var(--f-ui);
+}
+.r-ask h4 { margin: 0 0 8px; font-size: var(--k-md); font-weight: 600; color: var(--ink-1); display: flex; align-items: center; gap: 8px; }
+.r-ask h4 svg { color: var(--warn); }
+.r-ask p { margin: 8px 0 14px; font-size: var(--k-sm); color: var(--ink-3); line-height: 1.5; }
+.r-ask code { font-family: var(--f-code); font-size: calc(12.5px * var(--font-scale)); padding: 4px 9px; border-radius: 7px; background: var(--well); color: var(--ink-1); display: inline-block; max-width: 100%; overflow-x: auto; white-space: pre; vertical-align: top; }
+.r-ask .row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Not in the mockup (plan §9.11): the questions card is a neutral ask. */
+.r-ask-neutral { background: var(--raised); border-color: var(--line); }
+.r-ask-neutral h4 svg { color: var(--ink-3); }
+.r-ask ol { margin: 8px 0 2px; padding-left: 1.3em; font-size: var(--k-sm); color: var(--ink-2); line-height: 1.5; }
+.r-ask ol li { margin: 4px 0; }
+.r-ask .def { color: var(--ink-4); }
+
+/* ═══ Notices (mock:L463) ═══ */
+/* Not in the mockup: a notice can be dismissed (a 16px x on hover); a failed run's is in the bad colour. */
+.r-notice-x { display: none; width: 16px; height: 16px; margin-left: 6px; vertical-align: middle; border-radius: 50%; place-items: center; color: var(--ink-4); }
+.r-notice:hover .r-notice-x, .r-notice-x:focus-visible { display: inline-grid; }
+.r-notice-x:hover { background: var(--hover); color: var(--ink-1); }
+.r-notice-x svg { width: 10px; height: 10px; }
+.r-notice-bad { color: var(--bad); }
+
+/* ═══ Diagrams ═══ */
+.r-mermaid { padding: 12px; overflow-x: auto; display: flex; justify-content: center; }
+.r-mermaid-src { margin: 0; padding: 14px 16px; color: var(--bad); font-family: var(--f-code); font-size: calc(13px * var(--font-scale)); white-space: pre-wrap; }

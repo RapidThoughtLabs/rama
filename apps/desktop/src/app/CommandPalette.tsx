@@ -3,6 +3,8 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useTheme } from "@rama/ui";
 import type { SearchResultDTO } from "@rama/protocol";
 import { ramaSearch } from "../engine/client";
+import { WINDOW_LABEL } from "../engine/window";
+import { useNavigation } from "./data/NavigationProvider";
 import { useProjectsData } from "./data/ProjectsProvider";
 import { useWindowTabsData } from "./data/WindowTabsProvider";
 import { MISSION_CONTROL_PANES, type MissionControlPaneId } from "./mission-control/panes";
@@ -17,11 +19,11 @@ interface PaletteAction {
 
 type PaletteEntry = { kind: "action"; action: PaletteAction } | { kind: "result"; result: SearchResultDTO };
 
-// Global ⌘K app-action palette, distinct from the composer's `/` menu (ChatColumn.tsx) but
+// Global ⌘K app-action palette, distinct from the composer's `/` menu (CodeComposer.tsx) but
 // sharing the same rama search backend (docs/IMPLEMENTATION_PLAN.md Phase 7, Part 5). Selecting a
-// tools/skills/mcp/docs result or a commands entry can't touch ChatColumn's local composer state
-// directly since this component lives in AppShell, outside ChatColumn — bridged via a couple of
-// window CustomEvents that ChatColumn listens for, the lightest option that doesn't require
+// tools/skills/mcp/docs result or a commands entry can't touch CodeChat's local composer state
+// directly since this component lives in AppShell, outside CodeChat — bridged via a couple of
+// window CustomEvents that CodeChat listens for, the lightest option that doesn't require
 // lifting composer state into a context (this codebase has no global store).
 //
 // docs/REDESIGN_PLAN.md Phase R3 — this is also where every other global keyboard chord lives
@@ -57,6 +59,7 @@ export function CommandPalette({
 
   const { cycleTheme } = useTheme();
   const { allChats, activeProjectId, openDraft } = useProjectsData();
+  const nav = useNavigation();
   const { tabs, activeTabId, selectTab, adoptChat, popOutTab } = useWindowTabsData();
 
   useEffect(() => {
@@ -100,8 +103,14 @@ export function CommandPalette({
         return;
       }
       if (meta && key === "n") {
+        // ⌘N follows the section (mock:L2126): Home's landing, or a code draft.
         e.preventDefault();
+        if (WINDOW_LABEL === "main" && nav.section === "home") {
+          nav.goHomeLanding();
+          return;
+        }
         if (activeProjectId) openDraft(activeProjectId);
+        if (WINDOW_LABEL === "main") nav.goSection("code");
         return;
       }
       if (meta && e.shiftKey && key === "o") {
@@ -126,8 +135,8 @@ export function CommandPalette({
         }
       }
     }
-    // Titlebar.tsx's ⌘K pill dispatches this on click, toggling the same palette instead of
-    // duplicating open/close state across two sibling components.
+    // Anything with a "Commands ⌘K" button (the Code tab's top bar, CODE_REDESIGN_PLAN) dispatches
+    // this on click, toggling the same palette instead of duplicating open/close state.
     function onToggle() {
       setOpen((v) => !v);
     }
@@ -137,7 +146,7 @@ export function CommandPalette({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("rama:toggle-palette", onToggle);
     };
-  }, [activeProjectId, activeTabId, tabs, openDraft, popOutTab, selectTab, onOpenSettings, onSelectPane, onToggleRail]);
+  }, [activeProjectId, activeTabId, tabs, openDraft, popOutTab, selectTab, onOpenSettings, onSelectPane, onToggleRail, nav]);
 
   useEffect(() => {
     if (!open) return;
@@ -170,6 +179,7 @@ export function CommandPalette({
   async function jumpToChat(chatId: string) {
     if (tabs.some((t) => t.id === chatId)) {
       selectTab(chatId);
+      if (WINDOW_LABEL === "main") nav.goSection("code");
       setOpen(false);
       return;
     }
@@ -177,6 +187,8 @@ export function CommandPalette({
     if (otherOwner) {
       const win = await WebviewWindow.getByLabel(otherOwner);
       await win?.setFocus();
+    } else if (WINDOW_LABEL === "main") {
+      nav.goSection("code");
     }
     setOpen(false);
   }
@@ -189,6 +201,7 @@ export function CommandPalette({
         subtitle: "start a new chat in the active project",
         run: () => {
           if (activeProjectId) openDraft(activeProjectId);
+          if (WINDOW_LABEL === "main") nav.goSection("code");
         },
       },
       { id: "act:theme", title: "cycle theme", run: cycleTheme },
@@ -235,6 +248,7 @@ export function CommandPalette({
     tabs,
     activeTabId,
     popOutTab,
+    nav,
   ]);
 
   const filteredActions = useMemo(() => {

@@ -1,0 +1,137 @@
+/* Window shell — HOME_REDESIGN_PLAN.md Phase HD1. Mockup CSS (docs/Rama/home-redesign.html)
+   ported verbatim apart from the r- prefix and kit token names (--fs-* → --k-*). Deviations are
+   marked inline and listed in the plan's §6. */
+
+/* mock:L96 */
+.r-app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
+
+/* ═══ Sidebar (mock:L99-163) ═══ */
+.r-sidebar {
+  width: 272px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
+  transition: background-color .35s, margin-left .25s ease;
+  z-index: 20;
+}
+.r-app[data-sb="closed"] .r-sidebar { margin-left: -272px; }
+.r-sb-top { height: 52px; display: flex; align-items: center; gap: 4px; padding: 0 10px 0 18px; flex-shrink: 0; }
+/* The mockup draws three 12px lights here (3×12 + 2×8 = 52px). The app's are native — positioned by
+   trafficLightPosition (tauri.conf.json, drag.rs) to sit exactly where the drawn ones are — so this
+   is an empty spacer of the same width. */
+.r-sb-lights { width: 52px; height: 12px; flex-shrink: 0; margin-right: auto; }
+
+/* Sidebar search — not in the mockup (§6.3); designed from kit tokens. */
+.r-sb-search { position: relative; margin: 0 12px 10px; flex-shrink: 0; }
+.r-sb-search input {
+  width: 100%; height: 34px; padding: 0 12px; border: 0; border-radius: 9px;
+  background: var(--well); color: var(--ink-1);
+  font-family: var(--f-ui); font-size: var(--k-sm);
+  outline: none;
+}
+.r-sb-search input::placeholder { color: var(--ink-4); }
+.r-sb-search input:focus { box-shadow: 0 0 0 3px var(--ring); }
+
+.r-sb-nav { padding: 0 8px; display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+.r-nav-row {
+  display: flex; align-items: center; gap: 10px;
+  height: 34px; padding: 0 10px; border-radius: 8px;
+  font-size: var(--k-md); color: var(--ink-2); text-align: left;
+}
+.r-nav-row svg { color: var(--ink-3); }
+.r-nav-row:hover { background: var(--hover); }
+.r-nav-row kbd { margin-left: auto; font-family: var(--f-ui); font-size: var(--k-xs); color: var(--ink-4); }
+
+.r-sb-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 12px; }
+/* mock:L147 — both lists' date/section labels. Sentence case, unlike the legacy .t-label. */
+.r-group-label { font-size: var(--k-xs); font-weight: 500; color: var(--ink-4); padding: 16px 10px 5px; }
+/* A sidebar row being renamed in place (HD4; not in the mockup, §6.3). Same box as the row's text. */
+.r-row-edit {
+  flex: 1; min-width: 0; height: 21px; margin: -1px -6px; padding: 0 6px; border: 0; border-radius: 5px;
+  background: var(--well); color: var(--ink-1);
+  font: inherit; outline: none; box-shadow: 0 0 0 3px var(--ring);
+}
+
+.r-sb-foot { display: flex; align-items: center; gap: 10px; padding: 10px 10px 12px 14px; border-top: 1px solid var(--line); flex-shrink: 0; }
+.r-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; flex-shrink: 0; }
+.r-avatar svg { width: 17px; height: 17px; }
+.r-who { flex: 1; min-width: 0; line-height: 1.25; }
+.r-who b { display: block; font-size: var(--k-sm); font-weight: 600; color: var(--ink-1); }
+.r-who span { font-size: var(--k-xs); color: var(--ink-4); }
+
+/* ═══ Main (mock:L166, 199) ═══ */
+.r-main { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+.r-view { position: relative; z-index: 1; flex: 1; min-height: 0; }
+/* Legacy screens (Code tab, Toolbox, Docs, the old Home placeholder) hosted inside the new frame
+   until their own phases restyle them. They expect a flex column parent. */
+.r-view.r-legacy { display: flex; flex-direction: column; }
+
+/* ═══ Top bar (mock:L171-181) ═══ */
+.r-topbar { position: relative; z-index: 5; height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 76px 0 14px; }
+.r-topbar .open-sb { display: none; }
+.r-app[data-sb="closed"] .r-topbar .open-sb { display: inline-grid; }
+/* Deviation §6.2: with the sidebar closed (or in a window with no sidebar) the native traffic
+   lights sit over the top bar — 14 + 52 + 14 clears them. */
+.r-app[data-sb="closed"] .r-topbar,
+.r-app[data-window="secondary"] .r-topbar { padding-left: 80px; }
+.r-chat-title {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 5px 8px; border-radius: 8px;
+  font-size: var(--k-md); font-weight: 500; color: var(--ink-1);
+}
+.r-chat-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-chat-title svg { color: var(--ink-4); }
+.r-chat-title:hover, .r-chat-title[aria-expanded="true"] { background: var(--hover); }
+.r-topbar-spacer { flex: 1; min-width: 12px; align-self: stretch; }
+.r-topbar-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+/* Interim home for the broken-provider alert until the model menu takes it (HD5). */
+.r-alert-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+
+/* Chat-title menu — not in the mockup (§6.3); built from the .mp-item look. */
+.r-menu { min-width: 200px; padding: 6px; }
+.r-menu .r-mp-item { grid-template-columns: 18px 1fr; padding: 7px 10px; font-size: var(--k-sm); color: var(--ink-1); }
+.r-menu .r-mp-item.danger, .r-menu .r-mp-item.danger svg { color: var(--bad); }
+.r-rename-input {
+  min-width: 0; width: min(420px, 100%); height: 30px; padding: 0 8px; border: 0; border-radius: 8px;
+  background: var(--well); color: var(--ink-1);
+  font-family: var(--f-ui); font-size: var(--k-md); font-weight: 500;
+  outline: none; box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* ═══ Seal (mock:L185-197) ═══ */
+.r-seal {
+  position: absolute; top: 14px; right: 22px; z-index: 6;
+  writing-mode: vertical-rl; text-orientation: upright;
+  font-family: var(--f-seal); font-weight: 600; font-size: 17px; line-height: 1; letter-spacing: 3px;
+  padding: 8px 6px 5px; border-radius: 3px;
+  background: var(--accent); color: var(--on-accent);
+  outline: 1.5px solid color-mix(in oklab, var(--on-accent) 55%, transparent); outline-offset: -4px;
+  transform: rotate(-2.5deg);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--accent) 60%, #000);
+  transition: transform .2s ease, background-color .35s, color .35s;
+}
+.r-seal:hover { transform: rotate(0deg) translateY(-1px); }
+.r-seal:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+
+/* ═══ Theme popover (mock:L631-656). The 480px two-column rule (mock:L685) is skipped: the
+   window's minWidth is 860. ═══ */
+.r-theme-pop { top: 62px; right: 18px; width: 376px; max-width: calc(100vw - 32px); padding: 18px 18px 16px; max-height: calc(100vh - 80px); overflow-y: auto; }
+.r-swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 10px; }
+.r-swatch { text-align: left; border-radius: 12px; padding: 0; }
+.r-swatch .pv {
+  display: block; position: relative; height: 66px; border-radius: 10px; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08);
+  transition: box-shadow .15s, transform .15s;
+}
+.r-swatch:hover .pv { transform: translateY(-1px); }
+.r-swatch[aria-checked="true"] .pv { box-shadow: 0 0 0 2px var(--raised), 0 0 0 4px var(--accent); }
+.r-swatch .pv .wp { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.r-swatch .pv .vl { position: absolute; inset: 0; }
+.r-swatch .pv .ln { position: absolute; left: 10px; height: 4px; border-radius: 2px; opacity: .8; }
+.r-swatch .pv .ln.a { bottom: 22px; width: 46%; }
+.r-swatch .pv .ln.b { bottom: 14px; width: 30%; opacity: .45; }
+.r-swatch .pv .mini-seal { position: absolute; top: 8px; right: 8px; writing-mode: vertical-rl; text-orientation: upright; font-family: var(--f-seal); font-weight: 600; font-size: 9px; line-height: 1; letter-spacing: 1px; padding: 3px 2px; border-radius: 2px; }
+.r-swatch .nm { display: block; margin-top: 6px; font-size: var(--k-sm); font-weight: 500; color: var(--ink-1); line-height: 1.2; }
+.r-swatch .md { display: block; font-size: var(--k-xs); color: var(--ink-4); }
+.r-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.r-opt > span { font-size: var(--k-sm); color: var(--ink-2); }

@@ -1,0 +1,76 @@
+/* Kit composer and model menu — HOME_REDESIGN_PLAN.md Phase HD5. Mockup CSS (mock:L232-279,
+   658-666) ported verbatim apart from the r- prefix and the kit token names (--fs-* → --k-*,
+   --scale → --font-scale). Additions not in the mockup are marked. */
+
+/* ═══ Composer (mock:L232-279) ═══ */
+.r-composer {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  padding: 14px 12px 10px 18px;
+  transition: border-color .15s, box-shadow .15s, background-color .35s;
+}
+/* Addition (HD7): files dragged over the composer light it up the way focus does. */
+.r-composer.drop,
+.r-composer:focus-within { border-color: color-mix(in oklab, var(--accent) 45%, transparent); box-shadow: var(--shadow), 0 0 0 4px color-mix(in oklab, var(--accent) 12%, transparent); }
+.r-composer textarea {
+  display: block; width: 100%; resize: none; border: 0; outline: 0; background: transparent;
+  font-family: var(--f-ui); font-size: calc(16px * var(--font-scale)); line-height: 1.5; color: var(--ink-1);
+  min-height: 26px; max-height: 220px; padding: 0 6px 0 0;
+}
+.r-composer textarea::placeholder { color: var(--ink-4); }
+.r-composer-row { display: flex; align-items: center; gap: 2px; margin-top: 12px; margin-left: -8px; }
+.r-tool-btn {
+  height: 32px; min-width: 32px; padding: 0 8px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--k-sm); color: var(--ink-3);
+  transition: background-color .15s, color .15s;
+}
+.r-tool-btn:hover { background: var(--hover); color: var(--ink-1); }
+.r-tool-btn[aria-pressed="true"] { background: var(--selected); color: var(--accent); }
+.r-tool-btn .lbl { display: none; }
+.r-tool-btn[aria-pressed="true"] .lbl { display: inline; }
+.r-model-pill {
+  margin-left: auto; height: 32px; padding: 0 10px 0 11px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--k-sm); font-weight: 500; color: var(--ink-2);
+  transition: background-color .15s;
+}
+.r-model-pill:hover { background: var(--hover); }
+.r-model-pill .where { color: var(--ink-4); }
+.r-model-pill svg.chev { color: var(--ink-4); width: 14px; height: 14px; }
+.r-send {
+  width: 34px; height: 34px; border-radius: 50%; margin-left: 4px;
+  display: grid; place-items: center;
+  background: var(--accent); color: var(--on-accent);
+  transition: background-color .15s, transform .1s, opacity .15s;
+}
+.r-send:active { transform: scale(.94); }
+.r-send:disabled { background: var(--line-2); color: var(--ink-4); cursor: default; }
+.r-send svg { stroke-width: 1.9; }
+/* Addition: the stop state while a run is going — same circle, a 10px rounded square. */
+.r-stop .sq { width: 10px; height: 10px; border-radius: 2.5px; background: currentColor; }
+/* Addition (HD7): files waiting to go with the next message, above the textarea. */
+.r-composer-files { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 12px -6px; }
+.r-privacy { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0 0; font-size: var(--k-xs); color: var(--ink-4); text-align: center; }
+.r-privacy svg { width: 13px; height: 13px; }
+.r-privacy .pv-note svg { vertical-align: -2px; margin-right: 6px; }
+.r-model-pill span { white-space: nowrap; }
+
+/* ═══ Model menu (mock:L658) — the item rows are kit.css's .r-mp-* ═══ */
+.r-model-pop { width: 300px; padding: 8px; }
+.r-model-pop .r-mp-item small.bad { color: var(--bad); }
+/* Addition: "More models…" at the right of the first group label (or the only row, with no models). */
+.r-model-pop .r-mp-label { display: flex; align-items: baseline; }
+.r-mp-manage { margin-left: auto; font-size: var(--k-xs); font-weight: 500; color: var(--ink-4); border-radius: 5px; padding: 0 2px; }
+.r-mp-manage:hover { color: var(--accent); }
+.r-mp-more b { font-weight: 400; color: var(--ink-2); }
+
+/* Additions (HD7): notes after the privacy line: a model that can't see an attached photo, a file
+   that couldn't be added, and web search not being set up yet (with a link to Settings). */
+.r-privacy { flex-wrap: wrap; }
+.r-privacy .pv-warn { color: var(--warn); }
+.r-privacy .pv-bad { color: var(--bad); }
+.r-privacy .pv-link { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); text-underline-offset: 2px; }
+.r-privacy .pv-link:hover { color: var(--ink-2); }

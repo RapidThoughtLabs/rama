@@ -1,6 +1,7 @@
 {
   "id": "sakura",
   "label": "Sakura",
+  "kanji": "桜",
   "family": "red",
   "mode": "light",
   "ground": "#f6e8ea",

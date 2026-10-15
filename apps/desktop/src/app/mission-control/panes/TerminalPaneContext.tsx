@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useGotoArg } from "../../code/workspace/gotoBridge";
+import type { MutableRefObject, ReactNode } from "react";
+import type { Terminal } from "@xterm/xterm";
 import type { TerminalDTO } from "@rama/protocol";
 import {
   createTerminal as createTerminalApi,
@@ -33,6 +35,8 @@ interface TerminalPaneValue {
   killTerminal: (id: string) => Promise<void>;
   renameTerminal: (id: string, title: string) => Promise<void>;
   removeTerminal: (id: string) => Promise<void>;
+  /** The mounted xterm, set by the stage so the stage bar's Clear can reach it. */
+  termRef: MutableRefObject<Terminal | null>;
 }
 
 const TerminalPaneContext = createContext<TerminalPaneValue | null>(null);
@@ -57,6 +61,7 @@ export function TerminalPaneProvider({ children }: { children: ReactNode }) {
   const [terminals, setTerminals] = useState<TerminalDTO[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
+  const termRef = useRef<Terminal | null>(null);
 
   useEffect(() => {
     setTerminals([]);
@@ -116,6 +121,10 @@ export function TerminalPaneProvider({ children }: { children: ReactNode }) {
     }
   }, [terminals, activeId]);
 
+  // goto("terminal:<id>") from the workspace bridge (docs/CODE_REDESIGN_PLAN.md CR3).
+  const terminalIds = useMemo(() => terminals.map((t) => t.id), [terminals]);
+  useGotoArg("terminal", terminalIds, setActiveId);
+
   const active = terminals.find((t) => t.id === activeId) ?? null;
 
   const createTerminal = useCallback(async () => {
@@ -147,7 +156,7 @@ export function TerminalPaneProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<TerminalPaneValue>(
-    () => ({ terminals, active, activeId, setActiveId, runningIds, createTerminal, killTerminal, renameTerminal, removeTerminal }),
+    () => ({ terminals, active, activeId, setActiveId, runningIds, createTerminal, killTerminal, renameTerminal, removeTerminal, termRef }),
     [terminals, active, activeId, runningIds, createTerminal, killTerminal, renameTerminal, removeTerminal],
   );
 

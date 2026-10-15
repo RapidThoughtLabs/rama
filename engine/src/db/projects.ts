@@ -31,8 +31,10 @@ function toDTO(row: ProjectRow): ProjectDTO {
   };
 }
 
+// System projects (HOME_REDESIGN_PLAN.md Decision D3 — the hidden "home" project) are never
+// listed; getProject still returns them, since the run loop resolves a Home chat's project by id.
 export function listProjects(): ProjectDTO[] {
-  const rows = db.query<ProjectRow, []>("SELECT * FROM projects ORDER BY created_at ASC").all();
+  const rows = db.query<ProjectRow, []>("SELECT * FROM projects WHERE is_system = 0 ORDER BY created_at ASC").all();
   return rows.map(toDTO);
 }
 
@@ -77,12 +79,18 @@ export function updateProject(id: string, patch: UpdateProjectInput): ProjectDTO
 // ON DELETE CASCADE (schema.ts), and silently deleting a project's chats/messages/artifacts
 // alongside it is a bigger destructive surface than the sidebar's "remove project" action asked
 // for. The caller (server.ts) surfaces this as a 409 telling the user to move/delete chats first.
-export function deleteProject(id: string): "ok" | "not-found" | "has-chats" {
+export function deleteProject(id: string): "ok" | "not-found" | "has-chats" | "system" {
   if (!getProject(id)) return "not-found";
+  if (isSystemProject(id)) return "system";
   if (listChatsByProject(id).length > 0) return "has-chats";
   deleteProposalsForProject(id);
   db.query("DELETE FROM projects WHERE id = ?").run(id);
   return "ok";
+}
+
+export function isSystemProject(id: string): boolean {
+  const row = db.query<{ is_system: number }, [string]>("SELECT is_system FROM projects WHERE id = ?").get(id);
+  return row?.is_system === 1;
 }
 
 interface ProjectSettingsJson {

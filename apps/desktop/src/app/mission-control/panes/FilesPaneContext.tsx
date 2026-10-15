@@ -24,6 +24,7 @@ interface FilesPaneValue {
   showIgnored: boolean;
   setShowIgnored: (show: boolean) => void;
   refreshTree: () => void;
+  ensureDir: (path: string) => void;
 
   // Tabs state
   openTabs: OpenFileTab[];
@@ -43,6 +44,27 @@ interface FilesPaneValue {
 
 const FilesPaneContext = createContext<FilesPaneValue | null>(null);
 
+function readTabs(key: string): { tabs: OpenFileTab[]; activePath: string | null } {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "null");
+    return {
+      tabs: Array.isArray(parsed?.tabs) ? parsed.tabs : [],
+      activePath: typeof parsed?.activePath === "string" ? parsed.activePath : null,
+    };
+  } catch {
+    return { tabs: [], activePath: null };
+  }
+}
+
+function readExpanded(key: string): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "null");
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
 export function FilesPaneProvider({ children }: { children: ReactNode }) {
   const { activeProjectId, projects } = useProjectsData();
   const currentProject = projects.find((p) => p.id === activeProjectId);
@@ -52,40 +74,18 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
   const wrapKey = `rama:files:wrap:${WINDOW_LABEL}`;
   const showIgnoredKey = `rama:files:show-ignored:${WINDOW_LABEL}`;
 
-  // Tabs persistence
-  const [openTabs, setOpenTabs] = useState<OpenFileTab[]>(() => {
-    try {
-      const raw = localStorage.getItem(tabsKey);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed?.tabs) ? parsed.tabs : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [activeTabPath, setActiveTabPath] = useState<string | null>(() => {
-    try {
-      const raw = localStorage.getItem(tabsKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return typeof parsed?.activePath === "string" ? parsed.activePath : null;
-    } catch {
-      return null;
-    }
-  });
-
-  // Expanded folders persistence
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem(expandedKey);
-      if (!raw) return new Set();
-      const parsed = JSON.parse(raw);
-      return new Set(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      return new Set();
-    }
-  });
+  // Tabs and expanded folders are persisted per project. The keys depend on `activeProjectId`, which
+  // is still null when this provider mounts on a cold start with Files as the saved pane, so the
+  // initial read is repeated whenever the keys change (otherwise the tabs came up empty).
+  const [openTabs, setOpenTabs] = useState<OpenFileTab[]>(() => readTabs(tabsKey).tabs);
+  const [activeTabPath, setActiveTabPath] = useState<string | null>(() => readTabs(tabsKey).activePath);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => readExpanded(expandedKey));
+  useEffect(() => {
+    const saved = readTabs(tabsKey);
+    setOpenTabs(saved.tabs);
+    setActiveTabPath(saved.activePath);
+    setExpandedFolders(readExpanded(expandedKey));
+  }, [tabsKey, expandedKey]);
 
   // View settings persistence
   const [wrapText, setWrapTextState] = useState<boolean>(() => {
@@ -154,10 +154,14 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
   const [contentLoading, setContentLoading] = useState(false);
   const contentCache = useRef<Map<string, FileContentDTO>>(new Map());
 
+  // Directories a load was started for, so `ensureDir` neither repeats a load nor retries a failed one.
+  const attemptedDirs = useRef<Set<string>>(new Set());
+
   // Load a directory's children
   const loadDir = useCallback(
     async (dirPath: string) => {
       if (!activeProjectId) return;
+      attemptedDirs.current.add(dirPath);
       setLoadingDirs((prev) => new Set(prev).add(dirPath));
       try {
         const res = await fetchProjectFiles(activeProjectId, dirPath);
@@ -192,6 +196,7 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setTreeChildren({});
     setRootError(null);
+    attemptedDirs.current.clear();
     contentCache.current.clear();
     if (!activeProjectId) return;
 
@@ -200,6 +205,15 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
       void loadDir(dir);
     }
   }, [activeProjectId, loadDir]);
+
+  // Loads a directory the tree only needs to look inside: a collapsed folder whose single child is a
+  // folder is drawn as one "a/b/c" row, which needs the chain's links loaded (FilesRail).
+  const ensureDir = useCallback(
+    (dirPath: string) => {
+      if (!attemptedDirs.current.has(dirPath)) void loadDir(dirPath);
+    },
+    [loadDir],
+  );
 
   const refreshTree = useCallback(() => {
     if (!activeProjectId) return;
@@ -250,8 +264,12 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
         if (existingIdx !== -1) {
           next = [...prev];
           if (pin) next[existingIdx] = { path, pinned: true };
+        } else if (!pin && prev.some((t) => !t.pinned)) {
+          // A single click previews: it takes over the one preview tab instead of adding another
+          // (mock:L1813-1824). Double-click or opening via a link pins.
+          next = prev.map((t) => (t.pinned ? t : { path, pinned: false }));
         } else {
-          next = [...prev, { path, pinned: true }];
+          next = [...prev, { path, pinned: pin }];
         }
         setActiveTabPath(path);
         saveTabs(next, path);
@@ -449,6 +467,7 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
       showIgnored,
       setShowIgnored,
       refreshTree,
+      ensureDir,
       openTabs,
       activeTabPath,
       openFile,
@@ -470,6 +489,7 @@ export function FilesPaneProvider({ children }: { children: ReactNode }) {
       showIgnored,
       setShowIgnored,
       refreshTree,
+      ensureDir,
       openTabs,
       activeTabPath,
       openFile,

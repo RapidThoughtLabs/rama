@@ -1,15 +1,19 @@
 import type {
   BackendConfig,
   ChatDTO,
+  ChatKind,
   ChatMode,
   ChatSettingsDTO,
   CreateChatInput,
+  RecentChatDTO,
   ThemeIdDTO,
   UpdateChatInput,
 } from "@rama/protocol";
 import { getChatRoleModel } from "../agent/config";
+import { liveChatStatus } from "../ws";
 import { db } from "./index";
 import { newId } from "./ids";
+import { snippetFromText } from "./snippet";
 
 const OWN_LOOP_BACKEND: BackendConfig = { kind: "own-loop" };
 
@@ -60,9 +64,10 @@ export function migrateLegacyCliChats(): void {
   }
 }
 
-interface ChatRow {
+export interface ChatRow {
   id: string;
   project_id: string;
+  kind: ChatKind;
   title: string;
   backend_json: string;
   provider_id: string;
@@ -79,10 +84,11 @@ interface ChatRow {
   updated_at: number;
 }
 
-function toDTO(row: ChatRow): ChatDTO {
+export function toDTO(row: ChatRow): ChatDTO {
   return {
     id: row.id,
     projectId: row.project_id,
+    kind: row.kind === "home" ? "home" : "code",
     title: row.title,
     backend: parseBackend(row.backend_json),
     providerId: row.provider_id,
@@ -90,7 +96,8 @@ function toDTO(row: ChatRow): ChatDTO {
     mode: row.mode,
     agentId: row.agent_id,
     themeId: row.theme_id,
-    status: row.status,
+    // E2 — a run in flight is not in the column (see ws.ts's liveStatus).
+    status: liveChatStatus(row.id) ?? row.status,
     costUsd: row.cost_usd,
     utilityCostUsd: row.utility_cost_usd,
     contextUsed: row.context_used,
@@ -100,19 +107,44 @@ function toDTO(row: ChatRow): ChatDTO {
   };
 }
 
-const CHAT_COLUMNS =
-  "id, project_id, title, backend_json, provider_id, model, mode, agent_id, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at";
+export const CHAT_COLUMNS =
+  "id, project_id, kind, title, backend_json, provider_id, model, mode, agent_id, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at";
 
+// Both list Code chats only (HOME_REDESIGN_PLAN.md Phase HD3) — Home chats come from
+// db/home.ts's listHomeChats, so the Code sidebar can't pick one up by accident.
 export function listAllChats(): ChatDTO[] {
-  const rows = db.query<ChatRow, []>(`SELECT ${CHAT_COLUMNS} FROM chats ORDER BY updated_at DESC`).all();
+  const rows = db.query<ChatRow, []>(`SELECT ${CHAT_COLUMNS} FROM chats WHERE kind = 'code' ORDER BY updated_at DESC`).all();
   return rows.map(toDTO);
 }
 
 export function listChatsByProject(projectId: string): ChatDTO[] {
   const rows = db
-    .query<ChatRow, [string]>(`SELECT ${CHAT_COLUMNS} FROM chats WHERE project_id = ? ORDER BY updated_at DESC`)
+    .query<ChatRow, [string]>(`SELECT ${CHAT_COLUMNS} FROM chats WHERE project_id = ? AND kind = 'code' ORDER BY updated_at DESC`)
     .all(projectId);
   return rows.map(toDTO);
+}
+
+interface RecentChatRow extends ChatRow {
+  last_text: string | null;
+}
+
+/** The newest `limit` Code chats of a project, each with a one-line snippet (the first sentence of the
+ *  last assistant reply) — the Code landing's "Recent in {project}" rows. `waiting` supplies a chat's
+ *  own sentence when it is blocked on an ask, since its last reply says nothing about that. */
+export function listRecentChats(projectId: string, limit: number, waiting: (chatId: string) => string | null): RecentChatDTO[] {
+  const rows = db
+    .query<RecentChatRow, [string, number]>(
+      `SELECT ${CHAT_COLUMNS},
+         (SELECT m.content FROM messages m
+           WHERE m.chat_id = chats.id AND m.role = 'assistant' AND m.content IS NOT NULL AND m.content != ''
+           ORDER BY m.seq DESC LIMIT 1) AS last_text
+       FROM chats WHERE project_id = ? AND kind = 'code' ORDER BY updated_at DESC LIMIT ?`,
+    )
+    .all(projectId, limit);
+  return rows.map((row) => {
+    const dto = toDTO(row);
+    return { ...dto, snippet: (dto.status === "waiting_permission" ? waiting(dto.id) : null) ?? snippetFromText(row.last_text) };
+  });
 }
 
 export function getChat(id: string): ChatDTO | null {
@@ -120,7 +152,7 @@ export function getChat(id: string): ChatDTO | null {
   return row ? toDTO(row) : null;
 }
 
-export function createChat(projectId: string, input: CreateChatInput): ChatDTO {
+export function createChat(projectId: string, input: CreateChatInput, kind: ChatKind = "code"): ChatDTO {
   const id = newId();
   const now = Date.now();
   const title = input.title ?? DEFAULT_TITLE;
@@ -135,9 +167,9 @@ export function createChat(projectId: string, input: CreateChatInput): ChatDTO {
     // `wallpaper` isn't in this insert (engine/src/db/schema.ts marks the column dead —
     // SETTINGS_PLAN.md Phase S0: the wallpaper is theme-authored data now, not per-chat state).
     // It keeps its NOT NULL DEFAULT, so the row still inserts fine without it named here.
-    `INSERT INTO chats (id, project_id, title, backend_json, provider_id, model, mode, agent_id, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', 0, 0, 0, 200000, ?, ?)`,
-  ).run(id, projectId, title, backendJson, providerId, input.model ?? chatRole.model, mode, agentId, themeId, now, now);
+    `INSERT INTO chats (id, project_id, kind, title, backend_json, provider_id, model, mode, agent_id, theme_id, status, cost_usd, utility_cost_usd, context_used, context_max, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', 0, 0, 0, 200000, ?, ?)`,
+  ).run(id, projectId, kind, title, backendJson, providerId, input.model ?? chatRole.model, mode, agentId, themeId, now, now);
 
   return getChat(id)!;
 }
@@ -196,6 +228,7 @@ const deleteChatTx = db.transaction((id: string) => {
   // persists them; with `PRAGMA foreign_keys = ON` (db/index.ts) the DELETE FROM chats below would
   // otherwise throw a foreign key violation the first time a compacted chat is deleted.
   db.query("DELETE FROM compactions WHERE chat_id = ?").run(id);
+  db.query("DELETE FROM message_attachments WHERE chat_id = ?").run(id); // HD7
   db.query("DELETE FROM messages WHERE chat_id = ?").run(id);
   db.query("DELETE FROM chats WHERE id = ?").run(id);
 });
@@ -229,14 +262,18 @@ export function recordUtilityUsage(id: string, costUsd: number): void {
 // docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2 — chats.settings_json, mirroring db/projects.ts's
 // readSettingsJson/ProjectSettingsJson split. Narrow and typed on purpose — see schema.ts's note
 // on why this isn't folded into backend_json.
-interface ChatSettingsJson {
+export interface ChatSettingsJson {
   extraRoots?: string[];
+  /** E3 — tools the reader approved for the whole chat (ChatSettingsDTO.permissionAllow). */
+  permissionAllow?: string[];
+  /** HD3 — a Home chat's web-search toggle (HomeChatSummaryDTO.webSearch). */
+  webSearch?: boolean;
   worktreeEnabled?: boolean;
   worktreePath?: string;
   worktreeBranch?: string;
 }
 
-function readChatSettingsJson(id: string): ChatSettingsJson | null {
+export function readChatSettingsJson(id: string): ChatSettingsJson | null {
   const row = db.query<{ settings_json: string }, [string]>("SELECT settings_json FROM chats WHERE id = ?").get(id);
   if (!row) return null;
   try {
@@ -246,13 +283,14 @@ function readChatSettingsJson(id: string): ChatSettingsJson | null {
   }
 }
 
-function writeChatSettingsJson(id: string, settings: ChatSettingsJson): void {
+export function writeChatSettingsJson(id: string, settings: ChatSettingsJson): void {
   db.query("UPDATE chats SET settings_json = ? WHERE id = ?").run(JSON.stringify(settings), id);
 }
 
 function toSettingsDTO(settings: ChatSettingsJson): ChatSettingsDTO {
   return {
     extraRoots: settings.extraRoots ?? [],
+    permissionAllow: settings.permissionAllow ?? [],
     worktreeEnabled: settings.worktreeEnabled ?? false,
     worktreePath: settings.worktreePath ?? null,
     worktreeBranch: settings.worktreeBranch ?? null,
@@ -272,6 +310,27 @@ export function setChatExtraRoots(id: string, extraRoots: string[]): ChatSetting
   const next: ChatSettingsJson = { ...settings, extraRoots };
   writeChatSettingsJson(id, next);
   return toSettingsDTO(next);
+}
+
+// E3 — "Always allow in this chat". The client replaces the list when it revokes (PUT), and the
+// engine appends one entry when a reader approves with scope "chat".
+export function setChatPermissionAllow(id: string, permissionAllow: string[]): ChatSettingsDTO | null {
+  const settings = readChatSettingsJson(id);
+  if (settings === null) return null;
+  const next: ChatSettingsJson = { ...settings, permissionAllow: [...new Set(permissionAllow)] };
+  writeChatSettingsJson(id, next);
+  return toSettingsDTO(next);
+}
+
+export function addChatPermissionAllow(id: string, bucket: string): void {
+  const settings = readChatSettingsJson(id);
+  if (settings === null) return;
+  if (settings.permissionAllow?.includes(bucket)) return;
+  setChatPermissionAllow(id, [...(settings.permissionAllow ?? []), bucket]);
+}
+
+export function chatPermissionAllow(id: string): string[] {
+  return readChatSettingsJson(id)?.permissionAllow ?? [];
 }
 
 // CC2 — called by server.ts's POST /chats/:id/worktree after ensureWorktree/removeWorktree has

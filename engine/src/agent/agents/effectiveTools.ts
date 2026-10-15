@@ -1,4 +1,4 @@
-import type { ChatMode } from "@rama/protocol";
+import type { ChatKind, ChatMode } from "@rama/protocol";
 import type { RamaToolSet } from "../../tools/define";
 import type { AgentDef } from "./types";
 
@@ -42,15 +42,21 @@ function modeForbids(name: string, mode: ChatMode): boolean {
   return mode === "plan" && HARNESS_TOOL_RISK[name] === "high";
 }
 
+// HOME_REDESIGN_PLAN.md Phase HD3 — everything a Home chat can ever call, whatever its agent row
+// says. Unlike an agent allowlist this narrows non-harness tools too (skills, heku): Home has no
+// project to point them at.
+export const HOME_TOOLS: readonly string[] = ["read", "clarify"];
+
 // docs/PROMPT_STACK_PLAN.md §5.2 — "the effective toolset is harness tools ∩ mode allowance ∩
 // agent allowlist." `agent.tools === null` means unrestricted (no narrowing beyond mode); a
 // non-null allowlist can only narrow, never add back a tool mode has forbidden (rule 1 + rule 2,
 // enforced here — the one place that decides what the model is even offered, not just what gate()
 // will let it actually call).
-export function computeEffectiveTools(tools: RamaToolSet, mode: ChatMode, agent: AgentDef): RamaToolSet {
+export function computeEffectiveTools(tools: RamaToolSet, mode: ChatMode, agent: AgentDef, kind: ChatKind = "code"): RamaToolSet {
   const allowed = agent.tools ? new Set(agent.tools) : null;
   const out: RamaToolSet = {};
   for (const [name, def] of Object.entries(tools)) {
+    if (kind === "home" && !HOME_TOOLS.includes(name)) continue;
     if (isHarnessTool(name)) {
       if (modeForbids(name, mode)) continue;
       if (allowed && !allowed.has(name)) continue;

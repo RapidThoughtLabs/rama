@@ -15,6 +15,14 @@ import { exitTerminal, fetchTerminalScrollback, postTerminalData, ptyIsRunning, 
 // exited, in which case it just replays the DB's persisted scrollback with no live listeners).
 const FLUSH_INTERVAL_MS = 1000;
 
+// When each terminal last printed something in this window — the Terminal rail calls a running shell
+// "idle" once it has been quiet for a while (CR4). The engine's `updatedAt` only moves when
+// scrollback is saved, so it is the floor and this is the live reading.
+const lastOutputAt = new Map<string, number>();
+export function terminalLastActivity(t: Pick<TerminalDTO, "id" | "updatedAt">): number {
+  return Math.max(t.updatedAt, lastOutputAt.get(t.id) ?? 0);
+}
+
 export interface TerminalSession {
   /** User keystrokes → PTY. A no-op (silently swallowed) if nothing is actually running. */
   write: (data: string) => void;
@@ -61,6 +69,7 @@ export function useTerminalSession(terminal: TerminalDTO, onData: (chunk: string
       if (!alive) return;
 
       unlistenData = await listen<string>(`pty-data:${terminal.id}`, (event) => {
+        lastOutputAt.set(terminal.id, Date.now());
         onDataRef.current(event.payload);
         pendingRef.current += event.payload;
       });

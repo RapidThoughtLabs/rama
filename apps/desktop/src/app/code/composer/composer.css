@@ -1,0 +1,58 @@
+/* The Code composer's extras — docs/CODE_REDESIGN_PLAN.md CR5. Mockup CSS (mock:L379, 398-404,
+   499-500, 618) ported with the r- prefix and kit token names. The card, textarea, tool row and
+   model menu are the kit's (packages/ui/src/kit/composer.css). Additions not in the mockup are
+   marked inline. */
+
+/* ═══ Dock (mock:L379) ═══ */
+.r-code-chat .r-dock { width: min(700px, 100%); }
+.r-code-composer { position: relative; }
+
+/* ═══ Context chips and mode pill (mock:L398-400) ═══ */
+.r-ctx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 12px -6px; }
+.r-mode-pill + .r-model-pill { margin-left: 0; }
+.r-mode-pill:disabled { opacity: .5; cursor: default; }
+.r-mode-pill:disabled:hover { background: none; }
+/* Addition (plan §9): an extra folder's chip shows its remove `x` on hover. */
+.r-chip-folder .x { display: none; width: 16px; height: 16px; margin: 0 -4px 0 -2px; border-radius: 50%; place-items: center; color: var(--ink-4); }
+.r-chip-folder:hover .x, .r-chip-folder .x:focus-visible { display: inline-grid; }
+.r-chip-folder .x:hover { background: var(--hover); color: var(--ink-1); }
+.r-chip-folder .x svg { width: 10px; height: 10px; color: inherit; }
+
+/* ═══ Context ring (mock:L401-404, 499-500) ═══ */
+.r-ring { width: 14px; height: 14px; transform: rotate(-90deg); }
+.r-ring circle { fill: none; stroke-width: 2.4; }
+.r-ring .bg { stroke: var(--line-2); }
+.r-ring .fg { stroke: var(--accent); stroke-linecap: round; }
+.r-code-composer .r-privacy { flex-wrap: wrap; }
+.r-privacy .ctx { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; }
+
+@media (max-width: 560px) {
+  .r-mode-pill span { display: none; }
+}
+
+/* ═══ Menus ═══ */
+/* Addition (plan §9): the project menu's note, divider and plain action row, same type as the kit's. */
+.r-mp-note { padding: 8px 10px 2px; font-size: var(--k-xs); color: var(--ink-3); }
+.r-mp-sep { height: 1px; margin: 6px 4px; background: var(--line); }
+.r-mp-plain { grid-template-columns: 18px 1fr; }
+.r-mp-plain b { font-weight: 400; color: var(--ink-2); }
+
+/* Addition: the Add folder popover and the attach (mention a file) popover. */
+.r-add-pop { width: 280px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.r-add-pop-label { font-size: var(--k-xs); font-weight: 500; color: var(--ink-4); }
+.r-add-pop small { font-size: var(--k-xs); color: var(--ink-4); }
+.r-add-pop-input {
+  width: 100%; height: 34px; padding: 0 12px; border: 0; border-radius: 10px; outline: 0;
+  background: var(--well); box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--f-ui); font-size: var(--k-sm); color: var(--ink-1);
+}
+.r-add-pop-input::placeholder { color: var(--ink-4); }
+.r-add-pop-input:focus { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent); }
+.r-mention-pop .r-add-pop-input { margin-bottom: 6px; }
+.r-mention-row { grid-template-columns: 18px 1fr; }
+.r-mention-row[aria-selected="true"], .r-slash-item[aria-selected="true"] { background: var(--hover); }
+
+/* Addition: the `/` menu, a popover above the card at the card's width (plan CR5). */
+.r-code-composer .r-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 5; max-height: 280px; overflow-y: auto; padding: 8px; }
+.r-slash-item { grid-template-columns: 1fr; }
+.r-slash-empty { padding: 10px; font-size: var(--k-sm); color: var(--ink-4); }

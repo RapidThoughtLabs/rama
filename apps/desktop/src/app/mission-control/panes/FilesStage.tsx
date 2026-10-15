@@ -1,10 +1,14 @@
 import { useMemo } from "react";
+import type { KeyboardEvent } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { FileIcon, IconClose, IconCopy, IconPopOut } from "@rama/ui";
+import { Icon } from "@rama/ui";
+import { Empty, baseName } from "../../code/workspace/parts";
 import { useFilesPane } from "./FilesPaneContext";
 import { highlightCode } from "./syntax";
 
-// docs/WORKSPACE_PANES_PLAN.md Phase W6 — Files stage with in-band tab strip, line-number gutter viewer, and external editor bridge.
+// docs/CODE_REDESIGN_PLAN.md CR4 (mock:L1797-1806) — the Files stage bar (open-file tabs, wrap, copy
+// path, open in your editor) and the code view. One click in the tree previews a file in the single
+// italic tab; double-click or opening from a link pins it.
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -12,157 +16,132 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function useOpenExternally() {
+  const { activeTabPath, projectPath } = useFilesPane();
+  return () => {
+    if (!activeTabPath) return;
+    const full = projectPath ? `${projectPath}/${activeTabPath}` : activeTabPath;
+    void openPath(full).catch((err) => console.error("[rama] failed to open external file", err));
+  };
+}
+
+export function FilesStageBar() {
+  const { openTabs, activeTabPath, openFile, pinTab, closeTab, wrapText, setWrapText } = useFilesPane();
+  const openExternally = useOpenExternally();
+
+  function onTabKey(e: KeyboardEvent<HTMLButtonElement>, path: string) {
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      closeTab(path);
+    }
+  }
+
+  return (
+    <>
+      <div className="r-ftabs" role="tablist">
+        {openTabs.map((tab) => (
+          <button
+            key={tab.path}
+            className={`r-ftab${tab.pinned ? "" : " preview"}`}
+            role="tab"
+            aria-selected={tab.path === activeTabPath}
+            title={tab.path}
+            onClick={() => openFile(tab.path, tab.pinned)}
+            onDoubleClick={() => pinTab(tab.path)}
+            onKeyDown={(e) => onTabKey(e, tab.path)}
+            onAuxClick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                closeTab(tab.path);
+              }
+            }}
+          >
+            {baseName(tab.path)}
+            <span
+              className="x"
+              title="Close"
+              aria-label={`Close ${baseName(tab.path)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(tab.path);
+              }}
+            >
+              <Icon name="x" />
+            </span>
+          </button>
+        ))}
+      </div>
+      <span className="grow" />
+      {activeTabPath && (
+        <>
+          <button
+            className={`r-icon-btn${wrapText ? " on" : ""}`}
+            title={wrapText ? "Stop wrapping long lines" : "Wrap long lines"}
+            aria-label="Wrap long lines"
+            aria-pressed={wrapText}
+            onClick={() => setWrapText(!wrapText)}
+          >
+            <Icon name="wrap" />
+          </button>
+          <button className="r-icon-btn" title="Copy path" aria-label="Copy path" onClick={() => void navigator.clipboard.writeText(activeTabPath)}>
+            <Icon name="copy" />
+          </button>
+          <button className="r-icon-btn" title="Open in your editor" aria-label="Open in your editor" onClick={openExternally}>
+            <Icon name="pop" />
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
 export function FilesStage() {
-  const {
-    openTabs,
-    activeTabPath,
-    openFile,
-    pinTab,
-    closeTab,
-    activeContent,
-    contentLoading,
-    wrapText,
-    setWrapText,
-    projectPath,
-  } = useFilesPane();
+  const { openTabs, activeTabPath, activeContent, contentLoading, wrapText } = useFilesPane();
+  const openExternally = useOpenExternally();
 
   const lines = useMemo(() => {
     if (!activeContent || activeContent.binary) return [];
     return highlightCode(activeContent.content, activeTabPath ?? "");
   }, [activeContent, activeTabPath]);
 
-  function copyPath() {
-    if (activeTabPath) void navigator.clipboard.writeText(activeTabPath);
-  }
+  if (openTabs.length === 0 || !activeTabPath) return <Empty title="No file open">Pick a file from the list.</Empty>;
+  if (contentLoading && !activeContent) return <Empty title="Opening file…" />;
+  if (!activeContent) return <Empty title="Couldn't open this file">It may have been moved or deleted.</Empty>;
 
-  function openExternally() {
-    if (!activeTabPath) return;
-    const full = projectPath ? `${projectPath}/${activeTabPath}` : activeTabPath;
-    void openPath(full).catch((err) => console.error("[rama] failed to open external file", err));
+  if (activeContent.binary) {
+    return (
+      <div className="r-empty">
+        <div>
+          <b>Binary file</b>
+          {formatBytes(activeContent.size)}, so there is no text to show.
+          <div>
+            <button className="r-btn r-btn-soft" onClick={openExternally}>
+              Open in your editor
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <>
-      <div className="rama-files-stage-toolbar">
-        <div className="rama-files-tab-strip">
-          {openTabs.map((tab) => {
-            const isActive = tab.path === activeTabPath;
-            const fileName = tab.path.split("/").pop() ?? tab.path;
-            return (
-              <div
-                key={tab.path}
-                className={`rama-file-tab${isActive ? " rama-file-tab-active" : ""}`}
-                title={tab.path}
-                onClick={() => openFile(tab.path, true)}
-                onDoubleClick={() => pinTab(tab.path)}
-                onAuxClick={(e) => {
-                  if (e.button === 1) {
-                    e.preventDefault();
-                    closeTab(tab.path);
-                  }
-                }}
-              >
-                <FileIcon path={tab.path} width={13} height={13} className="rama-file-tab-icon" />
-                <span className="rama-file-tab-title">{fileName}</span>
-                <button
-                  type="button"
-                  className="rama-file-tab-close"
-                  title="Close (middle-click)"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.path);
-                  }}
-                >
-                  <IconClose width={10} height={10} />
-                </button>
-              </div>
-            );
-          })}
+      {activeContent.truncated && (
+        <div className="r-banner">
+          <span>Showing the first 2 MB of {formatBytes(activeContent.size)}.</span>
+          <button className="r-btn r-btn-soft" onClick={openExternally}>
+            Open the whole file
+          </button>
         </div>
-
-        <div className="rama-files-toolbar-actions">
-          {activeTabPath && (
-            <>
-              <button
-                type="button"
-                className={`rama-files-action-btn${wrapText ? " active" : ""}`}
-                title={wrapText ? "Disable word wrap" : "Enable word wrap"}
-                onClick={() => setWrapText(!wrapText)}
-              >
-                wrap
-              </button>
-              <button
-                type="button"
-                className="rama-files-action-btn"
-                title="Copy path"
-                onClick={copyPath}
-              >
-                <IconCopy width={12} height={12} />
-              </button>
-              <button
-                type="button"
-                className="rama-files-action-btn"
-                title="Open in external editor"
-                onClick={openExternally}
-              >
-                <IconPopOut width={12} height={12} />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="rama-files-stage-body">
-        {openTabs.length === 0 || !activeTabPath ? (
-          <div className="rama-mc-coming-soon">no file open — select a file in the tree to view.</div>
-        ) : contentLoading && !activeContent ? (
-          <div className="rama-mc-coming-soon">loading file…</div>
-        ) : !activeContent ? (
-          <div className="rama-mc-coming-soon">file could not be loaded.</div>
-        ) : activeContent.binary ? (
-          <div className="rama-mc-coming-soon" style={{ flexDirection: "column", gap: 10 }}>
-            <span>binary file ({formatBytes(activeContent.size)})</span>
-            <button
-              type="button"
-              className="rama-mc-rail-action-btn"
-              style={{ width: "auto", padding: "4px 12px", border: "1px solid rgba(var(--ink), 0.1)" }}
-              onClick={openExternally}
-            >
-              <IconPopOut width={12} height={12} style={{ marginRight: 6 }} /> open in external editor
-            </button>
+      )}
+      <div className={`r-codeview r-code${wrapText ? " wrap" : ""}`} style={{ padding: "12px 0 28px" }}>
+        {lines.map((html, i) => (
+          <div key={i} className="r-cl">
+            <span className="n">{i + 1}</span>
+            <span dangerouslySetInnerHTML={{ __html: html || " " }} />
           </div>
-        ) : (
-          <div className="rama-file-viewer">
-            {activeContent.truncated && (
-              <div className="rama-files-oversize-banner">
-                <span>
-                  Oversize file: previewing first 2MB of {formatBytes(activeContent.size)}.
-                </span>
-                <button
-                  type="button"
-                  className="rama-files-action-btn"
-                  style={{ textDecoration: "underline" }}
-                  onClick={openExternally}
-                >
-                  <IconPopOut width={12} height={12} style={{ marginRight: 4 }} /> open full in editor
-                </button>
-              </div>
-            )}
-            <div className="rama-file-lines">
-              {lines.map((lineHtml, idx) => (
-                <div key={idx} className="rama-file-line">
-                  <span className="rama-diff-line-num">{idx + 1}</span>
-                  <span
-                    className={`rama-file-line-text${wrapText ? " rama-file-line-wrap" : ""}`}
-                    dangerouslySetInnerHTML={{ __html: lineHtml || "&nbsp;" }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        ))}
       </div>
     </>
   );
 }
-

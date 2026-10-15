@@ -74,3 +74,21 @@ export function resolveAgent(ctx: SearchCtx, agentId: string | null | undefined)
   if (requested) return requested;
   return agents.find((a) => a.name === DEFAULT_AGENT_NAME) ?? FALLBACK_DEFAULT;
 }
+
+// HOME_REDESIGN_PLAN.md Phase HD3 — a Home chat always runs the "home" agent, whatever its
+// agent_id row says (Home has no picker). A ~/.rama/agents/home.md can still restyle the voice;
+// the tool ceiling is enforced separately by computeEffectiveTools' `kind`.
+const FALLBACK_HOME: AgentDef = {
+  name: "home",
+  description: "Everyday help in the Home tab.",
+  tools: ["read", "clarify"],
+  mode: null,
+  model: "chat",
+  source: "bundled",
+  path: "(builtin fallback)",
+  body: "",
+};
+
+export function resolveHomeAgent(ctx: SearchCtx): AgentDef {
+  return discoverAgents(ctx).find((a) => a.name === "home") ?? FALLBACK_HOME;
+}

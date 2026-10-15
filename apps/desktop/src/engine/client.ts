@@ -2,12 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentSummaryDTO,
   ArtifactDTO,
+  AttachmentDTO,
   CatalogProviderSummaryDTO,
   ChangeDiffDTO,
   ChangesDTO,
   ChatDTO,
+  RecentChatDTO,
   ChatSettingsDTO,
   CreateChatInput,
+  CreateHomeChatInput,
   CreateProjectInput,
   CurationProposalDTO,
   CustomProviderInput,
@@ -17,6 +20,7 @@ import type {
   FileContentDTO,
   FileEntryDTO,
   GeneralSettingsDTO,
+  HomeChatSummaryDTO,
   InstructionsDTO,
   MessageDTO,
   PermissionSettings,
@@ -94,8 +98,40 @@ export function fetchChats(projectId?: string): Promise<ChatDTO[]> {
   return engineJson(projectId ? `/projects/${projectId}/chats` : "/chats");
 }
 
+/** CR8 — the Code landing's "Recent in {project}" rows. */
+export function fetchRecentChats(projectId: string, limit = 3): Promise<RecentChatDTO[]> {
+  return engineJson(`/projects/${projectId}/recent-chats?limit=${limit}`);
+}
+
 export function createChat(projectId: string, input: CreateChatInput): Promise<ChatDTO> {
   return engineJson(`/projects/${projectId}/chats`, { method: "POST", body: JSON.stringify(input) });
+}
+
+// HOME_REDESIGN_PLAN.md Phase HD3 — Home's own list/create. Rename and delete use patchChat /
+// deleteChat like any chat.
+export function fetchHomeChats(): Promise<HomeChatSummaryDTO[]> {
+  return engineJson("/home/chats");
+}
+
+export function createHomeChat(input: CreateHomeChatInput): Promise<HomeChatSummaryDTO> {
+  return engineJson("/home/chats", { method: "POST", body: JSON.stringify(input) });
+}
+
+// HOME_REDESIGN_PLAN.md Phase HD7 — the globe toggle on an existing Home chat.
+export function setHomeWebSearch(chatId: string, webSearch: boolean): Promise<ChatDTO> {
+  return engineJson(`/chats/${chatId}`, { method: "PATCH", body: JSON.stringify({ webSearch }) });
+}
+
+// HD7 — one file per request. Not through engineFetch: a multipart body needs the browser to set
+// its own Content-Type (with the boundary).
+export async function uploadHomeAttachment(chatId: string, file: File): Promise<AttachmentDTO> {
+  const { url, token } = await getEngineConnection();
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const res = await fetch(`${url}/home/chats/${chatId}/attachments`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error ?? `couldn't attach ${file.name} (${res.status})`);
+  return body as AttachmentDTO;
 }
 
 export function patchChat(chatId: string, patch: UpdateChatInput): Promise<ChatDTO> {
@@ -109,6 +145,13 @@ export function deleteChat(chatId: string): Promise<{ ok: true }> {
 // docs/TOOL_LAYER_PLAN.md §5.2 — restores the project's files to the state before the last run.
 export function undoLastRun(chatId: string): Promise<{ ok: boolean; message: string }> {
   return engineJson(`/chats/${chatId}/undo`, { method: "POST" });
+}
+
+// HOME_REDESIGN_PLAN.md HD6 — "Try again": the engine drops a user turn (its 0-based position among
+// the chat's user messages; the last when omitted) and everything after it, then runs that text
+// again.
+export function retryTurn(chatId: string, userTurn?: number): Promise<{ ok: boolean }> {
+  return engineJson(`/chats/${chatId}/retry`, { method: "POST", body: JSON.stringify(userTurn === undefined ? {} : { userTurn }) });
 }
 
 // docs/COMPOSER_CONTEXT_PLAN.md Phase CC1 — the composer's "+folder" chips.

@@ -1,118 +1,102 @@
-import { useEffect, useState } from "react";
-import type { CSSProperties } from "react";
-import { WallpaperStack } from "@rama/ui";
-import { Titlebar } from "./Titlebar";
-import { Sidebar } from "./Sidebar";
-import { ChatColumn } from "./ChatColumn";
+import { MainWall } from "@rama/ui";
+import { Seal } from "./shell/Seal";
+import { Sidebar } from "./shell/Sidebar";
+import { Topbar } from "./shell/Topbar";
+import { CodeTopbar } from "./code/CodeTopbar";
+import { CodeBody } from "./code/workspace/CodeBody";
+import { WorkspaceProvider, useWorkspace } from "./code/workspace/WorkspaceContext";
+import { CodeChat } from "./code/CodeChat";
 import { CommandPalette } from "./CommandPalette";
 import { DocsPage } from "./DocsPage";
-import { HomePane } from "./HomePane";
+import { HomeTopbar, HomeView } from "./home/HomeView";
 import { AgentTerminalBridge } from "./mission-control/AgentTerminalBridge";
 import { AgentWebBridge } from "./mission-control/AgentWebBridge";
-import { MissionControl } from "./mission-control/MissionControl";
-import { useMissionControlGeometry } from "./mission-control/useMissionControlGeometry";
 import { SettingsModal } from "./SettingsModal";
 import { ToolboxPage } from "./ToolboxPage";
+import { useNavigation } from "./data/NavigationProvider";
 import { useSettingsLink } from "./data/SettingsLinkContext";
 import { WINDOW_LABEL } from "../engine/window";
 import "./app-shell.css";
+import "./shell/shell.css";
 
 // Only the main window carries the global chats sidebar (docs/IMPLEMENTATION_PLAN.md Phase 5).
 // Windows spawned by a tab tear-off are focused terminal UIs — their tab strip + artifacts panel
 // only — so a chat lives in one obvious place instead of being duplicated across every window.
 const IS_MAIN_WINDOW = WINDOW_LABEL === "main";
 
-// docs/REDESIGN_PLAN.md Phase R5/R6 — the main window's content area switches between these.
-// "home" and "code" are reached via Titlebar's view switcher; "toolbox"/"docs" are reached via
-// Sidebar's nav rows (still land back on "code" when the titlebar's Code tab is clicked). Secondary
-// windows never leave "code" — they have no sidebar to navigate from and no Home concept.
-export type MainView = "home" | "code" | "toolbox" | "docs";
+// What the main area shows lives in NavigationProvider (HOME_REDESIGN_PLAN.md Phase HD1).
+export type { MainView } from "./data/NavigationProvider";
 
 export function AppShell() {
-  // docs/MISSION_CONTROL_PLAN.md M1 — Mission Control's whole width/collapse/pane/rail state,
-  // persisted per window. Owned here (not inside <MissionControl>) because the command palette's
-  // "toggle mission control" action needs to drive `panelCollapsed` without a context.
-  // MissionControl itself is always mounted now — its pane-switcher tabstrip never collapses, so
-  // it needs `geometry` regardless of `panelCollapsed`.
-  const geometry = useMissionControlGeometry();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [view, setView] = useState<MainView>("code");
+  return (
+    <WorkspaceProvider>
+      <AppShellBody />
+    </WorkspaceProvider>
+  );
+}
 
-  // docs/WORKSPACE_PANES_PLAN.md Phase W7 — rama:open-file cross-pane link: activate Files pane and expand panel if collapsed
-  useEffect(() => {
-    function handleOpenFile(e: Event) {
-      const ce = e as CustomEvent<{ path: string }>;
-      if (ce.detail?.path) {
-        geometry.setActivePaneId("files");
-        if (geometry.panelCollapsed) {
-          geometry.togglePanelCollapsed();
-        }
-      }
-    }
-    window.addEventListener("rama:open-file", handleOpenFile);
-    return () => window.removeEventListener("rama:open-file", handleOpenFile);
-  }, [geometry]);
+function AppShellBody() {
+  // docs/CODE_REDESIGN_PLAN.md CR3 — the workspace's open/width/rail/pane state lives in
+  // WorkspaceProvider (above this component) because the top bar's toggle and the command
+  // palette both drive it from outside the code view.
+  const ws = useWorkspace();
+  const nav = useNavigation();
+  const view = IS_MAIN_WINDOW ? nav.view : "code";
 
   // docs/REDESIGN_PLAN.md Phase R4 — one settings modal, opened from the sidebar footer (main
   // window), ⌘, / the ⌘K command palette (every window — see CommandPalette.tsx), or a P1 deep
-  // link (ModelPicker's banner, StatusBar's dot) — SettingsLinkContext owns open/close + target
+  // link (the composer's model menu, the topbar) — SettingsLinkContext owns open/close + target
   // so none of those callers need to prop-drill through this component.
   const { isOpen: settingsOpen, target: settingsTarget, open: openSettings, close: closeSettings } = useSettingsLink();
 
-  const bodyClass = ["rama-body", geometry.panelCollapsed ? "rama-body-panel-collapsed" : ""].filter(Boolean).join(" ");
-
-  // docs/REDESIGN_PLAN.md Phase R2 — native macOS traffic lights are an OS overlay fixed at the
-  // window's top-left corner regardless of DOM (tauri.conf.json: titleBarStyle "Overlay"). The
-  // sidebar's own header reserves that inset when it's the thing occupying the top-left (main
-  // window, sidebar expanded); otherwise the titlebar has to reserve it itself — either this
-  // window never has a sidebar, or it does but it's currently collapsed out of the way.
-  const reserveTrafficGapInTitlebar = !IS_MAIN_WINDOW || !sidebarOpen;
-
+  // HOME_REDESIGN_PLAN.md Phase HD1 — the mockup's shell (mock:L96-199): `.r-app` holds the
+  // sidebar and `.r-main`, which carries the wallpaper, the top bar, the seal and the active view.
+  // Screens not yet restyled render as `.r-legacy` islands inside `.r-view`. The palette and the
+  // settings modal stay outside `.r-app` — they're position: fixed and still legacy-styled.
   return (
-    <div className="rama-root" data-screen-label="rama app">
-      <AgentTerminalBridge />
-      <AgentWebBridge />
-      <WallpaperStack />
-      <div className="rama-frame">
-        {IS_MAIN_WINDOW && (
-          <Sidebar
-            collapsed={!sidebarOpen}
-            onToggleCollapse={() => setSidebarOpen((v) => !v)}
-            onOpenSettings={() => openSettings()}
-            view={view}
-            onNavigate={setView}
-          />
-        )}
-        <div className="rama-main">
-          <Titlebar
-            reserveTrafficGap={reserveTrafficGapInTitlebar}
-            showViewTabs={IS_MAIN_WINDOW}
-            showSidebarToggle={IS_MAIN_WINDOW && !sidebarOpen}
-            onToggleSidebar={() => setSidebarOpen((v) => !v)}
-            view={view}
-          />
+    <>
+      <div
+        className="r-app"
+        data-screen-label="rama app"
+        data-sb={IS_MAIN_WINDOW && nav.sidebarOpen ? "open" : "closed"}
+        data-window={IS_MAIN_WINDOW ? "main" : "secondary"}
+      >
+        <AgentTerminalBridge />
+        <AgentWebBridge />
+        {IS_MAIN_WINDOW && <Sidebar onOpenSettings={() => openSettings()} />}
+        <main className="r-main">
+          <MainWall />
+          <Topbar>
+            {view === "code" && <CodeTopbar />}
+            {view === "home" && <HomeTopbar />}
+          </Topbar>
+          <Seal />
 
-          {IS_MAIN_WINDOW && view === "home" && <HomePane onOpenChat={() => setView("code")} />}
-          {IS_MAIN_WINDOW && view === "toolbox" && <ToolboxPage />}
-          {IS_MAIN_WINDOW && view === "docs" && <DocsPage />}
-          {(!IS_MAIN_WINDOW || view === "code") && (
-            <div
-              ref={geometry.bodyRef}
-              className={bodyClass}
-              data-dragging={geometry.dragging || undefined}
-              style={{ "--mc-w": `${geometry.width}px` } as CSSProperties}
-            >
-              <ChatColumn />
-              <MissionControl geometry={geometry} />
-            </div>
+          {view === "home" && <HomeView />}
+          {view === "toolbox" && (
+            <section className="r-view r-legacy">
+              <ToolboxPage />
+            </section>
           )}
-        </div>
+          {view === "docs" && (
+            <section className="r-view r-legacy">
+              <DocsPage />
+            </section>
+          )}
+          {view === "code" && (
+            <section className="r-view r-view-code">
+              <CodeBody>
+                <CodeChat />
+              </CodeBody>
+            </section>
+          )}
+        </main>
       </div>
       <CommandPalette
-        onTogglePanel={geometry.togglePanelCollapsed}
+        onTogglePanel={ws.toggleOpen}
         onOpenSettings={() => openSettings()}
-        onSelectPane={geometry.setActivePaneId}
-        onToggleRail={geometry.toggleRailCollapsed}
+        onSelectPane={(id) => ws.goto(id)}
+        onToggleRail={ws.toggleRail}
       />
       <SettingsModal
         open={settingsOpen}
@@ -120,6 +104,6 @@ export function AppShell() {
         initialPane={settingsTarget?.pane}
         focusProviderId={settingsTarget?.providerId}
       />
-    </div>
+    </>
   );
 }

@@ -1,260 +1,110 @@
-import type { ChangeEntryDTO } from "@rama/protocol";
-import { ChangesTreeNode, useChangesPane } from "./ChangesPaneContext";
+import { Icon } from "@rama/ui";
+import type { IconName } from "@rama/ui";
+import type { ChangeEntryDTO, ChangesDTO } from "@rama/protocol";
+import { Delta, Empty, baseName, dirName } from "../../code/workspace/parts";
+import { useChangesPane } from "./ChangesPaneContext";
 
-// docs/WORKSPACE_PANES_PLAN.md Phase W4 — Changes rail with compact folder tree and 44px collapsed strip.
+// docs/CODE_REDESIGN_PLAN.md CR4 (mock:L1760-1775) — the Changes rail head and rail: a flat list
+// grouped by directory, one `.rrow` per file. Replaces the nested folder tree.
 
-function statusLetter(status: ChangeEntryDTO["status"]): string {
+function iconFor(status: ChangeEntryDTO["status"]): IconName {
   switch (status) {
-    case "modified":
-      return "M";
     case "added":
-      return "A";
-    case "deleted":
-      return "D";
-    case "renamed":
-      return "R";
     case "untracked":
-      return "?";
-    case "conflicted":
-      return "!";
+      return "file-plus";
+    case "deleted":
+      return "x";
+    case "renamed":
+      return "branch";
+    default:
+      return "pencil"; // modified, conflicted
   }
 }
 
-function statusColor(status: ChangeEntryDTO["status"]): string {
-  switch (status) {
-    case "modified":
-    case "renamed":
-      return "var(--accent)";
+function subFor(e: ChangeEntryDTO): string {
+  switch (e.status) {
     case "added":
-      return "var(--good)";
-    case "deleted":
-    case "conflicted":
-      return "var(--bad)";
     case "untracked":
-      return "rgba(var(--ink), 0.45)";
+      return "New file";
+    case "deleted":
+      return "Deleted";
+    case "renamed":
+      return e.origPath ? `Renamed from ${baseName(e.origPath)}` : "Renamed";
+    case "conflicted":
+      return "Conflict";
+    default:
+      return "Edited";
   }
 }
 
-function renderNode(
-  node: ChangesTreeNode,
-  depth: number,
-  activePath: string | null,
-  onSelectFile: (path: string) => void,
-  toggleFolder: (path: string) => void,
-  isFolderCollapsed: (path: string) => boolean,
-) {
-  if (node.kind === "dir") {
-    const collapsed = isFolderCollapsed(node.path);
-    return (
-      <div key={node.path} className="rama-changes-dir-group">
-        <button
-          type="button"
-          className="rama-changes-dir-row"
-          style={{ paddingLeft: depth * 14 + 6 }}
-          onClick={() => toggleFolder(node.path)}
-        >
-          <span className="rama-changes-disclosure">{collapsed ? "▸" : "▾"}</span>
-          <span className="rama-changes-dir-label" title={node.path}>
-            {node.label}
-          </span>
-          <span style={{ flex: 1 }} />
-          {(node.added !== null || node.removed !== null) && (
-            <span className="rama-changes-dir-count">
-              {node.added !== null && <span style={{ color: "var(--good)" }}>+{node.added}</span>}{" "}
-              {node.removed !== null && <span style={{ color: "var(--bad)" }}>−{node.removed}</span>}
-            </span>
-          )}
-        </button>
-        {!collapsed &&
-          node.children.map((child) =>
-            renderNode(child, depth + 1, activePath, onSelectFile, toggleFolder, isFolderCollapsed),
-          )}
-      </div>
-    );
-  }
+/** What the head's grow cell says, and whether it is a warning (mock:L1761). */
+function headline(changes: ChangesDTO): { text: string; bad: boolean } {
+  if (changes.midMerge) return { text: "Merging", bad: true };
+  if (changes.midRebase) return { text: "Rebasing", bad: true };
+  if (changes.detached) return { text: `Detached at ${changes.head ?? "HEAD"}`, bad: true };
+  const n = changes.entries.length;
+  if (n > 0) return { text: n === 1 ? "1 file" : `${n} files`, bad: false };
+  if (changes.ahead > 0) return { text: `${changes.ahead} to push`, bad: false };
+  return { text: "Up to date", bad: false };
+}
 
-  const { entry } = node;
-  const isActive = entry.path === activePath;
-  const glyph = statusLetter(entry.status);
-  const color = statusColor(entry.status);
-  const isRename = entry.status === "renamed";
-  const tooltip = isRename ? `${entry.origPath ?? ""} → ${entry.path}` : entry.path;
-
+export function ChangesRailHead() {
+  const { changes, refresh, loading } = useChangesPane();
+  if (!changes || !changes.isRepo) return <b className="grow">Changes</b>;
+  const { text, bad } = headline(changes);
   return (
-    <button
-      key={entry.path}
-      type="button"
-      className={`rama-changes-row${isActive ? " rama-changes-row-active" : ""}`}
-      style={{ paddingLeft: depth * 14 + 18 }}
-      title={tooltip}
-      onClick={() => onSelectFile(entry.path)}
-    >
-      <div className="rama-changes-row-head">
-        <span className="rama-changes-status-glyph" style={{ color }}>
-          {glyph}
-        </span>
-        <span className="rama-changes-file-name">{node.label}</span>
-      </div>
-      <div className="rama-changes-row-sub">
-        {isRename && entry.origPath ? (
-          <span className="rama-changes-orig-path" title={entry.origPath}>
-            ← {entry.origPath.split("/").pop()}
-          </span>
-        ) : (
-          <span />
-        )}
-        <span style={{ flex: 1 }} />
-        {entry.binary ? (
-          <span className="rama-changes-binary-tag">bin</span>
-        ) : (
-          (entry.added !== null || entry.removed !== null) && (
-            <span className="rama-changes-counts">
-              {entry.added !== null && <span style={{ color: "var(--good)" }}>+{entry.added}</span>}{" "}
-              {entry.removed !== null && <span style={{ color: "var(--bad)" }}>−{entry.removed}</span>}
-            </span>
-          )
-        )}
-      </div>
-    </button>
+    <>
+      <Icon name="branch" />
+      <b>{changes.branch ?? "HEAD"}</b>
+      <span className="grow" style={bad ? { color: "var(--bad)" } : undefined}>
+        {text}
+      </span>
+      <button className="r-icon-btn" title="Refresh" aria-label="Refresh" onClick={refresh} disabled={loading}>
+        <Icon name="retry" />
+      </button>
+    </>
   );
 }
 
 export function ChangesRail({ collapsed }: { collapsed: boolean }) {
-  const { changes, loading, activePath, setActivePath, tree, toggleFolder, isFolderCollapsed } = useChangesPane();
+  const { changes, loading, activePath, setActivePath } = useChangesPane();
 
-  if (collapsed) {
-    if (!changes || changes.entries.length === 0) {
-      return <div className="rama-mc-rail-icons" style={{ width: 44 }} />;
-    }
-    const visibleEntries = changes.entries.slice(0, 12);
-    const overflowCount = changes.entries.length - 12;
+  if (loading && !changes) return collapsed ? null : <Empty compact title="Loading changes…" />;
+  if (!changes || !changes.isRepo) return collapsed ? null : <Empty compact title="Not a repository" />;
+  if (changes.entries.length === 0) return collapsed ? null : <Empty compact title="No changed files" />;
 
-    return (
-      <div className="rama-mc-rail-icons" style={{ width: 44 }}>
-        {visibleEntries.map((e) => {
-          const isActive = e.path === activePath;
-          const glyph = statusLetter(e.status);
-          const color = statusColor(e.status);
-          return (
+  // Group in the order git listed them; a directory's files stay together under one label.
+  const groups = new Map<string, ChangeEntryDTO[]>();
+  for (const e of changes.entries) {
+    const dir = dirName(e.path);
+    const list = groups.get(dir);
+    if (list) list.push(e);
+    else groups.set(dir, [e]);
+  }
+
+  return (
+    <>
+      {[...groups].map(([dir, entries]) => (
+        <div key={dir}>
+          <div className="r-rdir" title={dir || "Project root"}>
+            <span>{dir || "Project root"}</span>
+          </div>
+          {entries.map((e) => (
             <button
               key={e.path}
-              type="button"
-              className={`rama-mc-rail-icon-row${isActive ? " rama-mc-rail-icon-row-active" : ""}`}
-              style={{ color }}
-              title={e.path}
+              className={`r-rrow${e.status === "conflicted" ? " bad" : ""}`}
+              aria-current={e.path === activePath}
+              title={e.status === "renamed" && e.origPath ? `${e.origPath} → ${e.path}` : e.path}
               onClick={() => setActivePath(e.path)}
             >
-              {glyph}
+              <Icon name={iconFor(e.status)} />
+              <span className="t">{baseName(e.path)}</span>
+              <span className="end">{e.binary ? "binary" : <Delta added={e.added} removed={e.removed} />}</span>
+              <span className="sub">{subFor(e)}</span>
             </button>
-          );
-        })}
-        {overflowCount > 0 && (
-          <button
-            type="button"
-            className="rama-mc-rail-icon-row"
-            title={`+${overflowCount} more changed files (click to expand rail)`}
-            onClick={() => window.dispatchEvent(new CustomEvent("rama:mc-expand-rail"))}
-            style={{ fontSize: "var(--fs-micro)" }}
-          >
-            +{overflowCount}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (loading && !changes) {
-    return <div className="rama-mc-coming-soon">loading changes…</div>;
-  }
-
-  if (!changes || !changes.isRepo) {
-    return (
-      <div className="rama-mc-coming-soon">
-        not a git repository — this project directory has no .git
-      </div>
-    );
-  }
-
-  if (changes.entries.length === 0) {
-    return <div className="rama-mc-coming-soon">working tree clean.</div>;
-  }
-
-  return (
-    <div className="rama-changes-tree">
-      {tree.map((node) => renderNode(node, 0, activePath, setActivePath, toggleFolder, isFolderCollapsed))}
-    </div>
-  );
-}
-
-export function ChangesRailActions() {
-  const { changes, refresh, loading } = useChangesPane();
-  if (!changes || !changes.isRepo) return null;
-
-  const branchLabel = changes.detached ? `detached @ ${changes.head ?? ""}` : changes.branch ?? "HEAD";
-  const aheadBehind = [
-    changes.ahead > 0 ? `↑${changes.ahead}` : null,
-    changes.behind > 0 ? `↓${changes.behind}` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span
-        style={{
-          fontSize: "var(--fs-micro)",
-          color: "rgba(var(--ink), 0.6)",
-          maxWidth: 100,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={`Branch: ${branchLabel}`}
-      >
-        {branchLabel}
-      </span>
-      {aheadBehind && (
-        <span style={{ fontSize: "var(--fs-micro)", color: "rgba(var(--ink), 0.4)" }}>
-          {aheadBehind}
-        </span>
-      )}
-      {changes.midMerge && (
-        <span
-          style={{
-            fontSize: "var(--fs-micro)",
-            color: "var(--bad)",
-            background: "rgba(255, 95, 87, 0.1)",
-            padding: "1px 4px",
-            borderRadius: 3,
-          }}
-          title="Repository is currently mid-merge"
-        >
-          ⚠ merging
-        </span>
-      )}
-      {changes.midRebase && (
-        <span
-          style={{
-            fontSize: "var(--fs-micro)",
-            color: "var(--bad)",
-            background: "rgba(255, 95, 87, 0.1)",
-            padding: "1px 4px",
-            borderRadius: 3,
-          }}
-          title="Repository is currently mid-rebase"
-        >
-          ⚠ rebasing
-        </span>
-      )}
-      <button
-        type="button"
-        className="rama-mc-rail-action-btn"
-        title="Refresh changes"
-        onClick={refresh}
-        disabled={loading}
-      >
-        ⟳
-      </button>
-    </div>
+          ))}
+        </div>
+      ))}
+    </>
   );
 }

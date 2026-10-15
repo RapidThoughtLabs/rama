@@ -1,4 +1,5 @@
 import hljs from "highlight.js";
+import "./syntax.css";
 
 const EXT_TO_LANG: Record<string, string> = {
   py: "python",

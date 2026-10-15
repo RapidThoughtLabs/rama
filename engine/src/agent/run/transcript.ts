@@ -6,7 +6,9 @@
 // docs/LOOP_MIGRATION_PLAN.md §5, Decision 4.
 
 import type { MessageDTO } from "@rama/protocol";
+import { listAttachmentsByMessage, type StoredAttachment } from "../../db/attachments";
 import { getLatestCompaction, type CompactionRow } from "../../db/compactions";
+import { imageDataUrl } from "../../files/attachments";
 import { getMessageReasoningSignature, listMessages } from "../../db/messages";
 import { listToolCallsForHistory, type ToolCallHistoryEntry } from "../../db/toolCalls";
 import type { CacheStyle } from "../catalog";
@@ -36,7 +38,14 @@ export interface CompactionFields {
  * docs/LOOP_MIGRATION_PLAN.md §5
  */
 export type TranscriptEntry =
-  | { kind: "user"; id: string; text: string }
+  | {
+      kind: "user";
+      id: string;
+      text: string;
+      /** HOME_REDESIGN_PLAN.md HD7 — attached photos as data URLs, sent as image parts. Only set
+       *  for a model that can see them. */
+      images?: string[];
+    }
   | {
       kind: "assistant";
       id: string;
@@ -143,6 +152,7 @@ export function projectTranscriptEntries(
   messages: readonly MessageDTO[],
   callsByMessage: ReadonlyMap<string, readonly ToolCallHistoryEntry[]>,
   compaction: CompactionRow | null,
+  files?: AttachmentProjection,
 ): TranscriptEntry[] {
   const entries: TranscriptEntry[] = [];
   let summaryInserted = false;
@@ -157,7 +167,19 @@ export function projectTranscriptEntries(
     }
 
     if (m.role === "user") {
-      entries.push({ kind: "user", id: m.id, text: m.content ?? "" });
+      const attached = files?.byMessage.get(m.id);
+      if (!attached?.length) {
+        entries.push({ kind: "user", id: m.id, text: m.content ?? "" });
+        continue;
+      }
+      const images: string[] = [];
+      const lines = attached.map((a) => {
+        const url = a.mime.startsWith("image/") ? files!.imageUrl(a) : null;
+        if (url) images.push(url);
+        return attachmentPointer(a, url !== null);
+      });
+      const text = [m.content ?? "", lines.join("\n")].filter(Boolean).join("\n\n");
+      entries.push({ kind: "user", id: m.id, text, ...(images.length ? { images } : {}) });
       continue;
     }
     if (m.role === "system") {
@@ -221,7 +243,35 @@ export function projectTranscriptEntries(
  * Replaces the toModelMessages() DB query logic.
  * docs/LOOP_MIGRATION_PLAN.md §5; docs/CONTEXT_BUDGET_PLAN.md CB2.
  */
-export function buildTranscriptFromDb(chatId: string): Transcript {
+/** HD7 — what the projection needs to know about a chat's attachments. `imageUrl` returns null
+ *  when the photo can't go to this model (it can't see images, or the file is unreadable). */
+export interface AttachmentProjection {
+  byMessage: ReadonlyMap<string, readonly Pick<StoredAttachment, "name" | "mime" | "size" | "pages" | "path">[]>;
+  imageUrl: (a: Pick<StoredAttachment, "mime" | "path">) => string | null;
+}
+
+/** The line a user turn gains per attached file, so the model knows it's there and where. The
+ *  path is relative to the home project, which is exactly what the read tool takes. */
+export function attachmentPointer(a: Pick<StoredAttachment, "name" | "mime" | "size" | "pages" | "path">, imageSent: boolean): string {
+  if (a.mime.startsWith("image/")) {
+    return imageSent
+      ? `Attached: ${a.name} (photo, included with this message)`
+      : `Attached: ${a.name} (photo). You can't see images with the current model; if the user asks about it, say so and suggest picking a model that can.`;
+  }
+  if (a.mime === "application/pdf") {
+    const pages = a.pages ? `, ${a.pages} page${a.pages === 1 ? "" : "s"}` : "";
+    return `Attached: ${a.name} (PDF${pages}). Read it with read path "${a.path}".`;
+  }
+  return `Attached: ${a.name} (${formatBytes(a.size)}). Read it with read path "${a.path}".`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function buildTranscriptFromDb(chatId: string, opts: { vision?: boolean } = {}): Transcript {
   const callsByMessage = new Map<string, ToolCallHistoryEntry[]>();
   for (const call of listToolCallsForHistory(chatId)) {
     const list = callsByMessage.get(call.messageId) ?? [];
@@ -230,7 +280,11 @@ export function buildTranscriptFromDb(chatId: string): Transcript {
   }
 
   const compaction = getLatestCompaction(chatId);
-  const entries = projectTranscriptEntries(listMessages(chatId), callsByMessage, compaction);
+  const files: AttachmentProjection = {
+    byMessage: listAttachmentsByMessage(chatId),
+    imageUrl: (a) => (opts.vision ? imageDataUrl(a) : null),
+  };
+  const entries = projectTranscriptEntries(listMessages(chatId), callsByMessage, compaction, files);
 
   return {
     entries,
@@ -337,7 +391,13 @@ export function project(t: Transcript, policy: ProjectionPolicy): WireMessage[] 
         if (wire.length > systemCount) {
           previousTurnBoundaryWireIndex = wire.length - 1;
         }
-        wire.push({ role: "user", content: entry.text });
+        // HD7 — a turn with photos goes out as parts: its text, then each image.
+        wire.push({
+          role: "user",
+          content: entry.images?.length
+            ? [{ type: "text", text: entry.text }, ...entry.images.map((url): ContentPart => ({ type: "image_url", image_url: { url } }))]
+            : entry.text,
+        });
         break;
       }
       case "assistant": {

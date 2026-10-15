@@ -66,6 +66,12 @@ pub async fn pop_out_chat(app: AppHandle, chat_id: String, from_label: String) -
     // native OS titlebar or unpadded traffic lights — tauri.conf.json's window config only seeds
     // the initial `main` window, so a dynamically built window like this one has to opt back in
     // explicitly. Keep the x/y here in sync with tauri.conf.json's `trafficLightPosition`.
+    //
+    // HOME_REDESIGN_PLAN.md Phase HD1: (17, 28) centres the close button on the mockup's first
+    // drawn light, (24, 26) inside the sidebar's 52px top row. tao grows the title-bar container
+    // to `buttonHeight + y` and AppKit centres the 14pt buttons in it, so the button's top edge is
+    // y - 9 (measured on macOS 26). Native buttons sit 23pt apart, not the mockup's 20, so only
+    // the first one lines up exactly; the diff masks the whole cluster (§5).
     let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
         .title("rama")
         .inner_size(1440.0, 900.0)
@@ -75,7 +81,7 @@ pub async fn pop_out_chat(app: AppHandle, chat_id: String, from_label: String) -
         builder = builder
             .title_bar_style(TitleBarStyle::Overlay)
             .hidden_title(true)
-            .traffic_light_position(LogicalPosition::new(16.0, 25.0));
+            .traffic_light_position(LogicalPosition::new(17.0, 28.0));
     }
     let window = builder.build().map_err(|e| e.to_string())?;
 

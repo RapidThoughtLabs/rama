@@ -1,6 +1,7 @@
 {
   "id": "matsu",
   "label": "Matsu",
+  "kanji": "松",
   "family": "green",
   "mode": "dark",
   "ground": "#131e18",
@@ -9,5 +10,5 @@
   "accent": "#8fae91",
   "semantic": { "good": "#7fb8d9" },
   "texture": { "grain": 0.28, "vignette": 0.58 },
-  "wallpaper": { "image": "/wallpapers/sansui-green.jpg", "veil": 0.80, "fit": "100% auto", "position": "center 30%" }
+  "wallpaper": { "image": "/wallpapers/sansui-green.jpg", "css": "linear-gradient(180deg, #3a4a3e 0%, #1b2820 40%, #131e18 100%)", "veil": 0.80, "fit": "100% auto", "position": "center 30%" }
 }

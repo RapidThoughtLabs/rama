@@ -9,12 +9,14 @@ CREATE TABLE IF NOT EXISTS projects (
   repo_url TEXT,
   default_branch TEXT,
   settings_json TEXT NOT NULL DEFAULT '{}',
+  is_system INTEGER NOT NULL DEFAULT 0, -- HOME_REDESIGN_PLAN.md Decision D3: the hidden "home" project; listProjects never returns it
   created_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS chats (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL REFERENCES projects(id),
+  kind TEXT NOT NULL DEFAULT 'code', -- HOME_REDESIGN_PLAN.md Phase HD3: 'home' | 'code'
   title TEXT NOT NULL,
   backend_json TEXT NOT NULL DEFAULT '{}',
   settings_json TEXT NOT NULL DEFAULT '{}', -- docs/COMPOSER_CONTEXT_PLAN.md Phase CC1/CC2: extraRoots + worktree state, mirrors projects.settings_json
@@ -23,7 +25,7 @@ CREATE TABLE IF NOT EXISTS chats (
   mode TEXT NOT NULL DEFAULT 'agent',
   agent_id TEXT NOT NULL DEFAULT 'default', -- docs/PROMPT_STACK_PLAN.md Phase PS4 — engine/src/agent/agents/discover.ts's DEFAULT_AGENT_NAME
   wallpaper TEXT NOT NULL DEFAULT 'indigo', -- dead: SETTINGS_PLAN.md Phase S0, wallpaper moved into the theme record
-  theme_id TEXT NOT NULL DEFAULT 'kanagawa',
+  theme_id TEXT NOT NULL DEFAULT 'kanagawa', -- dead: HOME_REDESIGN_PLAN.md Decision D1, the theme is app-wide
   accent TEXT NOT NULL DEFAULT 'plasma', -- dead: superseded by theme_id (docs/REDESIGN_PLAN.md Phase R0)
   theme TEXT NOT NULL DEFAULT 'dark', -- dead: superseded by theme_id (docs/REDESIGN_PLAN.md Phase R0)
   status TEXT NOT NULL DEFAULT 'idle',
@@ -250,4 +252,21 @@ CREATE TABLE IF NOT EXISTS compactions (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_compactions_chat ON compactions(chat_id, boundary_seq);
+
+-- HOME_REDESIGN_PLAN.md Phase HD7 — files attached to a Home turn. An upload lands with
+-- message_id NULL and is linked when the turn that carries it is recorded (runTurn). path is
+-- relative to the home project (attachments/<chatId>/<id>/<name>), so it's exactly what the read
+-- tool takes; a PDF also gets a <name>.txt sidecar there with its extracted text.
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES chats(id),
+  message_id TEXT REFERENCES messages(id),
+  name TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  pages INTEGER,
+  path TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_chat ON message_attachments(chat_id, message_id);
 `;

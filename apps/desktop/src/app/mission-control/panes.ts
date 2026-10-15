@@ -6,17 +6,17 @@ import { fetchChanges } from "../../engine/client";
 import { onProjectEvent } from "../../engine/ws";
 import { useProjectsData } from "../data/ProjectsProvider";
 import { ChangesPaneProvider } from "./panes/ChangesPaneContext";
-import { ChangesRail, ChangesRailActions } from "./panes/ChangesRail";
-import { ChangesStage } from "./panes/ChangesStage";
+import { ChangesRail, ChangesRailHead } from "./panes/ChangesRail";
+import { ChangesStage, ChangesStageBar } from "./panes/ChangesStage";
 import { TerminalPaneProvider } from "./panes/TerminalPaneContext";
-import { TerminalRail, TerminalRailActions } from "./panes/TerminalRail";
-import { TerminalStage } from "./panes/TerminalStage";
+import { TerminalRail, TerminalRailHead } from "./panes/TerminalRail";
+import { TerminalStage, TerminalStageBar } from "./panes/TerminalStage";
 import { WebPaneProvider } from "./panes/WebPaneContext";
-import { WebRail, WebRailActions } from "./panes/WebRail";
-import { WebStage } from "./panes/WebStage";
+import { WebRail, WebRailHead } from "./panes/WebRail";
+import { WebStage, WebStageBar } from "./panes/WebStage";
 import { FilesPaneProvider } from "./panes/FilesPaneContext";
-import { FilesRail, FilesRailActions } from "./panes/FilesRail";
-import { FilesStage } from "./panes/FilesStage";
+import { FilesRail, FilesRailHead } from "./panes/FilesRail";
+import { FilesStage, FilesStageBar } from "./panes/FilesStage";
 
 // docs/WORKSPACE_PANES_PLAN.md §3 — 4 panes: Changes · Terminal · Web · Files.
 export type MissionControlPaneId = "changes" | "terminal" | "web" | "files";
@@ -33,12 +33,15 @@ export interface MissionControlPane {
   /** What the pane's contents belong to — drives what a chat switch clears (§3.3). */
   scope: "chat" | "project";
   useBadge: () => MissionControlBadge | null;
-  /** The rail body (index). Called with `collapsed: true` for the 44px icon strip. */
+  /** The rail head's own content (icon, title, actions); the workspace appends the collapse toggle.
+   *  CR4: one cell of the 42px band row (mock:L1761-1798). */
+  RailHead: FC;
+  /** The rail body (index). Called with `collapsed: true` for the 48px icon column. */
   Rail: FC<{ collapsed: boolean }>;
-  /** The stage (content) — owns its own toolbar, matching the rail header's 36px band (§4.1). */
+  /** The stage bar's content — the other cell of the band row, left of the rail head. */
+  StageBar: FC;
+  /** The stage (content) under the bar. */
   Stage: FC;
-  /** Rendered right-aligned in the rail header, e.g. Terminal's `+` (§4.6). */
-  RailActions?: FC;
   /** Wraps Rail + Stage while this pane is active, for pane-local shared state. */
   Provider?: FC<{ children: ReactNode }>;
   disabled?: boolean;
@@ -106,9 +109,10 @@ export const MISSION_CONTROL_PANES: MissionControlPane[] = [
     Icon: IconChanges,
     scope: "project",
     useBadge: useChangesBadge,
+    RailHead: ChangesRailHead,
     Rail: ChangesRail,
+    StageBar: ChangesStageBar,
     Stage: ChangesStage,
-    RailActions: ChangesRailActions,
     Provider: ChangesPaneProvider,
   },
   {
@@ -117,9 +121,10 @@ export const MISSION_CONTROL_PANES: MissionControlPane[] = [
     Icon: IconTerminal,
     scope: "project",
     useBadge: useNullBadge,
+    RailHead: TerminalRailHead,
     Rail: TerminalRail,
+    StageBar: TerminalStageBar,
     Stage: TerminalStage,
-    RailActions: TerminalRailActions,
     Provider: TerminalPaneProvider,
   },
   {
@@ -128,9 +133,10 @@ export const MISSION_CONTROL_PANES: MissionControlPane[] = [
     Icon: IconWeb,
     scope: "project",
     useBadge: useNullBadge,
+    RailHead: WebRailHead,
     Rail: WebRail,
+    StageBar: WebStageBar,
     Stage: WebStage,
-    RailActions: WebRailActions,
     Provider: WebPaneProvider,
   },
   {
@@ -139,9 +145,10 @@ export const MISSION_CONTROL_PANES: MissionControlPane[] = [
     Icon: IconFiles,
     scope: "project",
     useBadge: useNullBadge,
+    RailHead: FilesRailHead,
     Rail: FilesRail,
+    StageBar: FilesStageBar,
     Stage: FilesStage,
-    RailActions: FilesRailActions,
     Provider: FilesPaneProvider,
   },
 ];

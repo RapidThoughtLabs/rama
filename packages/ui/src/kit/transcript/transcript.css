@@ -1,0 +1,134 @@
+/* Kit transcript — HOME_REDESIGN_PLAN.md Phase HD6 (mock:L282-360, 463). Mockup CSS ported verbatim
+   apart from the r- prefix on component classes (inner modifiers like .dot, .meta, .by, .subj and
+   .num keep their mockup names) and the kit token names (--fs-* → --k-*, --scale → --font-scale).
+   Shared with the Code plan (§3): its own transcript blocks sit inside the same .r-transcript. */
+
+/* ═══ Frame (mock:L282-284) ═══ */
+.r-scroller { flex: 1; min-height: 0; overflow-y: auto; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 18px, #000 calc(100% - 28px), transparent); }
+.r-transcript { width: min(720px, 100%); margin: 0 auto; padding: 40px 24px 40px; display: flex; flex-direction: column; gap: 30px; }
+.r-dock { width: min(720px, 100%); margin: 0 auto; padding: 0 24px 16px; flex-shrink: 0; }
+
+/* ═══ User turn (mock:L287-301) ═══ */
+.r-turn-user { align-self: flex-end; max-width: min(82%, 580px); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.r-bubble {
+  background: var(--bubble); color: var(--ink-1);
+  padding: 10px 16px; border-radius: 18px 18px 6px 18px;
+  font-size: calc(15.5px * var(--font-scale)); line-height: 1.55;
+  transition: background-color .35s;
+  /* Not in the mockup (its bubbles are one line of HTML): what the user typed, newlines kept. */
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.r-attach {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px 7px 7px; border-radius: 12px;
+  background: var(--raised); border: 1px solid var(--line);
+}
+.r-attach-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--selected); color: var(--accent); display: grid; place-items: center; }
+.r-attach b { display: block; font-size: var(--k-sm); font-weight: 500; color: var(--ink-1); line-height: 1.3; }
+.r-attach small { font-size: var(--k-xs); color: var(--ink-4); }
+/* Not in the mockup (HD7): a file waiting in the composer, with a ✕ to take it off. */
+.r-attach.removable { padding-right: 6px; min-width: 0; max-width: 260px; }
+.r-attach.removable > span:not(.r-attach-icon) { min-width: 0; }
+.r-attach.removable b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-attach-x { flex-shrink: 0; width: 24px; height: 24px; margin-left: 2px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-4); transition: background-color .15s, color .15s; }
+.r-attach-x:hover { background: var(--hover); color: var(--ink-1); }
+.r-attach-x svg { width: 12px; height: 12px; }
+
+/* ═══ AI turn: activity rows (mock:L303-319) ═══ */
+.r-turn-ai { display: flex; flex-direction: column; }
+.r-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: -4px 0 12px -6px; }
+.r-act-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 8px 4px 5px; border-radius: 8px;
+  font-size: var(--k-sm); color: var(--ink-3);
+}
+.r-act-btn:hover { background: var(--hover); color: var(--ink-1); }
+.r-act-btn .dot { width: 22px; height: 22px; border-radius: 6px; background: var(--well); display: grid; place-items: center; color: var(--ink-3); }
+.r-act-btn .dot svg { width: 13px; height: 13px; }
+.r-act-btn .meta { color: var(--ink-4); }
+.r-act-btn .meta.bad { color: var(--bad); }
+.r-act-btn svg.chev { width: 13px; height: 13px; color: var(--ink-4); transition: transform .2s; }
+.r-act-btn[aria-expanded="true"] svg.chev { transform: rotate(90deg); }
+.r-act-body { margin: 4px 0 8px 16px; padding: 2px 0 2px 18px; border-left: 1.5px solid var(--line-2); font-size: var(--k-sm); color: var(--ink-3); max-width: 60ch; }
+.r-act-body ol { margin: 0; padding-left: 1.2em; }
+.r-act-body li { margin: 3px 0; }
+.r-act-body li span { color: var(--ink-4); }
+/* Not in the mockup (its bodies are inline-styled): a thinking trace keeps its line breaks. */
+.r-act-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* mock:L407-408 — written in the mockup's Code section but global, so Home's turns get them too.
+   The .card/.plan/.ask + .acts variants are Code blocks and stay with the Code plan. */
+.r-turn-ai > .r-acts + .r-prose, .r-turn-ai > .r-prose + .r-acts { margin-top: 6px; }
+.r-turn-ai > .r-prose { margin-bottom: 4px; }
+
+/* ═══ Prose (mock:L321-335) ═══ */
+.r-prose { font-family: var(--f-read); font-size: var(--k-read); line-height: 1.65; color: var(--ink-2); max-width: 66ch; }
+:root[data-reading="sans"] .r-prose { font-family: var(--f-ui); font-size: calc(16px * var(--font-scale)); line-height: 1.6; }
+.r-prose > :first-child { margin-top: 0; }
+.r-prose p { margin: 0 0 .8em; }
+.r-prose strong { font-weight: 600; color: var(--ink-1); }
+.r-prose em { font-style: italic; }
+.r-prose ul { margin: .2em 0 .9em; padding-left: 1.25em; }
+.r-prose li { margin: .4em 0; padding-left: .2em; }
+.r-prose li::marker { color: var(--accent); }
+.r-prose code { font-family: var(--f-code); font-size: .82em; background: var(--well); padding: .12em .4em; border-radius: 5px; color: var(--ink-1); }
+.r-prose table { width: 100%; border-collapse: collapse; margin: .4em 0 1.1em; font-family: var(--f-ui); font-size: var(--k-sm); line-height: 1.45; }
+.r-prose th { text-align: left; font-weight: 500; color: var(--ink-3); padding: 0 14px 8px 0; border-bottom: 1px solid var(--line-2); }
+.r-prose td { padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-2); }
+.r-prose td.num, .r-prose th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.r-prose tr:last-child td { border-bottom: 0; }
+/* Not in the mockup, which never shows them: the rest of what markdown can produce, kept quiet. */
+.r-prose ol { margin: .2em 0 .9em; padding-left: 1.5em; }
+.r-prose ol li::marker { color: var(--ink-3); }
+.r-prose h3, .r-prose h4 { font-family: var(--f-ui); color: var(--ink-1); margin: 1.1em 0 .5em; line-height: 1.35; }
+.r-prose h3 { font-size: var(--k-md); font-weight: 600; }
+.r-prose h4 { font-size: var(--k-sm); font-weight: 600; }
+.r-prose blockquote { margin: 0 0 .8em; padding-left: 14px; border-left: 2px solid var(--line-2); color: var(--ink-3); }
+.r-prose hr { border: 0; height: 1px; background: var(--line); margin: 1.2em 0; }
+.r-prose a { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--accent) 40%, transparent); text-underline-offset: 2px; }
+.r-prose .r-table-wrap { overflow-x: auto; }
+
+/* ═══ Cards (mock:L337-350) ═══ */
+.r-card { margin: .3em 0 1em; border-radius: 14px; background: var(--raised); border: 1px solid var(--line); overflow: hidden; }
+.r-card-head { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px 7px 16px; border-bottom: 1px solid var(--line); font-family: var(--f-ui); font-size: var(--k-xs); font-weight: 500; color: var(--ink-3); }
+.r-draft-body { padding: 14px 18px 4px; font-size: .94em; }
+.r-draft-body p { margin: 0 0 .7em; }
+.r-draft-body .subj { font-family: var(--f-ui); font-size: var(--k-sm); color: var(--ink-3); }
+.r-draft-body .subj b { color: var(--ink-1); font-weight: 500; }
+.r-code-card { background: var(--well); border-color: transparent; }
+.r-code-card .r-card-head { border-color: var(--line); }
+.r-code-card pre { margin: 0; padding: 14px 16px 16px; overflow-x: auto; font-family: var(--f-code); font-size: calc(13.5px * var(--font-scale)); line-height: 1.6; color: var(--ink-1); }
+/* As in the mockup, .r-prose code also styles the card's <code> (the .82em chip inside the pre),
+   kept for parity. Its background is the card's own --well, so it doesn't show; its side padding
+   would, since by default only the first line gets it and indents 0.4em past the rest. Cloning
+   the decoration per line keeps every line aligned, and a one-line card renders as before. */
+.r-code-card pre code { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.tok-fn { color: var(--accent); font-weight: 500; }
+.tok-ref { color: var(--ink-3); }
+
+/* highlight.js classes recoloured to the mockup's roles (mock:L349-350, 481-484). Scoped under the
+   card so it outranks the legacy global .hljs-* rules (mission-control/panes/syntax.css). */
+.r-code-card pre [class*="hljs-"] { color: inherit; font-weight: inherit; font-style: normal; background: none; }
+.r-code-card pre .hljs-keyword, .r-code-card pre .hljs-literal, .r-code-card pre .hljs-selector-tag, .r-code-card pre .hljs-meta { color: var(--accent); }
+.r-code-card pre .hljs-title.function_, .r-code-card pre .hljs-built_in { color: var(--accent); font-weight: 500; }
+.r-code-card pre .hljs-string, .r-code-card pre .hljs-regexp, .r-code-card pre .hljs-template-variable, .r-code-card pre .hljs-attribute { color: color-mix(in oklab, var(--good) 75%, var(--ink-1)); }
+.r-code-card pre .hljs-comment, .r-code-card pre .hljs-quote, .r-code-card pre .hljs-doctag { color: var(--ink-4); font-style: italic; }
+.r-code-card pre .hljs-number { color: var(--warn); }
+.r-code-card pre .hljs-variable, .r-code-card pre .hljs-symbol, .r-code-card pre .hljs-params, .r-code-card pre .hljs-attr { color: var(--ink-3); }
+
+/* ═══ Turn actions (mock:L352-356) ═══ */
+.r-turn-actions { display: flex; align-items: center; gap: 2px; margin: 2px 0 0 -7px; opacity: 0; transition: opacity .15s; }
+.r-turn-ai:hover .r-turn-actions, .r-turn-ai:last-child .r-turn-actions, .r-turn-actions:focus-within { opacity: 1; }
+.r-turn-actions .r-icon-btn { width: 28px; height: 28px; color: var(--ink-4); }
+.r-turn-actions .r-icon-btn:hover { color: var(--ink-1); }
+.r-turn-actions .by { margin-left: 8px; font-size: var(--k-xs); color: var(--ink-4); }
+
+/* ═══ Working line (mock:L358-360) ═══ */
+.r-working { display: inline-flex; align-items: center; gap: 10px; font-size: var(--k-sm); color: var(--ink-3); }
+.r-working svg { width: 22px; height: 19px; color: var(--accent); animation: r-bob 1.4s ease-in-out infinite; }
+@keyframes r-bob { 0%, 100% { transform: translateY(1px) rotate(-4deg); } 50% { transform: translateY(-2px) rotate(4deg); } }
+
+/* ═══ Notice (mock:L463) ═══ */
+.r-notice { align-self: center; font-size: var(--k-xs); color: var(--ink-4); padding: 0 12px; text-align: center; }
+/* Not in the mockup: a failed run's notice carries a Try again button on the same line. */
+.r-notice .r-mini { margin-left: 6px; vertical-align: middle; }

@@ -9,7 +9,7 @@ import { ModelListSection } from "./ProvidersSettingsPane";
 // fast-add can't serve, a provider Rama has never heard of. Inline in the pane, never a nested
 // modal (Modal.tsx doesn't stack). Two hosts render this: ProvidersSettingsPane's "+ custom
 // provider" tile (skips straight to `credentials` in custom mode — the choice is already implicit
-// in which tile was clicked) and ChatColumn's first-run welcome screen (starts at `choose`, since
+// in which tile was clicked) and the Code landing's no-provider card (starts at `choose`, since
 // there's no existing tile grid to have already chosen from).
 
 type WizardStep = "choose" | "credentials" | "verify" | "models" | "finish";
