@@ -2,6 +2,7 @@ import { MainWall } from "@rama/ui";
 import { Seal } from "./shell/Seal";
 import { Sidebar } from "./shell/Sidebar";
 import { Topbar } from "./shell/Topbar";
+import { WindowControls } from "./shell/WindowControls";
 import { CodeTopbar } from "./code/CodeTopbar";
 import { CodeBody } from "./code/workspace/CodeBody";
 import { WorkspaceProvider, useWorkspace } from "./code/workspace/WorkspaceContext";
@@ -11,11 +12,11 @@ import { DocsPage } from "./DocsPage";
 import { HomeTopbar, HomeView } from "./home/HomeView";
 import { AgentTerminalBridge } from "./mission-control/AgentTerminalBridge";
 import { AgentWebBridge } from "./mission-control/AgentWebBridge";
-import { SettingsModal } from "./SettingsModal";
+import { SettingsModal } from "./settings/SettingsModal";
 import { ToolboxPage } from "./ToolboxPage";
 import { useNavigation } from "./data/NavigationProvider";
 import { useSettingsLink } from "./data/SettingsLinkContext";
-import { WINDOW_LABEL } from "../engine/window";
+import { IS_WINDOWS, WINDOW_LABEL } from "../engine/window";
 import "./app-shell.css";
 import "./shell/shell.css";
 
@@ -51,8 +52,8 @@ function AppShellBody() {
 
   // HOME_REDESIGN_PLAN.md Phase HD1 — the mockup's shell (mock:L96-199): `.r-app` holds the
   // sidebar and `.r-main`, which carries the wallpaper, the top bar, the seal and the active view.
-  // Screens not yet restyled render as `.r-legacy` islands inside `.r-view`. The palette and the
-  // settings modal stay outside `.r-app` — they're position: fixed and still legacy-styled.
+  // Screens not yet restyled render as `.r-legacy` islands inside `.r-view`. The palette stays
+  // outside `.r-app` (position: fixed, still legacy-styled); the settings modal portals itself in.
   return (
     <>
       <div
@@ -60,6 +61,7 @@ function AppShellBody() {
         data-screen-label="rama app"
         data-sb={IS_MAIN_WINDOW && nav.sidebarOpen ? "open" : "closed"}
         data-window={IS_MAIN_WINDOW ? "main" : "secondary"}
+        data-os={IS_WINDOWS ? "windows" : undefined}
       >
         <AgentTerminalBridge />
         <AgentWebBridge />
@@ -71,6 +73,7 @@ function AppShellBody() {
             {view === "home" && <HomeTopbar />}
           </Topbar>
           <Seal />
+          {IS_WINDOWS && <WindowControls />}
 
           {view === "home" && <HomeView />}
           {view === "toolbox" && (
@@ -98,12 +101,7 @@ function AppShellBody() {
         onSelectPane={(id) => ws.goto(id)}
         onToggleRail={ws.toggleRail}
       />
-      <SettingsModal
-        open={settingsOpen}
-        onClose={closeSettings}
-        initialPane={settingsTarget?.pane}
-        focusProviderId={settingsTarget?.providerId}
-      />
+      <SettingsModal open={settingsOpen} onClose={closeSettings} target={settingsTarget} />
     </>
   );
 }

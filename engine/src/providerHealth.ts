@@ -52,7 +52,10 @@ export async function checkProviderHealth(providerId: string): Promise<ProviderH
     return { providerId, status: "no-key", latencyMs: null, error: null, checkedAt };
   }
 
-  const url = providerRow.kind === "anthropic" ? "https://api.anthropic.com/v1/models" : `${providerRow.base_url}/models`;
+  // Anthropic-spec base URLs are stored without /v1 (see db/providers.ts's normalizeBaseUrl); a
+  // null one is the catalog's native Anthropic entry.
+  const anthropicBase = (providerRow.base_url || "https://api.anthropic.com").replace(/\/+$/, "");
+  const url = providerRow.kind === "anthropic" ? `${anthropicBase}/v1/models` : `${providerRow.base_url}/models`;
   // docs/PROVIDERS_PLAN.md Phase P5 — "Bearer, or a named header" is real now that a custom
   // provider can pick "header" (see configureCustomProvider); before this the auth_style/
   // auth_header columns P3 added were written but nothing ever read them for an actual request.
@@ -78,6 +81,14 @@ export async function checkProviderHealth(providerId: string): Promise<ProviderH
   try {
     const res = await fetch(url, { headers, signal: controller.signal });
     const latencyMs = Date.now() - started;
+    // Anthropic-compatible gateways often implement /v1/messages and nothing else. A 404 on the
+    // model list still proves the host answered, and without this the provider would be hidden
+    // from the model menu forever (unreachable providers are hidden, PROVIDERS_PLAN P1). Its
+    // models are added by id in Settings › Models instead.
+    if (res.status === 404 && providerRow.kind === "anthropic") {
+      updateProviderHealthStatus(providerId, "ok", checkedAt);
+      return { providerId, status: "ok", latencyMs, error: null, checkedAt };
+    }
     if (!res.ok) {
       updateProviderHealthStatus(providerId, "bad", checkedAt);
       return { providerId, status: "bad", latencyMs, error: `HTTP ${res.status}`, checkedAt };

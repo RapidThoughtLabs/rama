@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { ProjectDTO } from "@rama/protocol";
 import { Icon, Popover } from "@rama/ui";
 import { baseName, tildePath } from "../workspace/parts";
+import { pickFolder } from "./pickFolder";
 import type { ComposerContext } from "./useComposerContext";
 
 /* The chip row above the Code composer — docs/CODE_REDESIGN_PLAN.md CR5 (mock:L398, 1551-1556).
@@ -34,6 +35,16 @@ export function ContextChips({
   const [addOpen, setAddOpen] = useState(false);
   const [path, setPath] = useState("");
   const { branch, worktreeOn, extraFolders } = context;
+
+  // The OS file explorer first; the typed-path popover is only the fallback where there is none.
+  async function chooseFolder() {
+    try {
+      const picked = await pickFolder("Add a folder as read-only context", project?.path);
+      if (picked) context.addFolder(picked);
+    } catch {
+      setAddOpen(true);
+    }
+  }
 
   function submitFolder() {
     context.addFolder(path);
@@ -88,10 +99,8 @@ export function ContextChips({
           ref={addRef}
           type="button"
           className="r-chip"
-          aria-haspopup="dialog"
-          aria-expanded={addOpen}
           title="Add a read-only folder as context"
-          onClick={() => setAddOpen((v) => !v)}
+          onClick={() => void chooseFolder()}
         >
           <Icon name="plus" />
           Add folder

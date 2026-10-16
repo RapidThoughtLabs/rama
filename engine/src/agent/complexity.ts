@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { complete } from "../llm/complete";
 import { recordUtilityUsage } from "../db/chats";
-import { getProvider } from "../db/providers";
+import { getProvider, providerRequiresKey } from "../db/providers";
 import { getSecret } from "../secrets";
 import { estimateCostUsd } from "./config";
 import { getUtilityTarget } from "./utility";
@@ -84,7 +84,7 @@ async function classifyByModel(chatId: string, text: string): Promise<TaskComple
 
   const providerRow = getProvider(target.providerId);
   const apiKey = getSecret(target.providerId);
-  if (!providerRow || (!apiKey && target.providerId !== "ollama")) return "normal";
+  if (!providerRow || (!apiKey && providerRequiresKey(target.providerId))) return "normal";
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLASSIFY_TIMEOUT_MS);

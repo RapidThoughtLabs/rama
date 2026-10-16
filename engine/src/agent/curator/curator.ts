@@ -9,7 +9,7 @@ import { complete } from "../../llm/complete";
 import { recordUtilityUsage } from "../../db/chats";
 import { createProposal, listDedupeKeys, type ProposalEvidence } from "../../db/curationProposals";
 import { listMessagesForProject } from "../../db/messages";
-import { getProvider } from "../../db/providers";
+import { getProvider, providerRequiresKey } from "../../db/providers";
 import { listToolCallsForProject } from "../../db/toolCalls";
 import { getSecret } from "../../secrets";
 import { estimateCostUsd } from "../config";
@@ -49,7 +49,7 @@ async function phraseEvidence(chatId: string | null, items: EvidenceItem[]): Pro
 
   const providerRow = getProvider(target.providerId);
   const apiKey = getSecret(target.providerId);
-  if (!providerRow || (!apiKey && target.providerId !== "ollama")) return new Map();
+  if (!providerRow || (!apiKey && providerRequiresKey(target.providerId))) return new Map();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CURATOR_TIMEOUT_MS);

@@ -654,3 +654,33 @@ exists before Rama ships a release.
 - **Per-project model defaults** (open question A).
 - **Local model management** — pulling/removing Ollama models from inside Rama.
   Rama reads Ollama's roster; it does not manage it.
+
+## Status 2026-10-15: Settings split into Providers and Models
+
+The P4 pane and the P5 wizard are replaced, together with the rest of the settings modal, by a
+kit-styled rebuild in `apps/desktop/src/app/settings/` (old `SettingsModal.tsx`,
+`ProvidersSettingsPane.tsx` and `ProviderSetupWizard.tsx` are deleted).
+
+- **Providers** has no catalog tiles. Every provider is added the same way: API format
+  (OpenAI-compatible or Claude-compatible), base URL, optional key; "how the key is sent"
+  (Bearer or a named header) sits under a disclosure for the OpenAI format only. The form checks
+  the endpoint and hands over to Models. Rows open into name, base URL, key, health and Remove.
+- **Models** is the shortlist across every provider ("In your menu", grouped by provider), an
+  "Add models" list per provider (search, chat-models-only filter, dated snapshots folded, add by
+  ID), and the chat/utility role defaults, which moved here from General.
+- Home's "Choose a model" and the Code landing's no-provider card open Settings (the add form when
+  there's no provider, Models otherwise) instead of embedding the wizard.
+
+Engine changes that make this hold up without the tiles:
+
+- `POST /providers/custom` takes `kind`. A typed endpoint that matches a catalog entry (same
+  format, same normalized base URL) gets that catalog id while it's free
+  (`catalogIdForEndpoint`), so catalog pricing, cache policy and the utility-model hint, all
+  keyed by id, still apply. Anthropic-format URLs are stored without `/v1`.
+- The Anthropic health probe uses the row's base URL (it was hard-coded to api.anthropic.com),
+  and treats a 404 on `/v1/models` as reachable: gateways often implement only `/v1/messages`,
+  and an unreachable provider is hidden from the picker (P1).
+- A provider now starts with nothing ticked, so the role defaults (`maybeDefault*Role`) also run
+  when a model is enabled or added. "Add by ID" on an id the roster already has enables it.
+- Titling, complexity, instructions-init and the curator checked `providerId !== "ollama"` to
+  allow keyless calls; they use `providerRequiresKey()` now, so any keyless local server works.

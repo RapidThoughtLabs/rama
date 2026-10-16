@@ -9,6 +9,7 @@ import "./code.css";
 import { useNavigation } from "../data/NavigationProvider";
 import { useProjectsData } from "../data/ProjectsProvider";
 import { useWindowTabsData } from "../data/WindowTabsProvider";
+import { pickFolder } from "./composer/pickFolder";
 import { useOpenChat } from "./useOpenChat";
 
 /* Code's sidebar list (mock:L146-156, 495-499, 1522-1527) — HOME_REDESIGN_PLAN.md Phase HD1 split
@@ -165,6 +166,17 @@ export function CodeChatList({ query }: { query: string }) {
     }
   }
 
+  async function browseForProject() {
+    try {
+      const picked = await pickFolder("Choose a project folder", path || undefined);
+      if (!picked) return;
+      setPath(picked);
+      setName((prev) => prev.trim() || picked.split("/").filter(Boolean).pop() || "");
+    } catch {
+      // No native dialog here; the path stays typed.
+    }
+  }
+
   function openAddProjectModal() {
     setModalOpen(true);
     // docs/REDESIGN_PLAN.md Phase R4 — General pane's "default project directory". Only
@@ -179,12 +191,33 @@ export function CodeChatList({ query }: { query: string }) {
     }
   }
 
+  // Adding a project starts in the OS folder picker: the folder chosen is the project, named after
+  // it. The typed name/path modal is only the fallback where there is no native dialog.
+  async function startAddProject() {
+    let picked: string | null;
+    try {
+      const defaultDir = await fetchGeneralSettings()
+        .then((s) => s.defaultProjectDir || undefined)
+        .catch(() => undefined);
+      picked = await pickFolder("Choose a project folder", defaultDir);
+    } catch {
+      openAddProjectModal();
+      return;
+    }
+    if (!picked) return;
+    try {
+      await addProject({ name: picked.split("/").filter(Boolean).pop() || picked, path: picked });
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : String(err), "bad");
+    }
+  }
+
   // docs/COMPOSER_CONTEXT_PLAN.md CC0 — the composer's folder pill (CodeComposer.tsx) opens this
-  // same modal rather than forking its own add-project flow. Mirrored into a ref so the
+  // same flow rather than forking its own add-project flow. Mirrored into a ref so the
   // mount-only listener always calls the latest closure (same pattern as CodeChat.tsx's
   // runCommandRef).
-  const openAddProjectModalRef = useRef(openAddProjectModal);
-  openAddProjectModalRef.current = openAddProjectModal;
+  const openAddProjectModalRef = useRef(startAddProject);
+  openAddProjectModalRef.current = startAddProject;
 
   useEffect(() => {
     function onOpen() {
@@ -287,7 +320,7 @@ export function CodeChatList({ query }: { query: string }) {
 
       {/* Not in the mockup (§9): the only sidebar entry point for adding a project. Masked in parity. */}
       {!loading && (
-        <button className="r-add-project" data-pixel-mask onClick={openAddProjectModal}>
+        <button className="r-add-project" data-pixel-mask onClick={() => void startAddProject()}>
           <Icon name="plus" />
           Add project
         </button>
@@ -340,7 +373,12 @@ export function CodeChatList({ query }: { query: string }) {
       <Modal open={modalOpen} title="Add project" onClose={() => setModalOpen(false)}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Input placeholder="name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          <Input placeholder="path (e.g. ~/dev/my-project)" value={path} onChange={(e) => setPath(e.target.value)} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input style={{ flex: 1 }} placeholder="path (e.g. ~/dev/my-project)" value={path} onChange={(e) => setPath(e.target.value)} />
+            <Button variant="ghost" size="sm" onClick={() => void browseForProject()}>
+              browse…
+            </Button>
+          </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <Button variant="ghost" size="sm" onClick={() => setModalOpen(false)}>
               cancel

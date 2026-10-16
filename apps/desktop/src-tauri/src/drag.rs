@@ -83,6 +83,13 @@ pub async fn pop_out_chat(app: AppHandle, chat_id: String, from_label: String) -
             .hidden_title(true)
             .traffic_light_position(LogicalPosition::new(17.0, 28.0));
     }
+    // Windows has no overlay title bar, so it goes frameless (tauri.windows.conf.json does the same
+    // for `main`) and the app draws its own caption buttons (app/shell/WindowControls.tsx). That
+    // file replaces the whole `windows` array on Windows, so a size change here goes there too.
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.decorations(false);
+    }
     let window = builder.build().map_err(|e| e.to_string())?;
 
     // Cascade a fixed offset from the source window rather than centering — cheap way to avoid

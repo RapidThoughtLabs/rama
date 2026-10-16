@@ -3,7 +3,6 @@ import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { useTheme } from "../theme";
 import { Icon } from "./Icon";
 import { ModelMenu, sameModel, type ModelChoice } from "./ModelMenu";
-import { privacyNote } from "./modelPlace";
 
 /* Kit composer — HOME_REDESIGN_PLAN.md Phase HD5 (mock:L232-279, 1543-1590). The card, the
    autosizing textarea, the tool row (attach, web search, model pill, send) and the privacy line
@@ -11,7 +10,11 @@ import { privacyNote } from "./modelPlace";
    offer.
 
    Slots for the Code plan (§3 rule 3): `above` (its chip row), `tools` (its mode pill, which
-   replaces the web toggle) and `trailing` (its context ring, after the privacy note).
+   replaces the web toggle) and `corner` (its context ring, pinned inside the card's top right).
+   There is no where-does-this-model-run line: models and providers are dynamic, so the pill's
+   own icon says local or cloud and nothing is printed under the card. `trailing` is the line
+   under the card for notes that need saying (a file that couldn't be added), and is left out when
+   there are none.
 
    Not in the mockup (§6.3): while a run is going the send button turns into a stop button, and
    with no model the pill reads "Choose a model", and it and Send open the menu, or call
@@ -40,6 +43,7 @@ export interface ComposerProps {
   above?: ReactNode;
   tools?: ReactNode;
   trailing?: ReactNode;
+  corner?: ReactNode;
   textareaRef?: Ref<HTMLTextAreaElement>;
 }
 
@@ -65,6 +69,7 @@ export function Composer({
   above,
   tools,
   trailing,
+  corner,
   textareaRef,
 }: ComposerProps) {
   const { fontScale } = useTheme();
@@ -140,6 +145,7 @@ export function Composer({
           onDropFiles(files);
         }}
       >
+        {corner && <div className="r-composer-corner">{corner}</div>}
         {above}
         <textarea ref={setRefs} rows={1} aria-label="Message" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} />
         <div className="r-composer-row">
@@ -175,17 +181,7 @@ export function Composer({
           )}
         </div>
       </form>
-      <p className="r-privacy">
-        {model ? (
-          <span className="pv-note">
-            <Icon name={model.place === "local" ? "lock" : "cloud"} />
-            {privacyNote(model.name, model.place, model.via)}
-          </span>
-        ) : (
-          <span className="pv-note">Choose a model to start. You can run one on this Mac or in the cloud.</span>
-        )}
-        {trailing}
-      </p>
+      {trailing && <p className="r-privacy">{trailing}</p>}
       <ModelMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}

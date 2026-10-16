@@ -135,3 +135,26 @@
 .r-swatch .md { display: block; font-size: var(--k-xs); color: var(--ink-4); }
 .r-opt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .r-opt > span { font-size: var(--k-sm); color: var(--ink-2); }
+
+/* ═══ Windows chrome — not in the mockup. The window is frameless there (tauri.windows.conf.json),
+   so there are no traffic lights on the left and WindowControls.tsx draws the caption buttons in
+   the top-right corner. The seal steps left of them, keeping its 23px gap to the top-bar actions,
+   and its popover follows it. ═══ */
+.r-caption { position: absolute; top: 0; right: 0; z-index: 7; display: flex; }
+.r-caption button { position: relative; width: 42px; height: 52px; display: grid; place-items: center; color: var(--ink-3); transition: color .15s; }
+.r-caption button::before { content: ""; position: absolute; inset: 11px 4px; border-radius: 8px; transition: background-color .15s; }
+.r-caption button:hover { color: var(--ink-1); }
+.r-caption button:hover::before { background: var(--hover); }
+/* The theme's own red, deepened: dark themes carry a pale --bad that a thin white × can't sit on. */
+.r-caption button.close:hover { color: #fff; }
+.r-caption button.close:hover::before { background: color-mix(in oklab, var(--bad) 78%, #000); }
+.r-caption button.close:active::before { background: color-mix(in oklab, var(--bad) 66%, #000); }
+.r-caption svg { position: relative; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+
+.r-app[data-os="windows"] .r-sb-lights { width: 0; }
+.r-app[data-os="windows"][data-sb="closed"] .r-topbar,
+.r-app[data-os="windows"][data-window="secondary"] .r-topbar { padding-left: 14px; }
+/* 3 × 42 buttons + 10 gap = the seal's right edge (136); + its 31px width + the mockup's 23px gap. */
+.r-app[data-os="windows"] .r-topbar { padding-right: 190px; }
+.r-app[data-os="windows"] .r-seal { right: 136px; }
+.r-app[data-os="windows"] .r-theme-pop { right: 132px; }

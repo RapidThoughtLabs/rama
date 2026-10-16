@@ -61,7 +61,7 @@ export function ThemePopover({
 }
 
 /* Built from the theme's own values, not the live tokens, so every swatch shows its own theme. */
-function Swatch({ theme, checked, onSelect }: { theme: RamaTheme; checked: boolean; onSelect: () => void }) {
+export function Swatch({ theme, checked, onSelect }: { theme: RamaTheme; checked: boolean; onSelect: () => void }) {
   const wp = wallpaperCss(theme);
   const veil = theme.wallpaper && wp !== "none" ? theme.wallpaper.veil : 1;
   return (

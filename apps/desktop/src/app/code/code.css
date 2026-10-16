@@ -2,7 +2,9 @@
    Mockup CSS (mock:L381-395, 360-369) with the r- prefix and kit token names. */
 
 /* ═══ Crumbs and chips (mock:L381-388) ═══ */
-.r-crumbs { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: 2px; }
+/* overflow: hidden — when the top bar runs short (narrow window, or Windows' caption buttons) the
+   chips clip instead of sliding under the actions. */
+.r-crumbs { display: flex; align-items: center; gap: 4px; min-width: 0; margin-left: 2px; overflow: hidden; }
 .r-chip {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px;
   font-size: var(--k-xs); font-weight: 500; color: var(--ink-3); white-space: nowrap;
@@ -69,5 +71,3 @@ button.r-chip:hover { background: var(--hover); color: var(--ink-1); }
 }
 .r-empty-card h2 { margin: 0 0 6px; font-size: var(--k-md); font-weight: 600; color: var(--ink-1); }
 .r-empty-card p { margin: 0 0 16px; font-size: var(--k-sm); color: var(--ink-3); line-height: 1.5; }
-.r-empty-wizard { text-align: left; }
-.r-empty-wizard h2 { text-align: center; margin-bottom: 14px; }

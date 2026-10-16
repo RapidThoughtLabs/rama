@@ -1,10 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { Ref } from "react";
-import { createPortal } from "react-dom";
-import { Attachment, Composer, Modal, placeOf, type ModelChoice } from "@rama/ui";
+import { Attachment, Composer, placeOf, type ModelChoice } from "@rama/ui";
 import { acceptFiles, chipForFile, isImage } from "./attachments";
-import { fetchModelRoles } from "../../engine/client";
-import { ProviderSetupWizard } from "../ProviderSetupWizard";
 import { useProvidersData } from "../data/ProvidersProvider";
 import { useSettingsLink } from "../data/SettingsLinkContext";
 
@@ -12,8 +9,8 @@ import { useSettingsLink } from "../data/SettingsLinkContext";
    the menu offers the user's shortlist (PROVIDERS_PLAN P3/P4: enabled models that aren't missing
    or erroring) across enabled providers, never the full catalog. A provider whose health is bad
    or keyless keeps its models listed and marked unavailable, which replaces the old title-bar
-   alert dot. With no model at all, Send and the pill open the setup wizard in place, instead of
-   swapping the whole landing out the way the old Code chat column did.
+   alert dot. With no model at all, Send and the pill open Settings: Providers' add form when
+   there's no provider yet, otherwise Models.
 
    HD7: the paperclip opens the system file picker; files can also be dropped on the card or
    pasted. They wait as chips above the textarea (each with a ✕) until Send, when the caller
@@ -89,7 +86,6 @@ export function HomeComposer({
   const { models, resolve } = useModelChoices();
   const { providers } = useProvidersData();
   const { open: openSettings } = useSettingsLink();
-  const [setupOpen, setSetupOpen] = useState(false);
   const [addNotice, setAddNotice] = useState<string | null>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   const model = resolve(selected);
@@ -103,18 +99,6 @@ export function HomeComposer({
   const seesImages = !!model && !!providers.find((p) => p.id === model.providerId)?.models.find((m) => m.id === model.modelId)?.supportsVision;
   const blindTo = model && !seesImages && files.some(isImage) ? model.name : null;
   const problem = notice ?? addNotice;
-
-  async function afterSetup(providerId: string) {
-    setSetupOpen(false);
-    try {
-      const chat = (await fetchModelRoles()).chat;
-      if (chat) return onPickModel(chat.providerId, chat.modelId);
-    } catch (err) {
-      console.error("[rama] failed to read the default model after setup", err);
-    }
-    const first = providers.find((p) => p.id === providerId)?.models.find((m) => m.enabled);
-    if (first) onPickModel(providerId, first.id);
-  }
 
   return (
     <>
@@ -147,24 +131,23 @@ export function HomeComposer({
           )
         }
         trailing={
-          <>
-            {blindTo && <span className="pv-warn">· {blindTo} can't see images. Pick a model that can.</span>}
-            {problem && <span className="pv-bad">· {problem}</span>}
-            {webSearch && (
-              <span>
-                ·{" "}
+          blindTo || problem || webSearch ? (
+            <>
+              {blindTo && <span className="pv-warn">{blindTo} can't see images. Pick a model that can.</span>}
+              {problem && <span className="pv-bad">{problem}</span>}
+              {webSearch && (
                 <button type="button" className="pv-link" onClick={() => openSettings()}>
                   Web search isn't set up yet
                 </button>
-              </span>
-            )}
-          </>
+              )}
+            </>
+          ) : null
         }
         models={models}
         model={model}
         onPickModel={(m) => onPickModel(m.providerId, m.modelId)}
-        onMoreModels={() => openSettings({ pane: "providers" })}
-        onChooseModel={() => setSetupOpen(true)}
+        onMoreModels={() => openSettings({ pane: "models" })}
+        onChooseModel={() => openSettings(providers.length === 0 ? { pane: "providers", addProvider: true } : { pane: "models" })}
         textareaRef={textareaRef}
       />
       <input
@@ -177,14 +160,6 @@ export function HomeComposer({
           e.currentTarget.value = "";
         }}
       />
-      {/* Portalled: the view is its own stacking context, and the overlay must cover the sidebar. */}
-      {setupOpen &&
-        createPortal(
-          <Modal open title="Set up a model" onClose={() => setSetupOpen(false)}>
-            <ProviderSetupWizard onDone={afterSetup} onCancel={() => setSetupOpen(false)} />
-          </Modal>,
-          document.body,
-        )}
     </>
   );
 }

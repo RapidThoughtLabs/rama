@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { complete } from "../llm/complete";
-import { getProvider } from "../db/providers";
+import { getProvider, providerRequiresKey } from "../db/providers";
 import { getSecret } from "../secrets";
 import { getUtilityTarget } from "./utility";
 
@@ -61,7 +61,7 @@ export async function draftProjectInstructions(projectPath: string): Promise<Dra
   const providerRow = getProvider(target.providerId);
   const apiKey = getSecret(target.providerId);
   if (!providerRow) return { ok: false, error: `unknown provider "${target.providerId}"` };
-  if (!apiKey && target.providerId !== "ollama") {
+  if (!apiKey && providerRequiresKey(target.providerId)) {
     return { ok: false, error: `no ${providerRow.label ?? target.providerId} key configured` };
   }
 

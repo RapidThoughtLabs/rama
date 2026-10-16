@@ -50,6 +50,13 @@ const PATHS = {
   "file-plus": <><path d="M4 1.8h5l3.2 3.2V14a.6.6 0 0 1-.6.6H4a.6.6 0 0 1-.6-.6V2.4A.6.6 0 0 1 4 1.8z"/><path d="M9 1.8V5h3.2M8 7.5v4M6 9.5h4"/></>,
   // Not in the mockup: the Files stage's word-wrap toggle (docs/CODE_REDESIGN_PLAN.md §9).
   "wrap": <><path d="M2.5 4h11M2.5 8h8.2a2.3 2.3 0 0 1 0 4.6H8.5M10 11l-1.6 1.6L10 14.2M2.5 12.6H5"/></>,
+  // Not in the mockup: the Settings nav (app/settings/SettingsModal.tsx), drawn to the same grid.
+  "palette": <><path d="M8 2a6 6 0 0 0 0 12c.9 0 1.4-.6 1.4-1.3 0-.4-.2-.7-.4-1s-.4-.6-.4-1c0-.7.6-1.2 1.3-1.2h1.5A2.6 2.6 0 0 0 14 6.9 5.6 5.6 0 0 0 8 2z"/><path d="M4.9 7.4h.01M7.4 4.9h.01M10.5 5.6h.01"/></>,
+  "plug": <><path d="M6 2v3M10 2v3M4.5 5h7v2.5a3.5 3.5 0 0 1-7 0zM8 11v3"/></>,
+  "chip": <><rect x="4" y="4" width="8" height="8" rx="1.5"/><path d="M6.5 1.8V4M9.5 1.8V4M6.5 12v2.2M9.5 12v2.2M1.8 6.5H4M1.8 9.5H4M12 6.5h2.2M12 9.5h2.2"/></>,
+  "keyboard": <><rect x="1.8" y="4" width="12.4" height="8" rx="1.8"/><path d="M4.6 6.7h.01M7 6.7h.01M9.4 6.7h.01M11.6 6.7h-.2M5.2 9.4h5.6"/></>,
+  "user": <><circle cx="8" cy="5.5" r="2.6"/><path d="M2.8 13.6c.6-2.5 2.7-3.9 5.2-3.9s4.6 1.4 5.2 3.9"/></>,
+  "info": <><circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.5M8 5.1v.01"/></>,
 } satisfies Record<string, JSX.Element>;
 
 export type IconName = keyof typeof PATHS;

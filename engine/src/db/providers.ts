@@ -1,5 +1,5 @@
 import type { ProviderDTO, ProviderKind } from "@rama/protocol";
-import { getCatalogProvider } from "../agent/catalog";
+import { getCatalog, getCatalogProvider } from "../agent/catalog";
 import { getModelsForProvider } from "../agent/config";
 import { db } from "./index";
 import { deleteAllModelsForProvider, enableDefaultModels, setModelEnabled } from "./providerModels";
@@ -105,12 +105,25 @@ export function configureProvider(id: string): { row: ProviderRow; created: bool
   return { row: getProvider(id)!, created: true };
 }
 
-export function updateProviderConfig(id: string, patch: { baseUrl?: string; label?: string }): ProviderDTO | null {
+// Settings › Providers takes whatever the user pastes. An Anthropic-spec URL is stored without its
+// /v1 (AnthropicStreamClient and the health probe both append /v1/...), and an OpenAI-spec URL
+// without a pasted /chat/completions, so the two most common paste mistakes still connect.
+export function normalizeBaseUrl(kind: ProviderKind, url: string): string {
+  let out = url.trim().replace(/\/+$/, "");
+  if (kind === "anthropic") out = out.replace(/\/v1(\/messages)?$/i, "");
+  else out = out.replace(/\/chat\/completions$/i, "");
+  return out;
+}
+
+const ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com";
+
+export function updateProviderConfig(id: string, patch: { baseUrl?: string; label?: string; requiresKey?: boolean }): ProviderDTO | null {
   const existing = getProvider(id);
   if (!existing) return null;
-  db.query("UPDATE providers SET base_url = ?, label = ? WHERE id = ?").run(
-    patch.baseUrl ?? existing.base_url,
+  db.query("UPDATE providers SET base_url = ?, label = ?, requires_key = ? WHERE id = ?").run(
+    patch.baseUrl != null ? normalizeBaseUrl(existing.kind, patch.baseUrl) : existing.base_url,
     patch.label ?? existing.label,
+    patch.requiresKey != null ? (patch.requiresKey ? 1 : 0) : existing.requires_key,
     id,
   );
   return getProviderDTO(id);
@@ -140,6 +153,7 @@ function uniqueProviderId(label: string): string {
 }
 
 export interface CustomProviderInput {
+  kind: ProviderKind;
   label: string;
   baseUrl: string;
   requiresKey: boolean;
@@ -147,19 +161,47 @@ export interface CustomProviderInput {
   authHeader: string | null;
 }
 
-// docs/PROVIDERS_PLAN.md Phase P5 — "custom (OpenAI-compatible)": the first place `is_custom = 1`
-// is ever actually set. Always `kind: "openai-compatible"` — a catalog-less Anthropic-shaped
-// provider isn't a real case (Anthropic's wire format isn't something a third party reimplements
-// under a different base URL), and the wizard's own auth-style choice ("Bearer, or a named header
-// — the whole realistic space") only makes sense for that adapter anyway.
-export function configureCustomProvider(input: CustomProviderInput): ProviderRow {
-  const id = uniqueProviderId(input.label);
+// The catalog entry an endpoint *is*, when it is one: same wire format, same base URL. Settings no
+// longer offers catalog tiles, so a user who adds "https://api.together.xyz/v1" by hand has to land
+// on the same id the tile used to create — cache policy, the utility-model hint, catalog pricing
+// and the OpenRouter id map are all keyed by it. Only while that id is free: a second Together
+// account gets a slug id and no catalog meaning, which is the old custom-provider behaviour.
+export function catalogIdForEndpoint(kind: ProviderKind, baseUrl: string, isTaken: (id: string) => boolean = (id) => !!getProvider(id)): string | null {
+  const want = normalizeBaseUrl(kind, baseUrl).toLowerCase();
+  for (const p of getCatalog().providers) {
+    if (p.kind !== kind) continue;
+    const have = normalizeBaseUrl(kind, p.baseUrl ?? (kind === "anthropic" ? ANTHROPIC_DEFAULT_BASE_URL : "")).toLowerCase();
+    if (have && have === want && !isTaken(p.id)) return p.id;
+  }
+  return null;
+}
+
+// docs/PROVIDERS_PLAN.md Phase P5, reworked: Settings › Providers now creates every provider here —
+// the user picks the wire format (OpenAI-compatible or Anthropic) and a base URL, nothing else is
+// predefined. `is_custom` stays 1 unless the endpoint resolved to a catalog id above. An Anthropic
+// endpoint always authenticates with x-api-key (AnthropicStreamClient sets it), so auth style is
+// only meaningful for the OpenAI-compatible adapter.
+export function configureCustomProvider(input: CustomProviderInput): { row: ProviderRow; catalogMatch: boolean } {
+  const baseUrl = normalizeBaseUrl(input.kind, input.baseUrl);
+  const catalogId = catalogIdForEndpoint(input.kind, baseUrl);
+  const id = catalogId ?? uniqueProviderId(input.label);
+  const anthropic = input.kind === "anthropic";
   const now = Date.now();
   db.query(
     `INSERT INTO providers (id, kind, base_url, label, created_at, is_custom, enabled, requires_key, auth_style, auth_header, extra_headers_json)
-     VALUES (?, 'openai-compatible', ?, ?, ?, 1, 1, ?, ?, ?, '{}')`,
-  ).run(id, input.baseUrl, input.label, now, input.requiresKey ? 1 : 0, input.authStyle, input.authHeader);
-  return getProvider(id)!;
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '{}')`,
+  ).run(
+    id,
+    input.kind,
+    baseUrl,
+    input.label,
+    now,
+    catalogId ? 0 : 1,
+    input.requiresKey ? 1 : 0,
+    anthropic ? "bearer" : input.authStyle,
+    anthropic ? null : input.authHeader,
+  );
+  return { row: getProvider(id)!, catalogMatch: !!catalogId };
 }
 
 // docs/PROVIDERS_PLAN.md Phase P3 — "removal ... cascading provider_models and clearing any

@@ -6,9 +6,8 @@ import { McpServersModal } from "./McpServersModal";
 
 // docs/REDESIGN_PLAN.md Phase R6 — Skills + MCP servers as one Toolbox page, replacing the old
 // SkillsModal popover (deleted) plus the McpServersModal mount that used to live directly in
-// Sidebar.tsx (that one's still shared — SettingsModal's "mcp servers" pane renders the same bare
-// component). Full-bleed page reusing SettingsModal's nav/content two-pane classes rather than
-// inventing new ones.
+// Sidebar.tsx. Full-bleed page reusing the old settings modal's nav/content two-pane classes. Still
+// legacy-styled; Settings › MCP servers (app/settings/McpPane.tsx) is the kit version of its MCP half.
 
 type Section = "skills" | "mcp";
 

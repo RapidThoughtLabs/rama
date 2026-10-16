@@ -15,6 +15,7 @@
 //   empty     projects | providers — the Code landing's two empty states (plan CR8): no project at all, or
 //             projects but no provider configured
 //   goto      pane:arg, e.g. changes:packages/ui/src/theme.tsx — applied through window.__rama.goto
+//   os        windows draws the frameless Windows chrome (caption buttons, the seal moved left)
 //
 // What it does: pins the clock to the mockup's (Mon 5 Oct 2026, 18:30), answers every engine and
 // Tauri call from the ported mockup data, and writes the persisted view state the app reads on
@@ -85,6 +86,11 @@ export async function installFixtures(): Promise<void> {
     data.chats = [];
   } else if (empty === "providers") {
     data.providers = [];
+  }
+
+  // engine/window.ts reads IS_WINDOWS from the user agent at import, which is after this runs.
+  if (params.get("os") === "windows") {
+    Object.defineProperty(navigator, "userAgent", { value: `${navigator.userAgent} (Windows NT 10.0)`, configurable: true });
   }
 
   freezeClock(FIXTURE_NOW);

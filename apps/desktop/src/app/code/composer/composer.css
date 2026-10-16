@@ -23,10 +23,14 @@
 .r-ring circle { fill: none; stroke-width: 2.4; }
 .r-ring .bg { stroke: var(--line-2); }
 .r-ring .fg { stroke: var(--accent); stroke-linecap: round; }
-.r-code-composer .r-privacy { flex-wrap: wrap; }
-.r-privacy .ctx { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; }
+/* The ring sits inside the card's top right; the chip row leaves it room. */
+.r-code-composer .r-composer-corner .ctx { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; cursor: default; }
+.r-code-composer .r-composer-corner .r-ring { width: 18px; height: 18px; }
+.r-code-composer .r-ctx-row { padding-right: 30px; }
 
-@media (max-width: 560px) {
+/* By the card's own width, not the window's: the mode pill drops its label when the card is narrow. */
+.r-code-composer .r-composer { container-type: inline-size; }
+@container (max-width: 460px) {
   .r-mode-pill span { display: none; }
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { Fluke, Icon } from "@rama/ui";
 import type { ProjectDTO, RecentChatDTO } from "@rama/protocol";
 import { fetchRecentChats } from "../../engine/client";
-import { ProviderSetupWizard } from "../ProviderSetupWizard";
+import { useSettingsLink } from "../data/SettingsLinkContext";
 import "../home/home.css";
 import { relativeWhen } from "./relativeWhen";
 import { useOpenChat } from "./useOpenChat";
@@ -14,7 +14,7 @@ import { useOpenChat } from "./useOpenChat";
 
    The composer arrives as a node because its state (text, mode, draft sync, submit) lives in
    CodeChat. Two states the mockup doesn't draw (plan §9.36): with no project the composer is a card
-   that adds one; with no provider it is a card holding the setup wizard. */
+   that adds one; with no provider it is a card that opens Settings › Providers' add form. */
 
 export function CodeLanding({
   project,
@@ -41,6 +41,7 @@ export function CodeLanding({
 
 function LandingInner({ project, composer, noProjects, needsProvider, textareaRef }: Parameters<typeof CodeLanding>[0]) {
   const openChat = useOpenChat();
+  const { open: openSettings } = useSettingsLink();
   const [recent, setRecent] = useState<RecentChatDTO[]>([]);
 
   useEffect(() => {
@@ -79,9 +80,13 @@ function LandingInner({ project, composer, noProjects, needsProvider, textareaRe
           </button>
         </div>
       ) : needsProvider ? (
-        <div className="r-empty-card r-empty-wizard r-legacy">
+        <div className="r-empty-card">
           <h2>Connect a provider to start</h2>
-          <ProviderSetupWizard onDone={() => {}} />
+          <p>Rama works with any API that speaks the OpenAI or Claude format, on this Mac like Ollama, or in the cloud.</p>
+          <button type="button" className="r-btn" onClick={() => openSettings({ pane: "providers", addProvider: true })}>
+            <Icon name="plus" />
+            <span>Add a provider…</span>
+          </button>
         </div>
       ) : (
         composer

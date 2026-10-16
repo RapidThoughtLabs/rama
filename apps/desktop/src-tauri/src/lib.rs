@@ -29,6 +29,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         // AGENT_BROWSER_PLAN.md AB0 — the large-payload value-return channel; see webview.rs's
         // module doc for why it exists alongside `rama-eval://`.
         .register_asynchronous_uri_scheme_protocol("rama-ipc", handle_rama_ipc)

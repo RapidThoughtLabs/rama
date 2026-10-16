@@ -234,6 +234,9 @@ export class MockEngine {
       case "add_chat_to_window":
       case "get_provider_key": // legacy keychain → engine migration: nothing to migrate
         return null;
+      case "set_provider_key":
+      case "delete_provider_key":
+        return undefined;
       case "pty_is_running":
         return this.data.runningTerminals.includes(String(args.terminalId));
       case "pty_list_running":
@@ -251,6 +254,86 @@ export class MockEngine {
         console.warn(`[fixture] unhandled tauri command ${cmd}`);
         return undefined;
     }
+  }
+
+  /** Settings › Providers and Models: add/rename/remove providers, tick models, set roles. A new
+   *  provider gets a small made-up roster so the Models pane has something to list. */
+  private handleProviders(method: string, seg: string[], b: Record<string, unknown>): Reply | null {
+    const d = this.data;
+    if (method === "PUT" && seg[0] === "model-roles" && seg[1]) {
+      const role = seg[1] as ModelRole;
+      const dto: ModelRoleDTO = { role, providerId: String(b.providerId), modelId: String(b.modelId), updatedAt: Date.now() };
+      d.modelRoles = { ...d.modelRoles, [role]: dto };
+      return ok(dto);
+    }
+    if (seg[0] !== "providers") return null;
+    if (method === "POST" && seg[1] === "custom") {
+      const kind = b.kind === "anthropic" ? "anthropic" : "openai-compatible";
+      const base = String(b.label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "custom";
+      let id = base;
+      for (let n = 2; d.providers.some((p) => p.id === id); n++) id = `${base}-${n}`;
+      const roster: [string, string, number][] =
+        kind === "anthropic"
+          ? [["claude-sonnet-5", "Claude Sonnet 5", 200_000], ["claude-opus-5", "Claude Opus 5", 200_000], ["claude-haiku-4-5", "Claude Haiku 4.5", 200_000]]
+          : [["gpt-5", "GPT-5", 400_000], ["gpt-5-mini", "GPT-5 mini", 400_000], ["gpt-4o", "GPT-4o", 128_000], ["gpt-4o-2024-08-06", "gpt-4o-2024-08-06", 128_000], ["text-embedding-3-small", "text-embedding-3-small", 8_000]];
+      const now = Date.now();
+      const p: ProviderDTO = {
+        id,
+        kind,
+        label: String(b.label),
+        baseUrl: String(b.baseUrl).replace(/\/+$/, ""),
+        requiresKey: b.requiresKey !== false,
+        isCustom: true,
+        enabled: true,
+        lastHealthStatus: "ok",
+        lastHealthAt: now,
+        models: roster.map(([mid, label, ctx]) => ({
+          id: mid, label, supportsTools: true, supportsThinking: mid.includes("5"), supportsVision: !mid.includes("embed"), contextWindow: ctx,
+          status: "available", tier: null, pricing: null, deprecated: false, supersededBy: null,
+          enabled: false, pinned: false, inCatalog: false, addedManually: false, firstSeenAt: now, lastError: null,
+        })),
+      };
+      d.providers.push(p);
+      return { status: 201, body: p };
+    }
+    const p = d.providers.find((x) => x.id === seg[1]);
+    if (!p) return null;
+    if (seg.length === 2 && method === "PATCH") {
+      if (typeof b.label === "string") p.label = b.label;
+      if (typeof b.baseUrl === "string") p.baseUrl = b.baseUrl;
+      if (typeof b.requiresKey === "boolean") p.requiresKey = b.requiresKey;
+      return ok(p);
+    }
+    if (seg.length === 2 && method === "DELETE") {
+      d.providers = d.providers.filter((x) => x !== p);
+      return ok({ ok: true });
+    }
+    if (seg[2] === "secret" && method === "POST") return ok({ ok: true });
+    if (seg[2] === "models" && seg.length === 3 && method === "POST") {
+      const mid = String(b.modelId);
+      const existing = p.models.find((m) => m.id === mid);
+      if (existing) existing.enabled = true;
+      else
+        p.models.push({
+          id: mid, label: mid, supportsTools: false, supportsThinking: false, supportsVision: false, contextWindow: 0,
+          status: "unverified", tier: null, pricing: null, deprecated: false, supersededBy: null,
+          enabled: true, pinned: false, inCatalog: false, addedManually: true, firstSeenAt: Date.now(), lastError: null,
+        });
+      return { status: 201, body: p };
+    }
+    if (seg[2] === "models" && seg[3]) {
+      const mid = decodeURIComponent(seg[3]);
+      if (method === "PATCH") {
+        const m = p.models.find((x) => x.id === mid);
+        if (m) m.enabled = Boolean(b.enabled);
+        return ok(p);
+      }
+      if (method === "DELETE") {
+        p.models = p.models.filter((x) => x.id !== mid);
+        return ok({ ok: true });
+      }
+    }
+    return null;
   }
 
   handle(method: string, rawPath: string, body: unknown): Reply {
@@ -414,6 +497,8 @@ export class MockEngine {
     }
     if (method === "POST" && seg[0] === "chats" && seg[2] === "undo") return ok({ ok: true, message: "fixture: nothing to undo" });
     if (method === "POST" && path === "/catalog/enrich") return ok({ ran: false, matched: 0 });
+    const providerReply = this.handleProviders(method, seg, b);
+    if (providerReply) return providerReply;
     if (method === "POST" && seg[0] === "browser") return ok({ ok: true });
     if (method === "POST" && seg[0] === "terminals" && seg[2] === "data") return ok({ ok: true });
     if ((method === "PUT" || method === "PATCH") && path.startsWith("/settings/")) return ok(b);

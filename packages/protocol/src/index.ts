@@ -496,10 +496,12 @@ export interface CatalogProviderSummaryDTO {
   docsUrl: string | null;
 }
 
-// docs/PROVIDERS_PLAN.md Phase P5 — "custom (OpenAI-compatible)": the wizard's credentials step
-// for a provider Rama has never heard of. Always openai-compatible (see db/providers.ts's
-// configureCustomProvider for why Anthropic-shaped custom providers aren't a real case).
+// Settings › Providers' add form — every provider is added this way now (no catalog tiles). The
+// user picks the wire format and a base URL; the engine resolves a known endpoint to its catalog
+// id (see engine/src/db/providers.ts's configureCustomProvider). `kind` defaults to
+// "openai-compatible"; auth style only applies to that adapter (Anthropic always uses x-api-key).
 export interface CustomProviderInput {
+  kind?: ProviderKind;
   label: string;
   baseUrl: string;
   requiresKey: boolean;

@@ -146,6 +146,16 @@ function modelRoleDTO(row: ReturnType<typeof getModelRole>) {
 function agentSummaryDTO(agent: AgentDef): AgentSummaryDTO {
   return { name: agent.name, description: agent.description, tools: agent.tools, mode: agent.mode, model: agent.model, source: agent.source };
 }
+// A provider is now added with no models ticked (Settings › Models is where they're picked), so
+// the first model enabled is the first moment a role can default — not provider creation. Each
+// call is a no-op once its role is set.
+function defaultRolesAfterModelChange(): void {
+  maybeDefaultChatRole();
+  maybeDefaultUtilityRole();
+  maybeDefaultSubagentRole();
+  maybeDefaultSummarizeRole();
+}
+
 function json(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     ...init,
@@ -734,13 +744,17 @@ export function createServer() {
           if (authStyle === "header" && !authHeader) {
             return json({ error: "authHeader is required when authStyle is \"header\"" }, { status: 400 });
           }
-          const row = configureCustomProvider({
+          const { row, catalogMatch } = configureCustomProvider({
+            kind: body?.kind === "anthropic" ? "anthropic" : "openai-compatible",
             label: body.label.trim(),
             baseUrl: body.baseUrl.trim(),
             requiresKey: body?.requiresKey !== false,
             authStyle,
             authHeader,
           });
+          // An endpoint that resolved to a catalog id gets that entry's model rows back (labels,
+          // pricing, capability flags) — removing the provider earlier deleted them.
+          if (catalogMatch) refreshModelCatalog();
           maybeDefaultChatRole();
           maybeDefaultUtilityRole();
           maybeDefaultSubagentRole();
@@ -752,7 +766,11 @@ export function createServer() {
         if (providerMatch && req.method === "PATCH") {
           const providerId = providerMatch[1];
           const body = await req.json().catch(() => ({}));
-          const updated = updateProviderConfig(providerId, { baseUrl: body?.baseUrl, label: body?.label });
+          const updated = updateProviderConfig(providerId, {
+            baseUrl: typeof body?.baseUrl === "string" ? body.baseUrl : undefined,
+            label: typeof body?.label === "string" ? body.label : undefined,
+            requiresKey: typeof body?.requiresKey === "boolean" ? body.requiresKey : undefined,
+          });
           if (!updated) return json({ error: "provider not found" }, { status: 404 });
           return json(updated);
         }
@@ -775,6 +793,7 @@ export function createServer() {
             return json({ error: "modelId is required" }, { status: 400 });
           }
           addManualModel(providerId, body.modelId.trim(), typeof body?.label === "string" ? body.label : undefined, Date.now());
+          defaultRolesAfterModelChange();
           return json(getProviderDTO(providerId), { status: 201 });
         }
 
@@ -786,6 +805,7 @@ export function createServer() {
           const body = await req.json().catch(() => ({}));
           if (typeof body?.enabled !== "boolean") return json({ error: "enabled is required" }, { status: 400 });
           setModelEnabled(providerId, decodeURIComponent(modelId), body.enabled);
+          if (body.enabled) defaultRolesAfterModelChange();
           return json(getProviderDTO(providerId));
         }
         if (providerModelMatch && req.method === "DELETE") {

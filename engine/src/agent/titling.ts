@@ -4,7 +4,7 @@
 // if this fails for any reason at all.
 import { complete } from "../llm/complete";
 import { recordUtilityUsage, updateChat } from "../db/chats";
-import { getProvider } from "../db/providers";
+import { getProvider, providerRequiresKey } from "../db/providers";
 import { getSecret } from "../secrets";
 import { broadcast } from "../ws";
 import { estimateCostUsd } from "./config";
@@ -23,7 +23,7 @@ export async function maybeTitleChat(chatId: string, firstUserMessage: string): 
 
   const providerRow = getProvider(target.providerId);
   const apiKey = getSecret(target.providerId);
-  if (!providerRow || (!apiKey && target.providerId !== "ollama")) return;
+  if (!providerRow || (!apiKey && providerRequiresKey(target.providerId))) return;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TITLE_TIMEOUT_MS);

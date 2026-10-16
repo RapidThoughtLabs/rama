@@ -3,6 +3,7 @@ import type { KeyboardEvent, RefObject } from "react";
 import type { ChatMode, FileEntryDTO, ProjectDTO, SearchResultDTO } from "@rama/protocol";
 import { Composer, Icon, Popover } from "@rama/ui";
 import { fetchProjectFiles, ramaSearch } from "../../../engine/client";
+import { useProvidersData } from "../../data/ProvidersProvider";
 import { useSettingsLink } from "../../data/SettingsLinkContext";
 import { useModelChoices, type ModelRef } from "../../home/HomeComposer";
 import { ContextChips } from "./ContextChips";
@@ -12,7 +13,7 @@ import "./composer.css";
 
 /* The Code composer — docs/CODE_REDESIGN_PLAN.md CR5 (mock:L232-279, 398-404, 1543-1572). Home's
    kit `Composer` with the Code slots filled: the chip row above the text, the mode pill where the
-   web toggle would be, and the context ring after the privacy note. The text, what Send means and
+   web toggle would be, and the context ring pinned in the card's top right. The text, what Send means and
    the chat state stay with the caller (CodeChat); this owns the chrome around
    them, the `/` menu and the attach popover.
 
@@ -126,6 +127,7 @@ export function CodeComposer({
   onSlashPick: (result: SearchResultDTO) => void;
 }) {
   const { models, resolve } = useModelChoices();
+  const { providers } = useProvidersData();
   const { open: openSettings } = useSettingsLink();
   const slash = useSlashSearch(value, project?.id);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -227,8 +229,8 @@ export function CodeComposer({
         models={models}
         model={selected}
         onPickModel={(m) => onPickModel(m.providerId, m.modelId)}
-        onMoreModels={() => openSettings({ pane: "providers" })}
-        onChooseModel={() => openSettings({ pane: "providers" })}
+        onMoreModels={() => openSettings({ pane: "models" })}
+        onChooseModel={() => openSettings(providers.length === 0 ? { pane: "providers", addProvider: true } : { pane: "models" })}
         onAttach={() => {
           if (!project) return;
           attachAnchor.current = wrapRef.current?.querySelector<HTMLElement>(".r-tool-btn") ?? null;
@@ -247,11 +249,10 @@ export function CodeComposer({
           />
         }
         tools={<ModePill mode={mode} onMode={onMode} projectId={project?.id} agentId={agentId} onAgent={onAgent} disabled={running} />}
-        trailing={
+        corner={
           usage && usage.max > 0 ? (
-            <span className="ctx">
+            <span className="ctx" role="img" title={`${k(usage.used)} of ${k(usage.max)} context used`} aria-label={`${k(usage.used)} of ${k(usage.max)} context used`}>
               <Ring pct={pct} />
-              {k(usage.used)} of {k(usage.max)} context used
             </span>
           ) : null
         }

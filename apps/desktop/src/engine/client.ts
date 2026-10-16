@@ -3,7 +3,6 @@ import type {
   AgentSummaryDTO,
   ArtifactDTO,
   AttachmentDTO,
-  CatalogProviderSummaryDTO,
   ChangeDiffDTO,
   ChangesDTO,
   ChatDTO,
@@ -406,24 +405,18 @@ export function fetchProviderHealth(providerId: string): Promise<ProviderHealthD
   return engineJson(`/providers/${providerId}/health`);
 }
 
-// docs/PROVIDERS_PLAN.md Phase P4 fast-add — catalog tiles for providers Rama knows about that
-// have no `providers` row yet (Phase P3: a row means configured).
-export function fetchCatalogProviders(): Promise<CatalogProviderSummaryDTO[]> {
-  return engineJson("/catalog/providers");
-}
-
 // Creates the `providers` row from the catalog. Idempotent — safe to call even if the provider
 // is already configured (returns it unchanged, 200 instead of 201).
 export function createProvider(providerId: string): Promise<ProviderDTO> {
   return engineJson("/providers", { method: "POST", body: JSON.stringify({ providerId }) });
 }
 
-export function updateProviderConfig(providerId: string, patch: { baseUrl?: string; label?: string }): Promise<ProviderDTO> {
+export function updateProviderConfig(providerId: string, patch: { baseUrl?: string; label?: string; requiresKey?: boolean }): Promise<ProviderDTO> {
   return engineJson(`/providers/${providerId}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
-// docs/PROVIDERS_PLAN.md Phase P5 — the wizard's "custom (OpenAI-compatible)" path; parallel to
-// createProvider above but for a provider id Rama's catalog has never heard of.
+// Settings › Providers' add form — every provider is added this way (OpenAI- or Claude-compatible,
+// any base URL). createProvider above is left for ProvidersProvider's legacy-key migration.
 export function createCustomProvider(input: CustomProviderInput): Promise<ProviderDTO> {
   return engineJson("/providers/custom", { method: "POST", body: JSON.stringify(input) });
 }

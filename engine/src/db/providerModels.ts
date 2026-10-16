@@ -268,13 +268,14 @@ export function setModelEnabled(providerId: string, modelId: string, enabled: bo
 
 // "Rows carry `+ add model manually` ... for fine-tunes and private deployments" — a model id
 // neither the catalog nor a fetch has ever seen. Enabled by default: the only reason to add one
-// by hand is to use it right away. A no-op if the id already exists (catalog-known, previously
-// fetched, or already added) rather than clobbering whatever state that row already has.
+// by hand is to use it right away. If the id already exists (catalog-known, previously fetched,
+// or already added) only `enabled` changes — Settings › Models' "Add by ID" on a listed model
+// means "add it", and every other column keeps the state that row already has.
 export function addManualModel(providerId: string, modelId: string, label: string | undefined, now: number): void {
   db.query(
     `INSERT INTO provider_models (provider_id, model_id, label, enabled, added_manually, in_catalog, first_seen_at, last_seen_at)
      VALUES (?, ?, ?, 1, 1, 0, ?, ?)
-     ON CONFLICT(provider_id, model_id) DO NOTHING`,
+     ON CONFLICT(provider_id, model_id) DO UPDATE SET enabled = 1`,
   ).run(providerId, modelId, label ?? modelId, now, now);
 }
 
